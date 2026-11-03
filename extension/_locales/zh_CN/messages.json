@@ -1,0 +1,278 @@
+{
+  "extensionName": {
+    "message": "oh-my-webbridge"
+  },
+  "extensionDescription": {
+    "message": "把本机的 omw daemon 连到这个浏览器，让 agent 打开标签页、读取页面并操作。"
+  },
+  "state_connected": {
+    "message": "已连接"
+  },
+  "state_connecting": {
+    "message": "正在连接"
+  },
+  "state_paused": {
+    "message": "已暂停"
+  },
+  "state_unpaired": {
+    "message": "未配对"
+  },
+  "state_offline": {
+    "message": "daemon 未运行"
+  },
+  "state_rejected": {
+    "message": "连接被拒绝"
+  },
+  "titleState_connected": {
+    "message": "oh-my-webbridge：已连接"
+  },
+  "titleState_connecting": {
+    "message": "oh-my-webbridge：正在连接"
+  },
+  "titleState_paused": {
+    "message": "oh-my-webbridge：已暂停"
+  },
+  "titleState_unpaired": {
+    "message": "oh-my-webbridge：未配对"
+  },
+  "titleState_offline": {
+    "message": "oh-my-webbridge：daemon 未运行"
+  },
+  "titleState_rejected": {
+    "message": "oh-my-webbridge：连接被拒绝"
+  },
+  "titleControlled": {
+    "message": "oh-my-webbridge：会话 $1 正在控制此标签页"
+  },
+  "activityClick": {
+    "message": "点击"
+  },
+  "activityHover": {
+    "message": "悬停"
+  },
+  "activityType": {
+    "message": "输入"
+  },
+  "activitySelect": {
+    "message": "选择"
+  },
+  "activityCheck": {
+    "message": "勾选"
+  },
+  "activityFocus": {
+    "message": "聚焦"
+  },
+  "activityScroll": {
+    "message": "滚动"
+  },
+  "activityDrag": {
+    "message": "拖动"
+  },
+  "activityUpload": {
+    "message": "上传"
+  },
+  "popupHint_unpaired": {
+    "message": "把这个浏览器和 omw daemon 配对。"
+  },
+  "popupHint_offline": {
+    "message": "用 omw start 启动 daemon。"
+  },
+  "popupHint_rejected": {
+    "message": "daemon 拒绝了这个浏览器，需要重新配对。"
+  },
+  "openSetup": {
+    "message": "打开设置向导"
+  },
+  "thisPage": {
+    "message": "此标签页"
+  },
+  "pageControlled": {
+    "message": "会话 $1"
+  },
+  "pageWorking": {
+    "message": "会话 $1 正在操作"
+  },
+  "pageNotControlled": {
+    "message": "未被控制"
+  },
+  "pause": {
+    "message": "暂停"
+  },
+  "resume": {
+    "message": "继续"
+  },
+  "settings": {
+    "message": "设置"
+  },
+  "documentation": {
+    "message": "文档"
+  },
+  "copied": {
+    "message": "已复制"
+  },
+  "copyCommand": {
+    "message": "复制命令"
+  },
+  "copyPrompt": {
+    "message": "复制提示词"
+  },
+  "example_summarize": {
+    "message": "总结"
+  },
+  "example_summarize_prompt": {
+    "message": "用 oh-my-webbridge 读取我当前的标签页，用五个要点总结内容。"
+  },
+  "example_form": {
+    "message": "填表"
+  },
+  "example_form_prompt": {
+    "message": "用 oh-my-webbridge 按下面的信息填写我当前标签页里的表单，提交前停下。"
+  },
+  "example_research": {
+    "message": "调研"
+  },
+  "example_research_prompt": {
+    "message": "用 oh-my-webbridge 在后台标签页打开这个主题最相关的三个来源，比较它们的说法，结束后关闭会话。"
+  },
+  "example_extract": {
+    "message": "提取"
+  },
+  "example_extract_prompt": {
+    "message": "用 oh-my-webbridge 把我当前标签页里的主表格导出为 CSV。"
+  },
+  "setupTitle": {
+    "message": "设置向导"
+  },
+  "setupSubtitle": {
+    "message": "把这个浏览器连到本机的 omw daemon。"
+  },
+  "settingsSubtitle": {
+    "message": "这个浏览器的连接与页面活动。"
+  },
+  "stepDaemon": {
+    "message": "启动 daemon"
+  },
+  "stepDaemonBody": {
+    "message": "在这台电脑上安装 omw，然后启动。"
+  },
+  "stepDaemonDownload": {
+    "message": "下载 omw"
+  },
+  "stepDaemonService": {
+    "message": "要在登录时启动，运行 omw service install。"
+  },
+  "waitingDaemon": {
+    "message": "正在等待 127.0.0.1:17373 上的 daemon"
+  },
+  "daemonRunning": {
+    "message": "daemon 正在运行"
+  },
+  "stepPair": {
+    "message": "配对这个浏览器"
+  },
+  "stepPairBody": {
+    "message": "在终端运行 omw pair，输入它显示的配对码。"
+  },
+  "pairCodeLabel": {
+    "message": "配对码"
+  },
+  "pairCodeDigit": {
+    "message": "第 $1 位，共 $2 位"
+  },
+  "pairInvalid": {
+    "message": "配对码错误或已过期，重新运行 omw pair。"
+  },
+  "pairOffline": {
+    "message": "daemon 没有响应，启动后再试。"
+  },
+  "pairRejected": {
+    "message": "daemon 拒绝了连接，可能这个浏览器的另一个配置文件已经连上。"
+  },
+  "paired": {
+    "message": "已配对"
+  },
+  "stepScripts": {
+    "message": "允许脚本"
+  },
+  "stepScriptsBody": {
+    "message": "允许用户脚本后，Firefox 才能执行 evaluate 动作。"
+  },
+  "allowScripts": {
+    "message": "允许脚本"
+  },
+  "scriptsAllowed": {
+    "message": "已允许脚本"
+  },
+  "allowed": {
+    "message": "已允许"
+  },
+  "scriptsDescription": {
+    "message": "evaluate 动作需要这项权限。"
+  },
+  "stepTry": {
+    "message": "让 agent 试一下"
+  },
+  "stepTryBody": {
+    "message": "安装 agent 技能，让 agent 知道怎么调用："
+  },
+  "stepTryPrompt": {
+    "message": "对 agent 说，例如："
+  },
+  "setupDone": {
+    "message": "这个浏览器已经可以使用。"
+  },
+  "groupConnection": {
+    "message": "连接"
+  },
+  "status": {
+    "message": "状态"
+  },
+  "pauseLabel": {
+    "message": "暂停"
+  },
+  "pauseDescription": {
+    "message": "暂停期间 agent 无法使用这个浏览器。"
+  },
+  "groupPages": {
+    "message": "页面"
+  },
+  "activityLabel": {
+    "message": "显示 agent 活动"
+  },
+  "activityDescription": {
+    "message": "在 agent 控制的页面上显示边缘光晕、焦点框和网站图标。"
+  },
+  "groupAdvanced": {
+    "message": "高级"
+  },
+  "tokenLabel": {
+    "message": "Token"
+  },
+  "tokenSaved": {
+    "message": "已保存：$1"
+  },
+  "tokenEmpty": {
+    "message": "尚未保存 token。"
+  },
+  "tokenPlaceholder": {
+    "message": "omw connection 输出的 64 个十六进制字符"
+  },
+  "tokenUpdated": {
+    "message": "Token 已保存"
+  },
+  "save": {
+    "message": "保存"
+  },
+  "forgetLabel": {
+    "message": "取消配对"
+  },
+  "forgetDescription": {
+    "message": "删除 token，重新配对后才能连接。"
+  },
+  "forget": {
+    "message": "取消配对"
+  },
+  "versionLabel": {
+    "message": "版本 $1"
+  }
+}

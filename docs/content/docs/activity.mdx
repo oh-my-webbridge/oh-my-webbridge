@@ -1,0 +1,64 @@
+---
+title: Agent activity
+description: What the toolbar icon, the popup and the activity layer show while an agent controls a tab, and how to turn the layer off.
+---
+
+An agent works in tabs of your own browser, so the extension marks the tab it controls. The mark appears in the toolbar icon, the popup and the activity layer drawn over the page.
+
+<Demo
+  name="activity-form"
+  alt="An agent fills in a booking form: the tab shows an edge glow, a focus frame moves from field to field, and the text appears in each one."
+/>
+
+## Toolbar icon
+
+| Icon                    | When                                         | Tooltip                                                                      |
+| ----------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| Blue                    | Connected, this tab is not controlled        | `oh-my-webbridge: connected`                                                 |
+| Blue with an orange dot | A session controls this tab                  | `oh-my-webbridge: session research controls this tab`                        |
+| Grey                    | Not paired, or connecting                    | `oh-my-webbridge: not paired`, `oh-my-webbridge: connecting`                 |
+| Grey with a red dot     | Daemon not running, or the daemon refused it | `oh-my-webbridge: daemon not running`, `oh-my-webbridge: connection refused` |
+| Grey with pause bars    | Paused                                       | `oh-my-webbridge: paused`                                                    |
+
+The orange dot is set on the controlled tab only. Other tabs keep the connection state icon.
+
+## The popup
+
+While connected, the popup starts with a row labeled "This tab". It reads "Not controlled" for an ordinary tab, "Session research" for a controlled tab, and "Session research is working" while an action runs. The row follows the active tab.
+
+<Demo
+  name="popup"
+  alt="The popup over a booking form an agent is filling in: Connected, This tab reads Session demo, prompt examples in tabs, and Pause and Settings buttons."
+  still
+/>
+
+## On the page
+
+The layer is drawn in Chrome and Firefox, on tabs the session opened and on tabs it borrowed from you. It ends when the session releases or closes the tab. While it is drawn, the page shows:
+
+- An edge glow while an action runs, fading out shortly after it finishes.
+- A chip in the bottom right corner with an orange dot and the session name.
+- The orange-dot icon as the favicon, in place of the page's own icons.
+- A focus frame around the element an action targets, with the action name above it: Click, Hover, Type, Select, Check, Focus, Scroll, Drag or Upload. The label moves below the element when the element sits near the top edge. The frame follows elements of the main document; while the session has an iframe selected, the page shows the glow and the chip only.
+
+The focus frame stays for a moment after the action finishes, so a run of clicks reads as one activity instead of a flicker of frames. A navigation replaces the document, and the layer is drawn again on the new page.
+
+## How it stays out of the way
+
+- The layer is one host element with a shadow root. The page's styles do not reach its parts.
+- It uses `pointer-events: none`, so clicks, selection and hover reach the page underneath.
+- It is `inert` and `aria-hidden`, so screen readers and the page's accessibility tree skip it. `read_page` returns the page text without the chip, and `snapshot` does not list the layer.
+- Screenshots and PDFs are taken with the layer hidden, then it reappears.
+- The layer carries a 75-second lease that the extension renews every 30 seconds. If the extension stops renewing it, the page removes the layer by itself and restores its own favicon, so a stopped worker or a lost debugger session leaves no markings behind.
+
+## Turn it off
+
+<Demo
+  name="settings"
+  alt="The settings page with Connection, Pages and Advanced groups. Show agent activity is on."
+  still
+/>
+
+Under **Settings**, then **Pages**, turn off **Show agent activity**. The layer disappears from every controlled tab at once and is not drawn on tabs that sessions claim later. Agents keep working, and the toolbar icon and the popup row still show which session controls the tab. Turn the switch on again to draw the layer on the tabs that are still controlled.
+
+The layer follows the system's reduced motion and reduced transparency settings: the glow stops pulsing and the chip switches to a solid background.

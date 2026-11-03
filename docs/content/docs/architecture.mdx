@@ -1,0 +1,98 @@
+---
+title: Architecture
+description: How the omw daemon and the browser extension split work, and how a command reaches a tab.
+---
+
+Two processes make up oh-my-webbridge. The daemon `omw` is a Go binary that listens on `127.0.0.1:17373`. The extension runs inside Chrome or Firefox and drives tabs through browser APIs. Agents, the CLI and the SDK call the daemon over HTTP; the daemon calls the extension over a WebSocket.
+
+## Components
+
+### Daemon
+
+The daemon holds state that outlives a browser window.
+
+- Authentication. Every request is checked against the token here, except `GET /ping` and `POST /pair`.
+- Routing. It keeps one connection per browser and sends each command to Chrome or Firefox.
+- Concurrency and deadlines. It admits requests, applies a timeout, and answers `busy` when a limit is reached.
+- Files. It writes screenshots and PDFs to the paths you give it, and reads upload files for Firefox, whose extension cannot read local files.
+- CDP front end. `GET /json`, `GET /json/version` and `GET /devtools/page/{tab}` present Chrome tabs to CDP clients, and `omw serve --cdp` passes `/devtools/browser` through to a native DevTools endpoint.
+- Session bindings, stored in `bindings.json` in the config directory.
+
+### Extension
+
+The extension owns the browser side.
+
+- Task tabs and their tab groups, including borrowing a tab that already exists.
+- `snapshot` of the DOM and accessibility tree, and the `@e` references derived from one snapshot.
+- Input: click, hover, type, select, check, focus, scroll, drag and upload.
+- Chrome: `chrome.debugger`, which is CDP.
+- Firefox: WebExtension APIs. `page.js` is injected into the selected frame on demand, `webRequest` handles presets and headers, `tabs.captureTab` takes screenshots, and `userScripts.execute` runs `evaluate`.
+- Network entries and console records for each controlled tab.
+- The activity layer drawn over a controlled page.
+
+Firefox answers some actions with `unsupported`, because its extension APIs have no equivalent. The differences are listed in [Firefox](/firefox).
+
+One tab belongs to one session at a time. A session that creates tabs keeps them in its own tab group; a borrowed tab stays in your group and returns on release. A tab group is neither a cookie boundary nor a security boundary: every tab in the profile shares the same logins.
+
+## Multi-browser routing
+
+The daemon keeps at most one Chrome connection and one Firefox connection. It tells them apart by the WebSocket Origin. The extension's hello reports the browser, the browser version, and the session names the extension holds.
+
+A command may carry a `browser` field. A session binds to a browser on its first command and keeps that binding until `close_session` succeeds. The binding is written to `bindings.json`, so after a daemon restart the session is routed back to the same browser. The next hello re-reports the session names, and stale bindings are dropped.
+
+A session without a binding goes to Chrome when it is connected, and to Firefox otherwise. `/json/list`, `/devtools/*` and raw `cdp` need the Chrome extension; `/json/version` reports the version even with no browser connected. A second connection from the same browser is refused with 409.
+
+## Request lifecycle and concurrency
+
+Requests arrive as `POST /command` with a 2 MiB body limit, or as frames on the extension WebSocket. The daemon assigns a random ID to a request that omits one, and a response is matched only against a pending request with that ID on the same connection. A dropped connection ends every command in flight on it with `outcome_unknown`. After reconnecting, only new requests are accepted.
+
+Commands for one session run in order, and different sessions run concurrently. The extension also queues per session and answers `busy` past 32 waiting commands. `close_session` and `dialog` run outside the session queue, on a reserve of 16 slots, so a stuck session or an open dialog can still be cleared. Page CDP connections keep the protocol multiplexing: a Fetch or Debugger continuation runs while another command on the same target waits.
+
+The default timeout is 30 seconds and the maximum is 120 seconds. A request that passes its deadline returns `outcome_unknown`, and the SDK does not retry an uncertain command.
+
+## Extension lifecycle
+
+Chrome runs the extension background as an MV3 service worker. The worker keeps one WebSocket to the daemon, sends a ping every 20 seconds, and closes the socket after 45 seconds without traffic. A `chrome.alarms` timer fires every 30 seconds and reconnects when the worker was stopped. Retries back off from 0.5 seconds to 30 seconds with jitter. No offscreen document, silent audio or polling loop keeps the worker alive, and Chrome may still stop it at any point.
+
+A debugger session survives the worker that opened it and stays attached to its tab. The next worker starts without the state that answers paused requests. On startup it detaches the debugger sessions it inherited from the previous worker, which releases any request paused there, and attaches again on the next command. Session metadata lives in `chrome.storage.session` rather than in worker globals. Page CDP sessions end with the daemon connection that opened them.
+
+Firefox runs an MV3 event page, which the browser suspends after 30 seconds idle. WebSocket traffic does not count as activity, so the 20-second heartbeat also calls `tabs.query` while a connection is open. A 30-second alarm reconnects after a suspension. Reloading the background drops the `webRequest` listeners and the frame selection. Presets are installed again on that tab's next controlled navigation.
+
+## Local trust model
+
+The daemon is reachable only from the machine it runs on, and the token is the only credential.
+
+- It binds `127.0.0.1:17373` and rejects a request whose Host is not `127.0.0.1`.
+- Web origins are rejected. Only `chrome-extension://` origins with 32 letters from a to p and `moz-extension://` origins with a UUID are accepted, and only on `/extension`, `/ping` and `/pair`.
+- The CLI and the SDK send the token as `Authorization: Bearer`. The extension sends it as a WebSocket subprotocol, `omw-token.<token>`, next to `omw.v1`. No token appears in the URL.
+- `GET /ping` reports the version without a token. `POST /pair` requires an extension origin and redeems the six-digit code for the token.
+- A pairing code is valid for 5 minutes and 5 attempts.
+- The config directory is created with mode 0700. `config.json`, which holds the token, is written to a temporary file and published atomically with mode 0600.
+- The token grants full control of the browser: page JavaScript in any tab, raw CDP, and file writes to the absolute paths you name. It does not isolate you from another process running as the same OS user, and the profile's cookies are available to every tab.
+- The Chrome extension has no `<all_urls>` host permission, no resident content script and no external message entry point. Firefox declares `<all_urls>`, which screenshots, request filtering, cookies and cross-origin frames need; `userScripts` stays optional and is granted in the setup page or under **Settings**, then **Pages**.
+
+## Resource limits
+
+These are capacity guards, not a bound on RSS: concurrent screenshots and Chrome's own tab and network caches still add memory.
+
+| Resource                                                                                 | Limit                                                                             |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| HTTP request body                                                                        | 2 MiB                                                                             |
+| HTTP requests being read or served                                                       | 288                                                                               |
+| Ordinary commands per browser                                                            | 128                                                                               |
+| Reserved slots per browser for `close_session`, `dialog`, `cdp_detach`, `artifact_close` | 16                                                                                |
+| Waiting commands per session in the extension                                            | 32                                                                                |
+| Sessions per browser                                                                     | 128                                                                               |
+| Tabs per session                                                                         | 32                                                                                |
+| WebSocket message                                                                        | 32 MiB                                                                            |
+| Buffered responses in the daemon                                                         | 64 MiB, past that the command returns `outcome_unknown`                           |
+| Extension send buffer                                                                    | 4 MiB before frames queue, 64 MiB queued, closed after 30 seconds without sending |
+| Screenshot and PDF jobs                                                                  | 2 at a time                                                                       |
+| Command timeout                                                                          | 30 seconds default, 120 seconds maximum                                           |
+| `snapshot` output                                                                        | 4000 nodes or 192000 characters, with `truncated` set                             |
+| Page CDP subscription queue                                                              | 32 events, 256 KiB per event                                                      |
+| Network capture                                                                          | 500 entries per tab, 8 MiB of buffered bodies in Chrome                           |
+| Firefox network bodies                                                                   | 1 MiB per response, 8 MiB per tab                                                 |
+| Firefox upload                                                                           | 16 MiB per command, 64 MiB across commands in flight                              |
+| PDF output                                                                               | 100 MiB                                                                           |
+| Artifact files                                                                           | written with mode 0600 through a temporary file, never over an existing path      |

@@ -1,0 +1,72 @@
+name: docs
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Recorded media live on the orphan assets branch.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: assets
+          path: docs/public/media
+      - uses: ./.github/actions/setup
+        with:
+          package: "@oh-my-webbridge/docs"
+      - run: pnpm --filter @oh-my-webbridge/docs run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: docs-site
+          path: docs/out
+          retention-days: 7
+  # The site is the organization page oh-my-webbridge.github.io, served from
+  # its own repository; this job pushes the built files there with a deploy key.
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: docs
+      url: https://oh-my-webbridge.github.io
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: docs-site
+          path: site
+      - name: Publish to oh-my-webbridge/oh-my-webbridge.github.io
+        env:
+          DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+          SOURCE: ${{ github.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/pages
+          chmod 600 ~/.ssh/pages
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/pages -o IdentitiesOnly=yes"
+          # The first deploy clones an empty repository.
+          git clone --depth 1 git@github.com:oh-my-webbridge/oh-my-webbridge.github.io.git pages
+          git -C pages checkout -B main
+          find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R site/. pages/
+          touch pages/.nojekyll
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The site is unchanged."
+            exit 0
+          fi
+          git commit -m "docs: publish oh-my-webbridge/oh-my-webbridge@${SOURCE::12}"
+          git push origin HEAD:main

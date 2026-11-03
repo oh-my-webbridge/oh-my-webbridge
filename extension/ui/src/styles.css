@@ -1,0 +1,207 @@
+@import "tailwindcss";
+@import "@oh-my-webbridge/brand/theme.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --animate-skeleton: skeleton 2s -1s infinite linear;
+  --animate-caret-blink: 1s ease-out infinite caret-blink;
+  --animate-toast-success-odd: toast-success-odd 0.32s cubic-bezier(0.5, 1, 0.89, 1);
+  --animate-toast-success-even: toast-success-even 0.32s cubic-bezier(0.5, 1, 0.89, 1);
+  --animate-toast-error-odd: toast-error-odd 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+  --animate-toast-error-even: toast-error-even 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+  --font-heading: var(--omw-font-sans);
+  --font-mono: var(--omw-font-mono);
+  --font-sans: var(--omw-font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar: var(--sidebar);
+  --color-code-highlight: var(--code-highlight);
+  --code-foreground: var(--code-foreground);
+  --color-code: var(--code);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-ring: var(--ring);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-input: var(--input);
+  --color-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-background: var(--background);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning: var(--warning);
+  --color-success-foreground: var(--success-foreground);
+  --color-success: var(--success);
+  --color-info-foreground: var(--info-foreground);
+  --color-info: var(--info);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  @keyframes skeleton {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes caret-blink {
+    0%,
+    70%,
+    to {
+      opacity: 1;
+    }
+    20%,
+    50% {
+      opacity: 0;
+    }
+  }
+  @keyframes toast-success-odd {
+    0% {
+      scale: 1;
+    }
+    30% {
+      scale: 1.025;
+    }
+    60% {
+      scale: 0.99;
+    }
+    100% {
+      scale: 1;
+    }
+  }
+  @keyframes toast-error-odd {
+    0% {
+      translate: 0 0;
+    }
+    25% {
+      translate: -3px 0;
+    }
+    50% {
+      translate: 3px 0;
+    }
+    75% {
+      translate: -3px 0;
+    }
+    100% {
+      translate: 0 0;
+    }
+  }
+  @keyframes toast-success-even {
+    0% {
+      scale: 1;
+    }
+    30% {
+      scale: 1.025;
+    }
+    60% {
+      scale: 0.99;
+    }
+    100% {
+      scale: 1;
+    }
+  }
+  @keyframes toast-error-even {
+    0% {
+      translate: 0 0;
+    }
+    25% {
+      translate: -3px 0;
+    }
+    50% {
+      translate: 3px 0;
+    }
+    75% {
+      translate: -3px 0;
+    }
+    100% {
+      translate: 0 0;
+    }
+  }
+}
+
+/* coss tokens mapped onto the brand palette (packages/brand/theme.css). */
+:root {
+  --background: var(--omw-canvas);
+  --foreground: var(--omw-ink);
+  --card: var(--omw-surface);
+  --card-foreground: var(--omw-ink);
+  --popover: var(--omw-surface);
+  --popover-foreground: var(--omw-ink);
+  --primary: var(--omw-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--omw-fill);
+  --secondary-foreground: var(--omw-ink);
+  --muted: var(--omw-fill);
+  --muted-foreground: var(--omw-ink-secondary);
+  --accent: var(--omw-fill);
+  --accent-foreground: var(--omw-ink);
+  --border: var(--omw-hairline);
+  --input: var(--omw-control);
+  --ring: var(--omw-blue);
+  --destructive: var(--omw-danger);
+  --destructive-foreground: var(--omw-danger);
+  --info: var(--omw-blue);
+  --info-foreground: var(--omw-blue);
+  --success: var(--omw-success);
+  --success-foreground: var(--omw-success);
+  --warning: var(--omw-live);
+  --warning-foreground: var(--omw-warning);
+  --chart-1: var(--omw-blue);
+  --chart-2: var(--omw-success);
+  --chart-3: var(--omw-live);
+  --chart-4: var(--omw-ink-secondary);
+  --chart-5: var(--omw-danger);
+  --code: var(--omw-fill);
+  --code-foreground: var(--omw-ink);
+  --code-highlight: var(--omw-fill);
+  --radius: 0.75rem;
+  --sidebar: var(--omw-canvas);
+  --sidebar-accent: var(--omw-fill);
+  --sidebar-accent-foreground: var(--omw-ink);
+  --sidebar-border: var(--omw-hairline);
+  --sidebar-foreground: var(--omw-ink-secondary);
+  --sidebar-primary: var(--omw-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: var(--omw-blue);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans antialiased;
+    font-synthesis-weight: none;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+}

@@ -1,0 +1,41 @@
+/* oh-my-webbridge brand palette and type stacks. Each surface maps these
+   values to its own component tokens: the extension pages to coss tokens in
+   extension/ui/src/styles.css, the docs site to Fumadocs tokens. */
+:root {
+  --omw-blue: #0062e3;
+  --omw-blue-hover: #0057cc;
+  --omw-blue-tint: rgb(0 98 227 / 0.1);
+  --omw-live: #ff9500;
+  --omw-danger: #d70015;
+  --omw-success: #1a8a3e;
+  --omw-warning: #b25e00;
+  --omw-canvas: #f5f5f7;
+  --omw-surface: #ffffff;
+  --omw-ink: #1d1d1f;
+  --omw-ink-secondary: #6e6e73;
+  --omw-hairline: rgb(0 0 0 / 0.08);
+  --omw-control: rgb(0 0 0 / 0.1);
+  --omw-fill: rgb(0 0 0 / 0.04);
+  --omw-font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --omw-font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.dark {
+  --omw-blue: #1e6ff0;
+  --omw-blue-hover: #3a82f5;
+  --omw-blue-tint: rgb(30 111 240 / 0.18);
+  --omw-live: #ff9f0a;
+  --omw-danger: #ff453a;
+  --omw-success: #30d158;
+  --omw-warning: #ffb340;
+  --omw-canvas: #000000;
+  --omw-surface: #1c1c1e;
+  --omw-ink: #f5f5f7;
+  --omw-ink-secondary: #98989d;
+  --omw-hairline: rgb(255 255 255 / 0.1);
+  --omw-control: rgb(255 255 255 / 0.12);
+  --omw-fill: rgb(255 255 255 / 0.06);
+}

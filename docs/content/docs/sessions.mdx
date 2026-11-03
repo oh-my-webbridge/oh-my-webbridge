@@ -1,0 +1,90 @@
+---
+title: Sessions and tabs
+description: How an agent splits work into sessions, how tabs are opened, grouped and borrowed, and the limits that apply.
+---
+
+A session is the unit of work in oh-my-webbridge. Every command names a session, and the daemon routes it to the tabs that session holds. Tabs opened by a session sit in a tab group titled with the session name or the title the agent passed, so a task's pages stay together and apart from the pages you use.
+
+<Demo
+  name="activity-read"
+  alt="Session demo reads an article in the tab it opened: the page scrolls from section to section, and the chip in the corner names the session."
+/>
+
+## One session per task
+
+Give each task its own session name and reuse it for everything the task does. Tasks that run at the same time use different names. Each session keeps its own tabs, tab group, current tab, presets and frame selection. The browser runs commands from different sessions at the same time.
+
+```sh
+omw call research navigate '{"url":"https://example.com/docs","group_title":"Research"}'
+omw call billing navigate '{"url":"https://example.com/pricing","group_title":"Billing"}'
+```
+
+A session starts with its first command. Its name is 1 to 96 letters (including CJK), digits, `_`, `.` or `-`.
+
+## A session stays in one browser
+
+A session's first command decides the browser it stays in: the browser named by `browser`, the only connected browser, or Chrome when both are connected. Later commands for that session go there, even after the other browser connects. `close_session` removes the binding. A command that asks for the other browser fails with `session_browser`.
+
+## Commands run in arrival order
+
+Each session has one queue. Commands for a session run one at a time, in the order the daemon receives them, so a click that follows a snapshot acts on the page that snapshot described. Sessions do not share a queue, and a page that responds slowly in one session does not hold another session.
+
+`dialog` and `close_session` are answered outside the session queue, so they still reach a tab whose command is waiting. One session can have 32 commands running or waiting at once.
+
+## New tabs open in the background
+
+`navigate` opens a tab when the session has no current tab or the command sets `newTab`. The tab opens in the background and joins the session's tab group:
+
+```json
+{
+  "session": "research",
+  "action": "navigate",
+  "args": { "url": "https://example.com/docs", "newTab": true, "group_title": "Research" }
+}
+```
+
+- `group_title` sets the title of the group. A navigation that opens a tab can change it; otherwise the current title stays. The default is the session name.
+- The group is created collapsed, so task tabs do not widen the tab strip. Expand it to look at the pages.
+- A later `navigate` without `newTab` reuses the current tab. A session holds at most 32 tabs, task and borrowed together.
+- `list_tabs` returns only the session's tabs, with URL, title, active flag, group title and whether the tab is borrowed.
+
+## Borrowing one of your tabs
+
+`find_tab` with `active: true` claims the tab that is active in the last focused window. The URL must match exactly or by hostname:
+
+```sh
+omw call research find_tab '{"url":"example.com","active":true}'
+```
+
+Without `active: true`, `find_tab` only looks at tabs the session already holds. A borrowed tab stays open, and `close_tab` refuses it with `borrowed_tab`. The session uses it and releases it when it ends. One tab belongs to one session at a time, and another session that asks for it gets `tab_busy`. Presets apply only to tabs the session opened. Borrow a tab when the task needs the page you have open; otherwise open a task tab.
+
+## Ending a session
+
+`close_session` cancels the commands still running or waiting for the session, closes the tabs the session opened, and releases the ones it borrowed, which stay open. It removes the session's browser binding and drops what the session recorded on borrowed tabs: frame selection, network entries, console output and `@e` references. Closing a tab yourself removes it from the session; the session ends only with `close_session`.
+
+## Limits
+
+| Limit                    | Value                                                     |
+| ------------------------ | --------------------------------------------------------- |
+| Sessions                 | 128 per browser                                           |
+| Tabs per session         | 32, task and borrowed together                            |
+| Commands running at once | 128 per browser; `close_session` and `dialog` use 16 more |
+| Commands per session     | 32 running or waiting                                     |
+| Session name             | 1 to 96 letters (including CJK), digits, `_`, `.` or `-`  |
+| `timeoutMs`              | 1 to 120000, default 30000                                |
+
+When a limit is reached the command fails with `busy` and HTTP 429 instead of waiting. Reduce concurrency, or close sessions that are finished.
+
+## Timeouts and uncertain results
+
+`timeoutMs` covers the whole request, including time spent waiting in the session queue. When it runs out, or when the browser disconnects in the middle of a command, the call returns `outcome_unknown`. The action may already have reached the page: a click may have happened, a form may be submitted.
+
+<Callout type="warn" title="Retrying after outcome_unknown">
+  Observe the page before reusing a command. `snapshot`, `read_page`, the tab URL, `get` and the
+  network log show what the page did. Send a command again only when the state shows the action did
+  not happen, and never replay a payment, publish or submit automatically.
+</Callout>
+
+## Logins come from your profile
+
+Task tabs and borrowed tabs run in your browser profile, with its cookies, sessions and logins. Sessions and tab groups organize tabs, not accounts: every session sees the same logins, and clearing cookies or site storage for one task clears them for the profile. Sign out of a site when the next task should start signed out.

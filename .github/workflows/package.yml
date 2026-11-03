@@ -1,0 +1,71 @@
+name: package and install
+on:
+  workflow_call:
+    inputs:
+      benchmark_artifact:
+        type: string
+        default: ""
+      artifact_prefix:
+        type: string
+        default: candidate-assets
+    outputs:
+      artifact:
+        value: ${{ jobs.package.outputs.artifact }}
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      artifact: ${{ inputs.artifact_prefix }}-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - name: Ensure zstd is available
+        run: bash scripts/ensure-zstd.sh
+      - uses: ./.github/actions/setup
+      - run: pnpm run build
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        if: inputs.benchmark_artifact != ''
+        with:
+          name: ${{ inputs.benchmark_artifact }}
+          path: dist/published-benchmark
+      - run: pnpm run release:pack
+        env:
+          OMW_RELEASE_BENCHMARK: ${{ inputs.benchmark_artifact != '' && 'dist/published-benchmark' || '' }}
+      - run: pnpm run release:audit
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-${{ github.sha }}
+          path: dist/release/
+          retention-days: ${{ inputs.artifact_prefix == 'release-assets' && 30 || 3 }}
+          overwrite: true
+  smoke:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Ensure zstd is available
+        run: bash scripts/ensure-zstd.sh
+      - name: Ensure gpg is available
+        run: |
+          if ! command -v gpg >/dev/null; then
+            if [ "$RUNNER_OS" = macOS ]; then brew install gnupg; else sudo apt-get install -y gnupg; fi
+          fi
+      - uses: ./.github/actions/setup
+      - run: node scripts/install-test-firefox.mjs
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.package.outputs.artifact }}
+          path: dist/release/
+      - run: node scripts/smoke-release.mjs

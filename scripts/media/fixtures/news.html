@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The Harbor Gazette</title>
+    <link rel="icon" href="/icons/newspaper.svg" />
+    <link rel="stylesheet" href="/site.css" />
+    <style>
+      /* An ad slot with nothing in it takes no space at all. */
+      .ad-slot:empty {
+        display: none;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .leaderboard {
+        margin: 10px 40px 0;
+      }
+      .ad-slot .ad {
+        width: 100%;
+      }
+      main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 296px;
+        gap: 40px;
+        padding: 10px 40px 10px;
+      }
+      .kicker {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .lead h1 {
+        font-size: 31px;
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+        margin: 4px 0 4px;
+        font-weight: 600;
+      }
+      .byline {
+        margin: 0 0 7px;
+        font-size: 12.5px;
+        color: var(--ink-2);
+      }
+      .lead p.body {
+        font-size: 14px;
+        line-height: 1.58;
+        color: #3c3c3e;
+        margin: 0 0 2px;
+      }
+      .infeed {
+        margin: 10px 0;
+      }
+      .secondary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        border-top: 1px solid var(--line);
+        padding-top: 8px;
+      }
+      .secondary h2 {
+        font-size: 16.5px;
+        line-height: 1.24;
+        letter-spacing: -0.01em;
+        margin: 3px 0 4px;
+        font-weight: 600;
+      }
+      .secondary p {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--ink-2);
+        margin: 0;
+      }
+      .latest {
+        margin-top: 6px;
+        border-top: 1px solid var(--line);
+        padding-top: 6px;
+      }
+      .latest h2 {
+        margin: 0 0 5px;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+      .latest ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px 26px;
+      }
+      .latest li {
+        display: grid;
+        gap: 2px;
+        font-size: 12.5px;
+        line-height: 1.3;
+      }
+      .latest time {
+        color: var(--ink-2);
+        font-variant-numeric: tabular-nums;
+        font-size: 10.5px;
+      }
+      aside .box {
+        margin-bottom: 14px;
+      }
+      aside h3 {
+        margin: 0 0 8px;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-2);
+      }
+      .most ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: story;
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        line-height: 1.28;
+      }
+      .most li {
+        counter-increment: story;
+        display: grid;
+        grid-template-columns: 16px 1fr;
+        gap: 5px;
+      }
+      .most li::before {
+        content: counter(story);
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 12px;
+      }
+      .weather {
+        margin-top: 14px;
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+      .weather p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--ink-2);
+      }
+      .weather .now {
+        font-size: 21px;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+        margin-bottom: 1px;
+      }
+      footer {
+        display: flex;
+        gap: 18px;
+        padding: 9px 40px 11px;
+        border-top: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--ink-2);
+      }
+    </style>
+    <script>
+      // The ad network script is what actually fills the slots.
+      addEventListener("DOMContentLoaded", () => {
+        const script = document.createElement("script");
+        script.src = `http://googleads.g.doubleclick.net:${location.port}/ads/inject.js`;
+        document.head.append(script);
+      });
+    </script>
+  </head>
+  <body>
+    <header class="site">
+      <img src="/icons/newspaper.svg" alt="" />
+      <strong>The Harbor Gazette</strong>
+      <nav><span>World</span><span>Business</span><span>Culture</span><span>Weather</span></nav>
+    </header>
+    <div class="ad-slot leaderboard" data-ad="leaderboard"></div>
+    <main>
+      <div class="stories">
+        <section class="lead">
+          <div class="kicker">Harbor &amp; region</div>
+          <h1 class="serif">Ferry service returns to the north pier after a decade</h1>
+          <p class="byline">By Dana Whitfield · 6 min read</p>
+          <p class="body">
+            Three sailings a day resume on Monday, ending a stretch in which the north shore has
+            been reachable only by road. The first boat leaves at 6:40 and takes nineteen minutes.
+          </p>
+          <p class="body">
+            The old landing has been rebuilt with a longer ramp and a waiting room that opens onto
+            the fish market. Tickets are sold on board for the first month.
+          </p>
+        </section>
+        <div class="ad-slot infeed" data-ad="infeed"></div>
+        <section class="secondary">
+          <article>
+            <div class="kicker">Business</div>
+            <h2>Cannery row leases go to three local bakers</h2>
+            <p>
+              The council chose small tenants over a single buyer, and the pier will smell of bread
+              by spring.
+            </p>
+          </article>
+          <article>
+            <div class="kicker">Culture</div>
+            <h2>A century of ship logs, finally catalogued</h2>
+            <p>
+              Volunteers spent four winters with the ledgers. The reading room opens on Thursday
+              afternoons.
+            </p>
+          </article>
+        </section>
+        <section class="latest">
+          <h2>More headlines</h2>
+          <ul>
+            <li><time>07:10</time><span>Storm shutters go up early along the west quay</span></li>
+            <li><time>06:45</time><span>School board approves the new bell schedule</span></li>
+            <li><time>06:20</time><span>Herring run arrives two weeks ahead of forecast</span></li>
+          </ul>
+        </section>
+      </div>
+      <aside>
+        <div class="ad-slot box" data-ad="sidebar"></div>
+        <section class="most">
+          <h3>Most read</h3>
+          <ol>
+            <li><span>What the new ferry timetable means for commuters</span></li>
+            <li><span>The last wooden boatyard on the coast</span></li>
+            <li><span>Inside the fish market's five o'clock auction</span></li>
+            <li><span>Why the harbour wall is being rebuilt, again</span></li>
+          </ol>
+        </section>
+        <section class="weather">
+          <h3>Tonight</h3>
+          <p class="now">Clear, 11°</p>
+          <p>Wind from the west, easing after midnight. Low tide at 22:40.</p>
+        </section>
+      </aside>
+    </main>
+    <footer>
+      <span>© The Harbor Gazette</span>
+      <span>Tide tables</span>
+      <span>Classifieds</span>
+      <span>Contact</span>
+    </footer>
+  </body>
+</html>
