@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@playwright/mcp": "0.0.83",
+    "@playwright/mcp": "0.0.84",
     "chrome-devtools-mcp": "1.12.0",
     "pi-chrome-use": "1.1.1",
     "puppeteer-core": "25.16.0",
