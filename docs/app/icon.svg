@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="oh-my-webbridge">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A8DFF"/><stop offset="1" stop-color="#0A5BE0"/></linearGradient><linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.24"/><stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient></defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/><rect width="128" height="128" rx="28" fill="url(#sheen)"/>
+  <g fill="#FFFFFF"><path d="M30 76 Q64 18 98 76" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/><circle cx="30" cy="78" r="11"/><circle cx="98" cy="78" r="11"/></g>
+</svg>

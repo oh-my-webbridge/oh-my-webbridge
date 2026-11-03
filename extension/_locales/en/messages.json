@@ -1,0 +1,278 @@
+{
+  "extensionName": {
+    "message": "oh-my-webbridge"
+  },
+  "extensionDescription": {
+    "message": "Connects the local omw daemon to this browser so agents can open tabs, read pages and act on them."
+  },
+  "state_connected": {
+    "message": "Connected"
+  },
+  "state_connecting": {
+    "message": "Connecting"
+  },
+  "state_paused": {
+    "message": "Paused"
+  },
+  "state_unpaired": {
+    "message": "Not paired"
+  },
+  "state_offline": {
+    "message": "Daemon not running"
+  },
+  "state_rejected": {
+    "message": "Connection refused"
+  },
+  "titleState_connected": {
+    "message": "oh-my-webbridge: connected"
+  },
+  "titleState_connecting": {
+    "message": "oh-my-webbridge: connecting"
+  },
+  "titleState_paused": {
+    "message": "oh-my-webbridge: paused"
+  },
+  "titleState_unpaired": {
+    "message": "oh-my-webbridge: not paired"
+  },
+  "titleState_offline": {
+    "message": "oh-my-webbridge: daemon not running"
+  },
+  "titleState_rejected": {
+    "message": "oh-my-webbridge: connection refused"
+  },
+  "titleControlled": {
+    "message": "oh-my-webbridge: session $1 controls this tab"
+  },
+  "activityClick": {
+    "message": "Click"
+  },
+  "activityHover": {
+    "message": "Hover"
+  },
+  "activityType": {
+    "message": "Type"
+  },
+  "activitySelect": {
+    "message": "Select"
+  },
+  "activityCheck": {
+    "message": "Check"
+  },
+  "activityFocus": {
+    "message": "Focus"
+  },
+  "activityScroll": {
+    "message": "Scroll"
+  },
+  "activityDrag": {
+    "message": "Drag"
+  },
+  "activityUpload": {
+    "message": "Upload"
+  },
+  "popupHint_unpaired": {
+    "message": "Pair this browser with the omw daemon."
+  },
+  "popupHint_offline": {
+    "message": "Start the daemon with omw start."
+  },
+  "popupHint_rejected": {
+    "message": "The daemon refused this browser. Pair it again."
+  },
+  "openSetup": {
+    "message": "Open setup"
+  },
+  "thisPage": {
+    "message": "This tab"
+  },
+  "pageControlled": {
+    "message": "Session $1"
+  },
+  "pageWorking": {
+    "message": "Session $1 is working"
+  },
+  "pageNotControlled": {
+    "message": "Not controlled"
+  },
+  "pause": {
+    "message": "Pause"
+  },
+  "resume": {
+    "message": "Resume"
+  },
+  "settings": {
+    "message": "Settings"
+  },
+  "documentation": {
+    "message": "Documentation"
+  },
+  "copied": {
+    "message": "Copied"
+  },
+  "copyCommand": {
+    "message": "Copy command"
+  },
+  "copyPrompt": {
+    "message": "Copy prompt"
+  },
+  "example_summarize": {
+    "message": "Summarize"
+  },
+  "example_summarize_prompt": {
+    "message": "Use oh-my-webbridge to read my active tab and summarize it in five bullet points."
+  },
+  "example_form": {
+    "message": "Fill a form"
+  },
+  "example_form_prompt": {
+    "message": "Use oh-my-webbridge to fill in the form on my active tab with the details below, and stop before submitting."
+  },
+  "example_research": {
+    "message": "Research"
+  },
+  "example_research_prompt": {
+    "message": "Use oh-my-webbridge to open the three most relevant sources on this topic in background tabs, compare what they say, and close the session when you are done."
+  },
+  "example_extract": {
+    "message": "Extract"
+  },
+  "example_extract_prompt": {
+    "message": "Use oh-my-webbridge to extract the main table on my active tab as CSV."
+  },
+  "setupTitle": {
+    "message": "Set up"
+  },
+  "setupSubtitle": {
+    "message": "Connect this browser to the omw daemon on this computer."
+  },
+  "settingsSubtitle": {
+    "message": "Connection and page activity for this browser."
+  },
+  "stepDaemon": {
+    "message": "Start the daemon"
+  },
+  "stepDaemonBody": {
+    "message": "Install omw on this computer, then start it."
+  },
+  "stepDaemonDownload": {
+    "message": "Download omw"
+  },
+  "stepDaemonService": {
+    "message": "To start at login, run omw service install instead."
+  },
+  "waitingDaemon": {
+    "message": "Waiting for the daemon on 127.0.0.1:17373"
+  },
+  "daemonRunning": {
+    "message": "The daemon is running"
+  },
+  "stepPair": {
+    "message": "Pair this browser"
+  },
+  "stepPairBody": {
+    "message": "Run omw pair in a terminal and enter the code it shows."
+  },
+  "pairCodeLabel": {
+    "message": "Pairing code"
+  },
+  "pairCodeDigit": {
+    "message": "Digit $1 of $2"
+  },
+  "pairInvalid": {
+    "message": "The code is wrong or expired. Run omw pair again."
+  },
+  "pairOffline": {
+    "message": "The daemon stopped responding. Start it and try again."
+  },
+  "pairRejected": {
+    "message": "The daemon refused the connection. Another profile of this browser may be connected."
+  },
+  "paired": {
+    "message": "Paired"
+  },
+  "stepScripts": {
+    "message": "Allow scripts"
+  },
+  "stepScriptsBody": {
+    "message": "Firefox runs the evaluate action only after you allow user scripts."
+  },
+  "allowScripts": {
+    "message": "Allow scripts"
+  },
+  "scriptsAllowed": {
+    "message": "Scripts allowed"
+  },
+  "allowed": {
+    "message": "Allowed"
+  },
+  "scriptsDescription": {
+    "message": "Required by the evaluate action."
+  },
+  "stepTry": {
+    "message": "Try it with an agent"
+  },
+  "stepTryBody": {
+    "message": "Install the agent skill so your agent knows the commands:"
+  },
+  "stepTryPrompt": {
+    "message": "Ask your agent, for example:"
+  },
+  "setupDone": {
+    "message": "This browser is ready."
+  },
+  "groupConnection": {
+    "message": "Connection"
+  },
+  "status": {
+    "message": "Status"
+  },
+  "pauseLabel": {
+    "message": "Pause"
+  },
+  "pauseDescription": {
+    "message": "Agents cannot use this browser while it is paused."
+  },
+  "groupPages": {
+    "message": "Pages"
+  },
+  "activityLabel": {
+    "message": "Show agent activity"
+  },
+  "activityDescription": {
+    "message": "Edge glow, focus frame and favicon on pages an agent controls."
+  },
+  "groupAdvanced": {
+    "message": "Advanced"
+  },
+  "tokenLabel": {
+    "message": "Token"
+  },
+  "tokenSaved": {
+    "message": "Saved: $1"
+  },
+  "tokenEmpty": {
+    "message": "No token saved."
+  },
+  "tokenPlaceholder": {
+    "message": "64 hex characters from omw connection"
+  },
+  "tokenUpdated": {
+    "message": "Token saved"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "forgetLabel": {
+    "message": "Forget pairing"
+  },
+  "forgetDescription": {
+    "message": "Removes the token. Pair again to reconnect."
+  },
+  "forget": {
+    "message": "Forget"
+  },
+  "versionLabel": {
+    "message": "Version $1"
+  }
+}

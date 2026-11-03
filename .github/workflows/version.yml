@@ -1,0 +1,30 @@
+name: prepare release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-preparation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    # Manual dispatches on other branches must not tag or rebuild release PRs.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Generate version PR or dispatch the merged version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OMW_CREATE_TAG: "true"
+        run: node scripts/release-pr.mjs

@@ -1,0 +1,82 @@
+/* Shared look of the fixture pages the media scenes record. */
+:root {
+  color-scheme: light;
+  --ink: #1d1d1f;
+  --ink-2: #6e6e73;
+  --line: rgb(0 0 0 / 0.1);
+  --paper: #fbfaf7;
+  --card: #ffffff;
+  --accent: #b4532a;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+.serif {
+  font-family: ui-serif, "New York", Georgia, serif;
+}
+header.site {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 40px;
+  border-bottom: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.7);
+  font-size: 14px;
+}
+header.site img {
+  width: 20px;
+  height: 20px;
+}
+header.site strong {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+header.site nav {
+  margin-left: auto;
+  display: flex;
+  gap: 24px;
+  color: var(--ink-2);
+}
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+input[type="text"],
+input[type="email"],
+select,
+textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  padding: 9px 12px;
+  border: 1px solid rgb(0 0 0 / 0.14);
+  border-radius: 10px;
+  background: #fff;
+  outline: none;
+}
+textarea {
+  resize: none;
+  height: 64px;
+}
+button.primary {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 22px;
+}

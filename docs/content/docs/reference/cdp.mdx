@@ -1,0 +1,160 @@
+---
+title: CDP
+description: Chrome DevTools Protocol access through the daemon, in extension and native mode.
+---
+
+The daemon exposes Chrome DevTools Protocol in two modes at `127.0.0.1:17373`, the same address and port as the rest of its API:
+
+- **Extension mode** serves page targets through `chrome.debugger` in the Chrome extension. It needs a paired Chrome extension and works with the browser profile you already have open.
+- **Native mode** is a WebSocket proxy to a Chrome browser endpoint you start with remote debugging. It is enabled with `omw serve --cdp`.
+
+Every request needs `Authorization: Bearer <token>`, including WebSocket upgrades. Get the token with `omw connection`. The `Host` header must be `127.0.0.1`. Requests that carry a web `Origin` are rejected with 403.
+
+## Endpoints in extension mode
+
+| Endpoint                 | Method    | Reply                                             |
+| ------------------------ | --------- | ------------------------------------------------- |
+| `/json`, `/json/list`    | GET       | The open page targets, as a JSON array.           |
+| `/json/version`          | GET       | A version object without a browser WebSocket URL. |
+| `/devtools/page/{tabId}` | WebSocket | One CDP session for one tab.                      |
+
+When only the Firefox extension is connected, these endpoints answer HTTP 501 with the error code `unsupported`. When no browser is connected, `/json` and `/json/list` answer HTTP 503, while `/json/version` still returns its object.
+
+### /json/list
+
+```sh
+TOKEN=$(omw connection | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:17373/json/list
+```
+
+```json
+[
+  {
+    "id": "123456789",
+    "type": "page",
+    "url": "https://example.com/",
+    "title": "Example Domain",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:17373/devtools/page/123456789"
+  }
+]
+```
+
+`id` is the tab id. The list covers non-incognito HTTP(S) and `about:blank` tabs that belong to sessions and tabs you opened, because the extension can attach to both.
+
+### /json/version
+
+```json
+{
+  "Browser": "oh-my-webbridge/0.2.0",
+  "Protocol-Version": "1.3",
+  "User-Agent": "oh-my-webbridge",
+  "transport": "chrome.debugger (page targets only)"
+}
+```
+
+The object has no `webSocketDebuggerUrl`, so a client that discovers targets through `/json/version` finds none in this mode.
+
+## Page connections
+
+Connect to `ws://127.0.0.1:17373/devtools/page/{tabId}` with the Bearer header on the upgrade request. Before the WebSocket is accepted, the daemon asks the extension to attach to that tab.
+
+- A tab another session is using answers HTTP 409 and is not taken over.
+- The tab is released when the client disconnects, when the tab closes, when the debugger detaches, and when the daemon stops or the extension pauses or disconnects. Clients can reconnect afterwards.
+- Events for the tab are subscribed before the attach starts, so events that arrive before the attach reply are still forwarded.
+
+Messages use the CDP shape. Commands need `id` and `method`:
+
+```json
+{ "id": 1, "method": "Page.navigate", "params": { "url": "https://example.com/" } }
+```
+
+A reply carries `result`, or an error object with code `-32000`:
+
+```json
+{ "id": 1, "error": { "code": -32000, "message": "..." } }
+```
+
+Events carry `method`, `params` and, when the event belongs to a child target, `sessionId`. Replies can arrive out of order; the original ids are preserved.
+
+Limits on one page connection:
+
+| Limit                | Value      |
+| -------------------- | ---------- |
+| Commands in flight   | 32         |
+| Deadline per command | 30 seconds |
+| Message size         | 32 MiB     |
+
+An event larger than 32 MiB is not forwarded. The bridge emits `Inspector.detached` for that tab and closes the connection. The daemon also closes the connection for an event whose parameters exceed 256 KiB. A client that cannot keep up with the event stream is disconnected rather than silently losing events.
+
+When the page reports `Inspector.detached` without a `sessionId`, the daemon forwards it and closes the WebSocket, which matches the behavior of Chrome's own page endpoint.
+
+## The cdp action
+
+The `cdp` action sends one protocol command on the session's current tab, attaching the tab if needed. It is the same transport as a page connection, without the WebSocket.
+
+```sh
+omw call research cdp '{"method":"Page.navigate","params":{"url":"https://example.com/"}}'
+```
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("research");
+const { frameTree } = await task.cdp("Page.getFrameTree");
+```
+
+| Argument    | Type     | Meaning                                                                                                                                               |
+| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `method`    | `string` | Protocol method, for example `Page.navigate`.                                                                                                         |
+| `params`    | `object` | Method parameters. Defaults to `{}`.                                                                                                                  |
+| `sessionId` | `string` | Child target session, for a flat session opened by `Target.attachToTarget` with `flatten: true`. Omitted, the command goes to the tab's root session. |
+
+The action is available in Chrome only. Firefox answers `unsupported` with HTTP 501 and the message `cdp is not available in Firefox: Firefox has no Chrome DevTools Protocol`.
+
+Two methods interact with the rest of the bridge:
+
+- `Page.disable` on the root session clears the `@e` references of that tab. The next `snapshot` or `navigate` enables Page events again.
+- `Runtime.disable` ends the frame selection of that session. Later commands run in the main frame until `frame` selects one again.
+
+## Native mode
+
+```sh
+omw serve --cdp ws://127.0.0.1:9222/devtools/browser/8b0d3f7c-...
+```
+
+The URL must start with `ws://` or `wss://` and include a host. Otherwise the daemon refuses to start. Start Chrome with `--remote-debugging-port=9222` to get that URL from `http://127.0.0.1:9222/json/version`.
+
+In native mode, `/json/version` adds the browser WebSocket URL and reports the other transport:
+
+```json
+{
+  "Browser": "oh-my-webbridge/0.2.0",
+  "Protocol-Version": "1.3",
+  "User-Agent": "oh-my-webbridge",
+  "transport": "native CDP passthrough",
+  "webSocketDebuggerUrl": "ws://127.0.0.1:17373/devtools/browser"
+}
+```
+
+`/devtools/browser` opens a WebSocket to that URL and copies frames in both directions, so every CDP domain and every browser-level target is available. It answers HTTP 503 while native mode is not configured (501 while only the Firefox extension is connected), and HTTP 502 when the configured endpoint cannot be reached. The upstream dial has a 10 second timeout.
+
+Playwright can connect to the proxy:
+
+```js
+import { chromium } from "playwright-core";
+
+const browser = await chromium.connectOverCDP("http://127.0.0.1:17373", {
+  headers: { Authorization: `Bearer ${process.env.OMW_TOKEN}` },
+});
+```
+
+Set `OMW_TOKEN` to the `token` value from `omw connection`. Playwright reads `/json/version` and uses the `webSocketDebuggerUrl` it finds.
+
+Native mode does not replace extension mode. `/json/list` still lists targets through the Chrome extension, so without the Chrome extension it answers HTTP 503 (501 while only the Firefox extension is connected) even when the proxy works.
+
+## Limits
+
+- Extension mode carries page targets only. The browser target endpoint is not available, and the domains Chrome allows to `chrome.debugger` are a subset of the full protocol. See the [`chrome.debugger` reference](https://developer.chrome.com/docs/extensions/reference/api/debugger) for that list.
+- Native mode forwards whatever the configured endpoint accepts; the daemon does not filter domains or methods.
+- Chrome does not accept `--remote-debugging-port` together with the default profile directory in current versions. Point it at a separate user data directory; see [remote debugging](https://developer.chrome.com/blog/remote-debugging-port).
+- CDP replies, events and the `cdp` action's result share the 32 MiB message limit of the rest of the bridge. The action's arguments, like any `/command` body, are limited to 2 MiB.
