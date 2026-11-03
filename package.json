@@ -1,0 +1,63 @@
+{
+  "name": "oh-my-webbridge",
+  "version": "0.1.1",
+  "private": true,
+  "description": "A local browser bridge for agents: Go daemon, Chrome and Firefox MV3 extensions, task sessions and CDP.",
+  "homepage": "https://oh-my-webbridge.github.io",
+  "bugs": "https://github.com/oh-my-webbridge/oh-my-webbridge/issues",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oh-my-webbridge/oh-my-webbridge.git"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "oxlint --type-aware --type-check --deny-warnings --format=agent",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "node --test tests/sdk.test.mjs tests/benchmark.test.mjs tests/state.test.mjs tests/worker.test.mjs tests/release.test.mjs tests/presets.test.mjs tests/preset-lifecycle.test.mjs tests/actions.test.mjs tests/firefox-worker.test.mjs tests/firefox-actions.test.mjs tests/firefox-presets.test.mjs tests/firefox-bidi.test.mjs",
+    "test:e2e": "node --test tests/e2e.test.mjs",
+    "test:e2e:firefox": "node --test tests/e2e-firefox.test.mjs",
+    "test:e2e:firefox-page": "node --test tests/firefox-page.test.mjs",
+    "test:e2e:dual": "node --test tests/e2e-dual.test.mjs",
+    "bench": "node benchmarks/run.mjs",
+    "release:pack": "node scripts/package-release.mjs",
+    "changeset": "changeset",
+    "release:plan": "node scripts/release.mjs plan",
+    "release:version": "node scripts/release.mjs version",
+    "release:check": "node scripts/release.mjs check",
+    "filters:update": "node scripts/update-filters.mjs",
+    "release:audit": "node scripts/audit-release.mjs",
+    "media": "node scripts/media/record.mjs"
+  },
+  "dependencies": {
+    "@ghostery/adblocker": "2.20.3"
+  },
+  "devDependencies": {
+    "@changesets/cli": "3.0.3",
+    "@oh-my-webbridge/brand": "workspace:*",
+    "@oh-my-webbridge/extension-ui": "workspace:*",
+    "@resvg/resvg-js": "2.6.2",
+    "@types/chrome": "0.3.7",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "fflate": "0.8.3",
+    "lucide-static": "1.66.0",
+    "mdast-util-from-markdown": "2.1.0",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-to-markdown": "2.2.1",
+    "micromark-extension-gfm": "3.0.0",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "parse5": "8.1.0",
+    "playwright-core": "1.64.1",
+    "typescript": "7.0.2",
+    "ws": "8.22.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.28.5"
+}

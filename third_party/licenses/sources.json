@@ -1,0 +1,12 @@
+[
+  {
+    "file": "GPL-3.0.txt",
+    "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  },
+  {
+    "file": "urlhaus-filter-MIT.txt",
+    "url": "https://gitlab.com/malware-filter/urlhaus-filter/-/raw/main/LICENSE",
+    "sha256": "ded212ed5aa1602579095de45a7b6e1b2b6cab386a8b2b70bec5f7124c81238e"
+  }
+]

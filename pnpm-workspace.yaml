@@ -1,0 +1,10 @@
+# The root package is listed so Changesets versions it with the workspace.
+packages:
+  - "."
+  - docs
+  - extension/ui
+  - packages/*
+allowBuilds:
+  esbuild: false
+# Scripts run against the installed tree; `pnpm install` is the explicit step.
+verifyDepsBeforeRun: false

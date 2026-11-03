@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "react"],
+  "categories": { "correctness": "error" },
+  "ignorePatterns": [
+    "dist/**",
+    "docs/.next/**",
+    "docs/.source/**",
+    "docs/out/**",
+    "docs/next-env.d.ts",
+    "extension/ui/src/components/ui/**"
+  ],
+  "rules": { "no-unused-vars": "error" },
+  "overrides": [
+    {
+      "files": ["tests/**/*.mjs"],
+      "rules": {
+        "typescript/no-floating-promises": "off",
+        "typescript/unbound-method": "off"
+      }
+    }
+  ]
+}

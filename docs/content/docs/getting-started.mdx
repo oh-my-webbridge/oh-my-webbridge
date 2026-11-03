@@ -1,0 +1,158 @@
+---
+title: Getting started
+description: Install the daemon and the browser extension, pair a browser and run the first commands.
+---
+
+Chrome and Firefox can run side by side, and each browser is paired on its own.
+
+## Requirements
+
+- Chrome 156 or later, or Firefox 153 or later.
+- macOS or Linux, on the same computer as the browser.
+- `zstd` to unpack a release archive.
+- Go 1.27.3, Node 24 and pnpm 11 to build from source.
+
+## Install the daemon
+
+<Tabs items={["Release archive", "Build from source"]}>
+<Tab value="Release archive">
+
+Download `omw-<version>-<os>-<arch>.tar.zst` for your platform from the [releases page](https://github.com/oh-my-webbridge/oh-my-webbridge/releases) and check it against the `SHA256SUMS` file from the same release. Unpack it:
+
+```sh
+zstd -dc omw-<version>-darwin-arm64.tar.zst | tar -xf - -C "$HOME/.local"
+```
+
+The archive holds `bin/omw`, `README.md` and the license files. Keep the binary on your `PATH`; the login service records that path.
+
+</Tab>
+<Tab value="Build from source">
+
+Build from the repository root:
+
+```sh
+pnpm install
+pnpm run build
+go build -trimpath -ldflags='-s -w' -o dist/omw ./cmd/omw
+```
+
+`pnpm run build` writes the Chrome extension to `dist/extension`, the Firefox extension to `dist/extension-firefox` and the SDK to `dist/sdk.mjs`.
+
+</Tab>
+</Tabs>
+
+## Install the extension
+
+<Tabs items={["Chrome", "Firefox"]}>
+<Tab value="Chrome">
+
+Unpack `omw-<version>-chrome-mv3.tar.zst` into a folder. Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and select that folder; the manifest sits at the archive root. A source build loads `dist/extension` the same way.
+
+</Tab>
+<Tab value="Firefox">
+
+Unpack `omw-<version>-firefox-mv3.tar.zst`. Open `about:debugging`, choose **This Firefox** and **Load Temporary Add-on…**, then pick `manifest.json` in the unpacked folder. Firefox drops temporary extensions when it restarts. A permanent install needs a signature from addons.mozilla.org in self-distribution mode; submit `omw-<version>-firefox-mv3-unsigned.xpi` there. A source build loads `dist/extension-firefox`.
+
+</Tab>
+</Tabs>
+
+## Set up the browser
+
+Installing the extension opens the setup page. The popup reopens it with **Open setup** when the browser is not paired, the daemon is not running, or the daemon refuses the connection.
+
+<Steps>
+<Step>
+### Start the daemon
+
+Run `omw start`. It starts the daemon in the background and prints `started`, or `already running` when one is up. The step completes by itself once the page reaches the daemon; until then it reads "Waiting for the daemon on 127.0.0.1:17373".
+
+</Step>
+<Step>
+### Pair this browser
+
+Run `omw pair`. It prints a six-digit code such as `482 913`, valid for 5 minutes and 5 attempts. Type the code into the pairing code field. The extension saves the daemon token and shows "Paired".
+
+</Step>
+<Step>
+### Try it with an agent
+
+Install the agent skill with `omw install-skill ~/.agents/skills`, then ask the agent for a browser task, for example to read the active tab.
+
+</Step>
+</Steps>
+
+Firefox adds a step of its own before the last one, **Allow scripts**, whose button carries the same label. The `evaluate` action needs the optional user script permission; you can grant it there, or later under **Settings**, then **Pages**.
+
+<Demo
+  name="setup"
+  alt="The setup page with its steps, the pairing code field and the connected state."
+/>
+
+## Start at login
+
+Move the binary to the path you intend to keep, then run:
+
+```sh
+omw service install
+```
+
+On macOS the command writes `~/Library/LaunchAgents/app.oh-my-webbridge.plist` and loads it with `launchctl`. On Linux it writes `~/.config/systemd/user/oh-my-webbridge.service` and enables the unit with `systemctl --user`. The unit runs `omw serve` with the configuration directory used by the install command. Stop a daemon that `omw start` launched before installing the service, because the service starts its own. Stop the service through its manager:
+
+```sh
+launchctl bootout gui/$(id -u)/app.oh-my-webbridge
+```
+
+```sh
+systemctl --user disable --now oh-my-webbridge.service
+```
+
+`omw stop` asks a running daemon to exit and leaves tabs open. With the service installed, use the service manager so the daemon does not start again.
+
+## Install the agent skill
+
+`omw install-skill DIR` writes `DIR/oh-my-webbridge/SKILL.md` and copies the guide built into the binary. It refuses to overwrite an existing file, so delete the old one before installing again. `omw skill` prints the same guide. The guide tells an agent which commands to run, how sessions and tab ownership work, and which errors to expect.
+
+## First commands
+
+```sh
+omw call research navigate '{"url":"https://example.com","group_title":"Research"}'
+omw call research snapshot
+omw call research evaluate '{"code":"document.title"}'
+omw call research close_session
+```
+
+The first argument after `omw call` is the session name; keep one name per task. Each command prints JSON on stdout.
+
+- `navigate` opens a background tab in a new group titled `Research` and returns the tab id. Later navigations in the same session reuse that tab; pass `newTab` to open another.
+- `snapshot` returns the accessibility tree with `@e` references that `click` and `fill` accept.
+- `evaluate` returns the value of the expression.
+- `close_session` closes the tabs the session owns and releases any borrowed tab.
+
+The third argument is a JSON object. Pass `-` to read it from stdin, which avoids shell quoting:
+
+```sh
+omw call research evaluate - < request.json
+```
+
+When both browsers are connected, name one right after `omw call`:
+
+```sh
+omw call --browser firefox research snapshot
+```
+
+## Check the connection
+
+`omw doctor` prints the config path on stderr and the status JSON on stdout, then one line per browser on stderr:
+
+```text
+chrome: connected (VERSION)
+firefox: not connected
+```
+
+`omw status` prints the same status JSON and browser lines without the config path. Both exit nonzero when the daemon does not answer.
+
+<Callout type="warn" title="The token is the browser credential">
+
+`omw connection` prints the daemon endpoint and token. Anyone who has the token can drive both paired browsers, so keep it out of logs and chat. To pair without the six-digit code, paste the 64 hex characters under **Settings**, then **Advanced**, then **Token**.
+
+</Callout>

@@ -1,0 +1,35 @@
+name: checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+  packages:
+    uses: ./.github/workflows/package.yml
+  changeset:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - run: git show-ref --verify --quiet refs/heads/main || git branch main origin/main
+      - name: Require fragments for published behavior
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/release.mjs check "$BASE_SHA"
+  benchmark-smoke:
+    uses: ./.github/workflows/benchmark.yml
+    with:
+      smoke: ${{ !contains(github.event.pull_request.labels.*.name, 'benchmark:full') }}

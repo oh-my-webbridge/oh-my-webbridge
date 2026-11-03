@@ -1,0 +1,123 @@
+---
+title: Page presets
+description: Control which network requests the tabs a session owns may make with the anti-ad, zen and none presets.
+---
+
+A preset is part of the session configuration. It applies to the task tabs the session owns, including tabs it opens later.
+
+| Mode      | Network                                   | Environment                                 | Use                                               |
+| --------- | ----------------------------------------- | ------------------------------------------- | ------------------------------------------------- |
+| `anti-ad` | Bundled filter lists                      | Optional, off by default                    | Ordinary task pages                               |
+| `zen`     | `anti-ad` plus resource type restrictions | Optional, skipped when `zen` blocks scripts | Static or archive pages, bulk reading             |
+| `none`    | No preset interception                    | Off                                         | Pages a preset breaks, or a run without filtering |
+
+<Tabs items={["anti-ad", "none"]}>
+  <Tab value="anti-ad">
+    <Demo
+      name="presets"
+      still
+      alt="A news front page in a task tab with the anti-ad preset: the stories fill the page and the ad slots are gone."
+    />
+  </Tab>
+  <Tab value="none">
+    <Demo
+      name="presets-none"
+      still
+      alt="The same news front page with the preset set to none: a leaderboard, a sidebar box and an in-feed box show ads."
+    />
+  </Tab>
+</Tabs>
+
+## Set a preset
+
+```js
+const browser = await connect("archive");
+
+await browser.preset("anti-ad", { environment: true });
+await browser.navigate("https://example.com");
+
+const status = await browser.call("preset", { cmd: "status" });
+console.log(status);
+```
+
+`preset` stores the configuration for the session and applies it to the tabs the session owns. `navigate` accepts the same `preset`, `zen` and `environment` fields. It stores them once the navigation starts. From the command line:
+
+```sh
+omw call archive preset '{"preset":"zen","zen":{"images":true,"fonts":true,"css":false,"javascript":false}}'
+omw call archive preset '{"cmd":"status"}'
+```
+
+A session that has not selected a preset uses `anti-ad`, the default for new task tabs.
+
+## anti-ad
+
+The lists are compiled into the extension at build time. `pnpm run filters:update` downloads them and records the URL, SHA-256 value, date and original notices in `third_party/filters/sources.lock.json`. The extension does not fetch rules or updates from a third-party server, and it works offline.
+
+Included lists:
+
+- AdGuard Base, with the EasyList duplicates removed, and AdGuard Tracking Protection
+- EasyList and EasyPrivacy
+- The enabled, non-regional default lists of uBlock Origin: filters, badware, privacy, unbreak, quick fixes, URLHaus and Peter Lowe
+
+Regional lists and annoyance lists are not included. Packaged uBO scriptlets and redirect resources come from Ghostery's pinned copy.
+
+The engine implements request blocking and exceptions. Redirects, response body and HTML rewriting, CSP directives and procedural cosmetics are not implemented. A page can therefore render differently than it does under uBlock Origin or AdGuard with the same lists.
+
+## zen
+
+`zen` adds resource type blocking to `anti-ad`. Each switch is a boolean, and `true` blocks that resource type.
+
+| Switch       | Blocks                       | Default |
+| ------------ | ---------------------------- | ------- |
+| `images`     | Image and image set requests | `true`  |
+| `fonts`      | Font requests                | `true`  |
+| `css`        | Stylesheet requests          | `false` |
+| `javascript` | Script requests              | `false` |
+
+`javascript: true` also stops inline scripts and event handler attributes. In Chrome, script execution is disabled through CDP. In Firefox, the extension adds `Content-Security-Policy: script-src 'none'` to the document and iframe responses of the tab. `<noscript>` content then does not render, because the browser still reports scripting as enabled.
+
+The restrictions cover network requests. Inline and data images, inline CSS and installed service worker caches are not affected. A site that needs stylesheets or scripts breaks under these switches. Select `none` or relax a switch and navigate again.
+
+## environment
+
+`environment: true` adds cosmetics and scriptlets from the bundled lists, guarded by the document hostname. It is off by default, and skipped in `zen` while `javascript` is on.
+
+Registration happens before the target document loads, so the setting applies to the next document the tab shows. It does not alter a page that is already loaded. Navigate again. A cross-host redirect or an iframe from another host receives network filtering only, because the guard never injects a different host's rules.
+
+Environment injection is not anti-bot fingerprint spoofing. A scriptlet that fails to parse or throws affects only itself. Status reports installation, not successful execution of every scriptlet. In Firefox, `environment: true` is accepted but reported as `environmentState: "unavailable"`, and network filtering continues.
+
+## none
+
+`none` removes interception from task tabs. A raw CDP Fetch handler installed through `cdp` conflicts with a preset request handler on the same tab. Select `none` first.
+
+## Borrowed tabs
+
+Presets apply only to tabs the session owns. A borrowed tab is never filtered, and it keeps no preset state for the session that borrowed it. Preset options on a navigation that targets a borrowed tab return `borrowed_tab`.
+
+## Status
+
+`preset {cmd:"status"}` reads the current tab and returns:
+
+- the configuration: `name`, `environment`, `images`, `fonts`, `css`, `javascript`
+- `blocked` and `allowed` request counts since the preset was installed
+- `network`, whether interception is active on the tab
+- `environmentState`: `off`, `active` or `unavailable`
+- `fallback`, up to 8 reasons, each cut to 300 characters
+
+Any other `cmd` value returns `invalid_args`. A configuration call returns `config`, a status entry for each task tab, `appliesOn` and `borrowedTabsExcluded`. `appliesOn` is `immediate; environment on next navigation` in Chrome.
+
+## Costs and limits
+
+- Matching runs in the extension background, in one filter engine shared by every tab. Requests are not sent to the daemon.
+- Engine data is released 30 seconds after the last filtered tab stops filtering. The next preset loads it again.
+- Network and script restrictions apply to existing task tabs and frames immediately. Environment registration applies to the next document.
+- Reconfiguring a tab disables interception on every target of the tab first, so page requests continue while a busy frame delays the rest. Installing the new preset needs the current document to answer. Use `close_session` to recover an unresponsive page.
+- Navigating a task tab whose preset did not change keeps the interception and sends no reconfiguration commands. With `environment` off, status counters continue across the navigation.
+- If the lists fail to load, requests pass unfiltered and status keeps the reason. `zen` type blocking still applies.
+- Chrome intercepts at most 128 targets per tab. Additional frames fail open and status records the reason. Firefox has no per-tab target limit.
+- When Chrome restarts the extension worker, status reports `none` for existing tabs until a controlled navigation reapplies the stored session configuration. No site action is retried.
+- `pnpm run filters:update` downloads the upstream lists, updates the gzip files and `sources.lock.json`, and fails on a download error or an invalid response. The build fails on an integrity mismatch between a list and its recorded SHA-256.
+
+## Firefox
+
+The Firefox build uses the same modes, lists and session settings. Network filtering runs in blocking `webRequest` listeners, environment injection is unavailable, and a blocked top-level page keeps the tab on its current page. [Firefox](/firefox#presets) covers the differences.

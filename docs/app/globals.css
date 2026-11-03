@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import "@oh-my-webbridge/brand/theme.css";
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--omw-font-sans);
+  --font-mono: var(--omw-font-mono);
+}
+
+/* Fumadocs shadcn tokens mapped onto the brand palette (packages/brand/theme.css). */
+:root,
+.dark {
+  --background: var(--omw-surface);
+  --foreground: var(--omw-ink);
+  --card: var(--omw-canvas);
+  --card-foreground: var(--omw-ink);
+  --popover: var(--omw-surface);
+  --popover-foreground: var(--omw-ink);
+  --primary: var(--omw-blue);
+  --primary-foreground: #ffffff;
+  --secondary: var(--omw-fill);
+  --secondary-foreground: var(--omw-ink);
+  --muted: var(--omw-canvas);
+  --muted-foreground: var(--omw-ink-secondary);
+  --accent: var(--omw-fill);
+  --accent-foreground: var(--omw-ink);
+  --border: var(--omw-hairline);
+  --input: var(--omw-control);
+  --ring: var(--omw-blue);
+  --radius: 0.625rem;
+  --color-fd-info: var(--omw-blue);
+  --color-fd-warning: var(--omw-warning);
+  --color-fd-success: var(--omw-success);
+  --color-fd-error: var(--omw-danger);
+}
+.dark {
+  --background: var(--omw-canvas);
+  --card: var(--omw-surface);
+  --muted: var(--omw-surface);
+}
+
+html {
+  scrollbar-gutter: stable;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.prose:not(a) {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+
+/* Demo media fills the article width. */
+.omw-media {
+  width: 100%;
+  height: auto;
+  margin-block: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--omw-hairline);
+  background: var(--omw-canvas);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

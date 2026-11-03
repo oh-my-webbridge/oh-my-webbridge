@@ -1,0 +1,18 @@
+node_modules/
+dist/
+artifacts/
+*.log
+.DS_Store
+.pnpm-store/
+
+# Local working notes and scratch output
+.scratch/
+.private/
+
+# Docs site build output; media come from the assets branch
+docs/public/media/
+docs/.next/
+docs/out/
+docs/.source/
+docs/next-env.d.ts
+docs/tsconfig.tsbuildinfo
