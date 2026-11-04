@@ -1,0 +1,18 @@
+name: setup
+description: Install pnpm, Node.js 24 and the workspace dependencies.
+inputs:
+  package:
+    description: Install only this workspace package and the packages it depends on; the whole workspace when empty.
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      with:
+        node-version: 24
+        cache: pnpm
+    - run: pnpm install --frozen-lockfile ${PACKAGE:+--filter "$PACKAGE..."}
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}

@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "version": "0.1.1",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
+  "icons": {
+    "16": "icons/mark-16.png",
+    "32": "icons/mark-32.png",
+    "48": "icons/mark-48.png",
+    "128": "icons/mark-128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "oh-my-webbridge@oh-my-webbridge.github.io",
+      "strict_min_version": "153.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": [
+    "tabs",
+    "storage",
+    "alarms",
+    "tabGroups",
+    "downloads",
+    "scripting",
+    "webNavigation",
+    "webRequest",
+    "webRequestBlocking",
+    "webRequestFilterResponse",
+    "cookies"
+  ],
+  "optional_permissions": ["userScripts"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "scripts": ["worker.js"],
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "oh-my-webbridge",
+    "default_icon": {
+      "16": "icons/toolbar-offline-16.png",
+      "32": "icons/toolbar-offline-32.png"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' ws://127.0.0.1:17373 http://127.0.0.1:17373"
+  }
+}

@@ -1,0 +1,36 @@
+---
+title: oh-my-webbridge
+icon: BookOpen
+description: 本机 daemon 加上浏览器扩展程序，让 Agent 或脚本在你平常使用的 Chrome 或 Firefox 里工作。
+---
+
+{/* Generated from index.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+Agent 或脚本发送的命令，会在你日常使用的 Chrome 或 Firefox 个人资料中运行，因此页面保有该个人资料的登录状态、cookie 与扩展程序。daemon 与浏览器在同一台电脑上运行，只监听 `127.0.0.1:17373`。
+
+1. Agent 或脚本通过 `omw call` 或 SDK 发送命令。
+2. `omw` daemon 检查 token，再通过 WebSocket 把命令转送给某个浏览器中的扩展程序。
+3. 扩展程序在标签页中运行命令，并返回 JSON。
+
+一个 daemon 可同时服务 Chrome 与 Firefox。每个浏览器只需配对一次，token 由其扩展程序保存。
+
+<Demo
+  name="activity-form"
+  alt="Agent 填写表单时，页面显示边缘光晕，当前的字段出现焦点框，并逐字显示输入的文字。"
+/>
+
+## Agent 能做什么 [#what-an-agent-can-do]
+
+- 在背景打开标签页，每个会话使用一个标签页分组。分组标题取自 `group_title` 或会话名称。标签页分组只在画面上区隔不同任务；所有标签页共用同一个个人资料及其 cookie。
+- 以文字读取页面（`read_page`），或取得带有 `@e` 引用的无障碍快照（`snapshot`），供后续动作指定目标。
+- 点击、输入与填写表单字段。Chrome 通过 DevTools 协议发送这些输入，因此页面收到的是受信任事件；Firefox 以不受信任事件发送点击与按键，页面可能忽略这些事件。
+- 在两种浏览器中截图，并可在 Chrome 中把页面存成 PDF。
+- 在两种浏览器中读取网络请求，并可在 Chrome 中读取控制台消息。
+- 没有现成动作能完成任务时，可在 Chrome 中发送原始 CDP 命令。
+
+## 接下来看哪里 [#where-to-go-next]
+
+- [快速开始](./getting-started.mdx)：安装 daemon 与扩展程序，配对浏览器，并运行第一批命令。
+- [会话与标签页](./sessions.mdx)：每项任务一个会话，各有自己的标签页与标签页分组。
+- [Agent 活动](./activity.mdx)：光晕、焦点框与工具栏图标，用来标示 Agent 正在控制的标签页。
+- [动作](./reference/actions.mdx)：所有动作、其参数，以及会返回的错误。

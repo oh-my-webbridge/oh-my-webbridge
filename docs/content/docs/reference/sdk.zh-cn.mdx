@@ -1,0 +1,183 @@
+---
+title: JavaScript SDK
+icon: Code
+description: 对 daemon 会话发送动作的 Node.js 客户端。
+---
+
+{/* Generated from sdk.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+SDK 是单一模块 `sdk/index.ts`，由 `pnpm run build` 构建为 `dist/sdk.mjs`。它是供 Node.js 24 及更新版本使用的 ESM 模块。它从[配置目录](./cli.mdx#configuration-directory)读取 `config.json`，并把动作送到 `POST /command`。
+
+`connect` 返回一个绑定到单一会话名称的 task 对象。如同 `omw call`，扩展程序会依需求打开该会话的标签页与标签页分组。
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("research");
+await task.navigate("https://example.com/");
+const page = await task.evaluate("({title:document.title,url:location.href})");
+console.log(page.title);
+await task.close();
+```
+
+## connect(session, options) [#connectsession-options]
+
+```ts
+const task = await connect("research", { browser: "firefox" });
+```
+
+| 参数              | 类型                    | 意义                                                                                           |
+| ----------------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `session`         | `string`                | 会话名称：由 1 到 96 个字符组成，可用字母（包括 CJK）、数字、`_`、`.` 或 `-`。由 daemon 验证。 |
+| `options.browser` | `"chrome" \| "firefox"` | 把每个命令送往这个浏览器。省略时，daemon 依序依据会话绑定、唯一已连接的浏览器、Chrome 来路由。 |
+
+在下列情况，`connect` 会被拒绝：
+
+- `config.json` 不存在或无法读取。请先运行 `omw start`；它会创建该文件。
+- 文件中的 `address` 不是 `127.0.0.1:17373`；消息为 `unsupported daemon address`。
+- `browser` 是其他字符串；消息为 `unsupported browser: safari`。
+
+返回的对象含有 `session`、`browser`（未指定浏览器时为 undefined），以及下列方法。
+
+## Task 方法 [#task-methods]
+
+| 方法                              | 发送                    | 解析为                                                                              |
+| --------------------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
+| `call(action, args, options)`     | 带有 `args` 的 `action` | 命令结果；除非传入类型参数，否则没有类型。                                          |
+| `navigate(url, newTab = false)`   | `navigate`              | `{ success, tabId, url }`                                                           |
+| `preset(preset, options)`         | `preset`                | `{ config, tabs }`，含每个任务标签页的状态。`options` 接受 `zen` 与 `environment`。 |
+| `snapshot()`                      | `snapshot`              | `{ tree, truncated, url, title }`                                                   |
+| `click(selector)`                 | `click`                 | `{ success: true }`                                                                 |
+| `fill(selector, value)`           | `fill`                  | `{ success: true }`                                                                 |
+| `evaluate(code)`                  | `evaluate`              | 表达式的值，而不是包装对象。                                                        |
+| `cdp(method, params, sessionId?)` | `cdp`                   | CDP 命令的结果。                                                                    |
+| `close()`                         | `close_session`         | `{ success, closed }`，`closed` 为已关闭的标签页数量。                              |
+
+`evaluate` 在页面中运行 JavaScript 表达式。把异步代码包在 IIFE 中：
+
+```js
+const count = await task.evaluate("(async () => (await fetch('/api/count')).text())()");
+```
+
+```js
+const links = await task.evaluate("document.querySelectorAll('a').length");
+```
+
+选择器接受[动作参考](./actions.mdx#selectors)中列出的形式，包括 CSS、快照中的 `@e` 引用、`role=`、`text=` 与 `xpath=`。
+
+## call(action, args, options) [#callaction-args-options]
+
+```ts
+const result = await task.call(
+  "get",
+  { selector: "#price", property: "text" },
+  { timeoutMs: 5000 },
+);
+```
+
+| 选项        | 类型          | 默认    | 意义                                                        |
+| ----------- | ------------- | ------- | ----------------------------------------------------------- |
+| `timeoutMs` | `number`      | `30000` | 命令的期限，包括它在队列中的时间。daemon 接受 1 到 120000。 |
+| `signal`    | `AbortSignal` | 无      | 取消请求。它会与 `timeoutMs + 5000` 的内部超时合并。        |
+
+请求在 daemon 期限之后 5 秒于本机中止。这让 daemon 有时间在页面没有完成时，以 `outcome_unknown` 响应。
+
+```js
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 2000);
+try {
+  await task.call("wait", { selector: "#done", state: "visible" }, { signal: controller.signal });
+} catch (error) {
+  console.log(error.name);
+}
+```
+
+## 错误 [#errors]
+
+被拒绝的调用是带有 `code` 属性的 `Error`。当 daemon 以命令错误响应时，`code` 与 `message` 就是 daemon 的 `error.code` 与 `error.message`。
+
+```js
+try {
+  await task.click("@e12");
+} catch (error) {
+  if (error.code === "stale_ref") {
+    await task.snapshot();
+  } else {
+    throw error;
+  }
+}
+```
+
+| `code`                                     | 原因                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `stale_ref`、`tab_busy`、`session_browser` | 引用已过期、另一个会话持有该标签页，或该会话绑定到另一个浏览器。HTTP 409。                 |
+| `browser_offline`                          | 目标浏览器没有已连接的扩展程序。HTTP 503。                                                 |
+| `unsupported`                              | 该浏览器没有这个动作或参数。HTTP 501。                                                     |
+| `busy`                                     | 命令容量已满。HTTP 429。等运行中的命令完成后重试。                                         |
+| `outcome_unknown`                          | 命令可能已经生效。重试之前，先读取页面。HTTP 504。                                         |
+| `invalid_args`、`invalid_request`          | 参数在分派之前就被拒绝。HTTP 400。                                                         |
+| `http_error`                               | 回复不是 JSON，因此缺少 daemon 的错误对象。消息为 `HTTP <status>: <本文的前 200 个字符>`。 |
+
+回复没有 JSON 内容类型时，请求从未到达命令处理常式。可能的原因：token 被拒绝、`Host` 不是回环地址、网页 `Origin`，或连接端口 17373 上是其他服务。
+
+被中止的请求以 `AbortError` 拒绝，没有 daemon 的错误码。被拒绝的连接以 `fetch` 的 `TypeError` 拒绝。
+
+完整的错误码清单与复原步骤位于[动作参考](./actions.mdx#errors)。
+
+## 并行任务 [#parallel-tasks]
+
+每个会话拥有自己的标签页。给每个任务各自的会话名称，然后用 `Promise.all` 一起启动。daemon 并行运行这些命令，每个浏览器最多同时进行 128 个。
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const tasks = [
+  { session: "chrome-docs", url: "https://developer.chrome.com/docs/extensions/" },
+  { session: "go-docs", url: "https://go.dev/doc/" },
+];
+
+const results = await Promise.all(
+  tasks.map(async ({ session, url }) => {
+    const task = await connect(session);
+    try {
+      await task.navigate(url);
+      const page = await task.evaluate("({title:document.title,url:location.href})");
+      return { session, ...page };
+    } finally {
+      await task.close();
+    }
+  }),
+);
+
+console.log(JSON.stringify(results, null, 2));
+```
+
+```json
+[
+  {
+    "session": "chrome-docs",
+    "title": "Chrome Extensions documentation",
+    "url": "https://developer.chrome.com/docs/extensions/"
+  },
+  {
+    "session": "go-docs",
+    "title": "The Go Programming Language",
+    "url": "https://go.dev/doc/"
+  }
+]
+```
+
+两个会话名称相同的任务会共用标签页与 CDP 状态，因此请给彼此独立的工作不同的名称。
+
+关闭 task 会关闭该会话打开的标签页、释放借用的标签页，并删除会话绑定。没有调用 `close` 时，标签页保持打开，绑定也会保留，因此之后以相同名称调用 `connect` 会继续该会话。
+
+## 类型 [#types]
+
+`sdk/index.ts` 从扩展程序协议导入 `Args`、`Browser`、`Json` 与 `Fault`。`call` 接受结果的类型参数：
+
+```ts
+const box = await task.call<{ x: number; y: number }>("get", {
+  selector: "#cart",
+  property: "box",
+});
+```

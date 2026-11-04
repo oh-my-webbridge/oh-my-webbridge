@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "oh-my-webbridge"
+  },
+  "extensionDescription": {
+    "message": "將這個瀏覽器連接到本機的 omw daemon，讓 Agent 能開啟分頁、讀取網頁並操作頁面。"
+  }
+}

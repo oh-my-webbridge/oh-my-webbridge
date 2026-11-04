@@ -1,0 +1,48 @@
+{
+  "name": "@oh-my-webbridge/docs",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbopack --port 3884",
+    "build": "next build",
+    "postinstall": "fumadocs-mdx",
+    "typegen": "fumadocs-mdx"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@fontsource-variable/noto-sans-sc": "^5.3.1",
+    "@fontsource-variable/noto-sans-tc": "^5.3.1",
+    "@fumadocs/language": "^0.2.18",
+    "@oh-my-webbridge/brand": "workspace:*",
+    "@sankyu/react-circle-flags": "1.6.9",
+    "fumadocs-core": "16.17.8",
+    "fumadocs-extras": "^0.1.1",
+    "fumadocs-mdx": "15.4.10",
+    "fumadocs-page-history": "^0.4.2",
+    "fumadocs-ui": "npm:@fumadocs/base-ui@16.17.8",
+    "lucide-react": "^1.66.0",
+    "next": "^16.4.4",
+    "next-themes": "^0.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/hast": "^3.0.5",
+    "@types/mdast": "^4.0.4",
+    "@types/mdx": "^2.0.14",
+    "@types/node": "24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "mdast-util-mdx-jsx": "^3.2.0",
+    "mdast-util-to-hast": "^13.2.1",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.3",
+    "takumi-js": "^2.19.0",
+    "typescript": "7.0.2",
+    "unist-util-visit": "^5.2.0",
+    "vfile": "^6.0.3"
+  }
+}

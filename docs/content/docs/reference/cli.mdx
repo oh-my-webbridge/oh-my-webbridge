@@ -1,0 +1,189 @@
+---
+title: CLI
+icon: Terminal
+description: Commands of the omw daemon and command line client.
+---
+
+`omw` is the Go daemon and its command line client. It listens on `127.0.0.1:17373` and has no option to bind another address or a network interface. `serve` and `start` run the daemon. `stop`, `status`, `doctor`, `pair` and `call` need one already running. `connection`, `skill`, `install-skill`, `service install`, `version` and `help` work without it.
+
+| Command               | Purpose                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `omw serve`           | Run the daemon in the foreground.                           |
+| `omw start`           | Start a background daemon; safe to run when one is running. |
+| `omw stop`            | Stop the daemon and leave tabs open.                        |
+| `omw status`          | Print the daemon status and one line per browser.           |
+| `omw doctor`          | Same as `status`, plus the configuration path.              |
+| `omw pair`            | Print a pairing code for a browser extension.               |
+| `omw connection`      | Print the endpoint, token and protocol version.             |
+| `omw call`            | Send one action to a session.                               |
+| `omw service install` | Install a launchd or systemd user service.                  |
+| `omw install-skill`   | Write the bundled agent guide below a directory.            |
+| `omw skill`           | Print the bundled agent guide.                              |
+| `omw version`         | Print the daemon version.                                   |
+| `omw help`            | Print the command list.                                     |
+
+Every command exits with status 0 on success. On failure it prints `omw: ` and the error to stderr, then exits with status 1.
+
+## serve
+
+```sh
+omw serve [--cdp ws://127.0.0.1:9222/devtools/browser/...]
+```
+
+Runs the daemon in the foreground until SIGINT or SIGTERM. The listener is fixed at `127.0.0.1:17373`. If `config.json` names another address, the daemon refuses to start.
+
+`--cdp` points the daemon at a Chrome browser endpoint already running with remote debugging. The URL must start with `ws://` or `wss://` and carry a host. With this flag, `/devtools/browser` proxies that endpoint; see [CDP](./cdp.mdx#native-mode).
+
+The endpoint is not written to `config.json`. A `cdp` field already present in that file is read at startup, and the flag replaces it for that process.
+
+## start
+
+```sh
+omw start
+```
+
+Starts `omw serve` in a new session, detached from the terminal, with `OMW_HOME` set to the configuration directory. Output goes to `daemon.log` in that directory. The file is emptied on every start. The command waits about two seconds for the daemon to answer `/status`.
+
+It prints `started` on success and `already running` when the daemon answers on the port. When another process holds the port, or the token does not match, it reports a port or credential mismatch and exits with status 1. When the new daemon does not answer in that window, it prints the contents of `daemon.log`.
+
+## stop
+
+```sh
+omw stop
+```
+
+Sends `POST /shutdown` and prints the reply, `{"stopping":true}`. Tabs that sessions opened stay open. Bindings in `bindings.json` are kept.
+
+## status and doctor
+
+```sh
+omw status
+omw doctor
+```
+
+Both print the daemon's `/status` JSON to stdout and one line per browser to stderr:
+
+```text
+chrome: connected (156.0.8078.80)
+firefox: not connected
+```
+
+`doctor` adds the path of `config.json` to stderr before those lines.
+
+`status` is an authenticated request. Without a running daemon it exits with status 1 and the connection error.
+
+## pair
+
+```sh
+omw pair
+```
+
+Asks the daemon for a pairing code and prints it in two groups of three digits:
+
+```text
+Enter this code in the oh-my-webbridge extension:
+
+    482 913
+
+It works once and expires in 5 minutes.
+```
+
+The code is valid for 5 minutes and 5 attempts. The command polls the daemon every 500 ms and prints `Paired with Chrome.` or `Paired with Firefox.` when the extension redeems the code. It exits with status 1 when the code expires. Without a running daemon it prints the hint to run `omw start`.
+
+## connection
+
+```sh
+omw connection
+```
+
+Prints one JSON object:
+
+```json
+{
+  "endpoint": "ws://127.0.0.1:17373/extension",
+  "token": "64 hex characters",
+  "protocol": 1
+}
+```
+
+The token is 32 random bytes in hex, the same value that `config.json` holds. It authorizes every request other than `GET /ping` and `POST /pair`, including WebSocket upgrades and CDP connections. Treat it as a secret: do not paste it into issues, logs or pages.
+
+## call
+
+```sh
+omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]
+```
+
+Sends one action to the daemon and prints its JSON reply. The session name is 1 to 96 letters (including CJK), digits, `_`, `.` or `-`. `ACTION` is one of the actions in the [action reference](./actions.mdx).
+
+The optional third argument is a JSON object with the action arguments. With `-`, the command reads that object from stdin, up to 2 MiB. Without it, the daemon receives `{}`.
+
+```sh
+omw call research navigate '{"url":"https://example.com/"}'
+echo '{"selector":"#submit"}' | omw call --browser firefox form click -
+```
+
+`--browser` sends the action to the named browser. Without it the daemon routes by the session binding, then the only connected browser, then Chrome.
+
+The client waits up to 125 seconds. The daemon applies the command's own deadline, which defaults to 30 seconds. The reply is printed as the daemon sends it. An HTTP status of 400 or above makes the command exit with status 1 after printing the reply.
+
+## service install
+
+```sh
+omw service install
+```
+
+Installs a user service that runs `omw serve` at login, with `OMW_HOME` set to the configuration directory the command used.
+
+| Platform | File                                               | Activation                                                                                     |
+| -------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| macOS    | `~/Library/LaunchAgents/app.oh-my-webbridge.plist` | `launchctl bootstrap gui/$UID`                                                                 |
+| Linux    | `~/.config/systemd/user/oh-my-webbridge.service`   | `systemctl --user daemon-reload`, then `systemctl --user enable --now oh-my-webbridge.service` |
+
+The service keeps the daemon running: `KeepAlive` on macOS, `Restart=on-failure` with a 3 second delay on Linux. Output is discarded on macOS; the systemd unit keeps the default journal.
+
+## install-skill and skill
+
+```sh
+omw install-skill DIRECTORY
+omw skill
+```
+
+`install-skill` writes the bundled agent guide to `DIRECTORY/oh-my-webbridge/SKILL.md` with mode 0600, and creates the directory with mode 0700. It refuses to overwrite an existing file.
+
+`skill` prints the same guide to stdout.
+
+```sh
+omw install-skill ~/.agents/skills
+```
+
+## version and help
+
+```sh
+omw version
+omw --version
+omw help
+```
+
+`version` prints the daemon version. `help`, `--help` and a bare `omw` print the command list.
+
+An unknown command prints `omw: unknown command "NAME"; run omw help` and exits with status 1.
+
+## Configuration directory
+
+The directory is resolved in this order:
+
+1. `OMW_HOME`, when set.
+2. macOS: `~/Library/Application Support/oh-my-webbridge`.
+3. Linux: `$XDG_CONFIG_HOME/oh-my-webbridge`, or `~/.config/oh-my-webbridge` when `XDG_CONFIG_HOME` is unset.
+
+The CLI, the daemon, the user service and the [SDK](./sdk.mdx) all read the same directory. Every command that reads the configuration creates it with mode 0700 when it is missing.
+
+| File            | Contents                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `config.json`   | `token` (64 hex characters), `address`, and an optional `cdp` endpoint. Created with mode 0600 on first use. |
+| `bindings.json` | Session to browser bindings, mode 0600, read at startup.                                                     |
+| `daemon.log`    | Output of the daemon started by `omw start`, emptied on every start.                                         |
+| `artifacts/`    | Screenshots and PDFs saved without an explicit `path`.                                                       |
+
+The token in `config.json` is the only credential. Anyone who reads the file can drive the paired browsers, so keep the directory private and do not copy `config.json` between machines.

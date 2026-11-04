@@ -1,0 +1,19 @@
+{
+  "byline": "文件",
+  "description": "本機 daemon 與瀏覽器擴充功能，讓 Agent 或指令碼在你平常使用的 Chrome 或 Firefox 裡工作。",
+  "repository": "GitHub 儲存庫：oh-my-webbridge/oh-my-webbridge",
+  "language": "語言",
+  "languageCurrent": "語言：{language}",
+  "theme": "主題",
+  "themeCurrent": "主題：{theme}",
+  "themeLight": "淺色",
+  "themeDark": "深色",
+  "themeSystem": "跟隨系統",
+  "pages": "目錄",
+  "notFoundTitle": "找不到頁面",
+  "notFoundBody": "連結已經過時，或是頁面換了位置。",
+  "backToDocs": "前往文件首頁",
+  "chooseLanguage": "選擇語言",
+  "codeBlock": "程式碼 {index}",
+  "codeBlockTitled": "程式碼 {index}：{title}"
+}

@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@import "@oh-my-webbridge/brand/theme.css";
+@import "./tokens.css";
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
+@import "fumadocs-extras/css/preset.css";
+@import "fumadocs-page-history/css/preset.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--omw-font-sans);
+  --font-mono: var(--omw-font-mono);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+:root {
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-ring: var(--ring);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --fd-layout-width: 1280px;
+  --omw-header-height: 4rem;
+}
+
+/* Callouts and badges use the state colors: notes use primary, the rest warning, destructive and success. */
+:root,
+.dark {
+  --color-fd-info: var(--primary);
+  --color-fd-idea: var(--primary);
+  --color-fd-warning: var(--warning);
+  --color-fd-success: var(--success);
+  --color-fd-error: var(--destructive);
+}
+
+html {
+  scrollbar-gutter: stable;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fumadocs adds right padding while it locks scrolling; the reserved scrollbar gutter already keeps the page still. */
+html > body[data-scroll-locked] {
+  margin-right: 0 !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/*
+ * Keyboard focus is one 2px outline with a 2px offset. The rule sits outside layers so it wins over
+ * the outline-none of Fumadocs controls, and it clears their box-shadow focus rings.
+ */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
+}
+
+/* Scroll regions of code blocks and tables sit in clipping containers, so their outline goes inside. */
+[role="region"]:focus-visible,
+.prose-no-margin[tabindex="0"]:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The docs layout sits in a 1280px frame under the site header. */
+#nd-docs-layout {
+  --fd-banner-height: var(--omw-header-height);
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  min-height: calc(100dvh - var(--omw-header-height));
+}
+
+/*
+ * Long text: body text with a long-form line height; headings take the section and card title
+ * roles. Table of contents links also carry `prose`; `:not(a)` keeps their Fumadocs size.
+ */
+.prose:not(a) {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+.prose:not(a) :where(h2):not(:where(.not-prose, .not-prose *)) {
+  @apply text-section-title;
+}
+.prose:not(a) :where(h3):not(:where(.not-prose, .not-prose *)) {
+  @apply text-card-title;
+}
+.prose:not(a) :where(table):not(:where(.not-prose, .not-prose *)) {
+  @apply text-body;
+  width: 100%;
+}
+
+/* Code blocks are control-sized surfaces: small radius, hairline border, no shadow. */
+#nd-page figure.shiki {
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+/* Demo media fills the article width. */
+.omw-media {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-block: 1.5rem;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-fd-border);
+  background: var(--color-fd-card);
+}
+
+/*
+ * Contributors and page history after the article: a divider with 24px above and below; section
+ * headings match the article h2; the history is one card whose toggle is concentric with it.
+ */
+.omw-page-history {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--color-fd-border);
+}
+.omw-page-history .fgc-section {
+  margin-block: 1.5rem 0;
+}
+.omw-page-history .fgc-heading {
+  @apply text-section-title;
+  margin: 0 0 0.75rem;
+}
+.omw-page-history .fgc-author {
+  @apply text-body;
+}
+.omw-page-history a.fgc-author {
+  color: var(--color-fd-foreground);
+  text-decoration-color: var(--color-fd-primary);
+}
+.omw-page-history .fgc-panel {
+  border: 1px solid var(--color-fd-border);
+  border-radius: var(--radius-card);
+  background: var(--color-fd-card);
+}
+.omw-page-history .fgc-toggle {
+  border-radius: calc(var(--radius-card) - 0.375rem);
+}
+.omw-page-history .fgc-summary {
+  font-weight: 600;
+}
+.omw-page-history .fgc-history-icon,
+.omw-page-history .fgc-panel[data-fresh] .fgc-history-icon {
+  color: var(--color-fd-muted-foreground);
+}
+.omw-page-history .fgc-sha code {
+  font-family: var(--font-mono);
+}
+/* Links in commit messages match article links: body color with a primary underline. */
+.omw-page-history .fgc-message a,
+.omw-page-history .fgc-markdown a {
+  color: var(--color-fd-foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--color-fd-primary);
+  text-underline-offset: 3px;
+}
+/* Focus matches the rest of the site: the toggle draws its ring with a shadow by default. */
+.omw-page-history .fgc-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.omw-page-history a:focus-visible {
+  outline-offset: 2px;
+}
+@media (width < 768px) {
+  .omw-page-history .fgc-toggle {
+    min-height: 2.75rem;
+  }
+  .omw-page-history .fgc-sort {
+    width: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

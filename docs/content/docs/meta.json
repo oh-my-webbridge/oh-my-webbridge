@@ -1,0 +1,17 @@
+{
+  "title": "oh-my-webbridge Docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "---Guides---",
+    "sessions",
+    "activity",
+    "presets",
+    "firefox",
+    "---Reference---",
+    "...reference",
+    "---Project---",
+    "architecture",
+    "development"
+  ]
+}

@@ -1,0 +1,115 @@
+---
+title: Firefox
+icon: Globe
+description: Install the Firefox extension, pair it with the daemon, and see how its actions differ from Chrome.
+---
+
+The Firefox build is an MV3 extension for Firefox 153 and later. It pairs with the same daemon and exposes the same actions as the Chrome extension, with the differences listed under [Actions](#actions). Where the Chrome extension uses CDP, the Firefox extension uses WebExtension APIs: page actions run in a content script, presets, network capture and extra request headers use blocking `webRequest` listeners, screenshots use `tabs.captureTab`, and `evaluate` uses `userScripts`.
+
+## Install
+
+Each release has two Firefox files. Check both against `SHA256SUMS`.
+
+- `omw-<version>-firefox-mv3.tar.zst` holds the extension directory. Extract it with `zstd -dc archive.tar.zst | tar -xf - -C <directory>`.
+- `omw-<version>-firefox-mv3-unsigned.xpi` holds the same extension, packaged for signing.
+
+### Temporary extension
+
+A temporary extension is removed when Firefox quits.
+
+1. Open `about:debugging` and select **This Firefox**.
+2. Choose **Load Temporary Add-on…**.
+3. Select `manifest.json` in `dist/extension-firefox` or in the extracted release directory.
+
+`pnpm run build` writes `dist/extension-firefox` next to the Chrome build.
+
+### Signed extension
+
+Firefox Release and Beta install only extensions signed by Mozilla. A signed extension stays installed after a restart.
+
+1. Sign the extension on addons.mozilla.org as unlisted and self-distributed. Upload the unsigned `.xpi` in the AMO Developer Hub, or run `web-ext sign --channel=unlisted --api-key=<JWT issuer> --api-secret=<JWT secret>` in the extracted directory. `web-ext` writes the signed `.xpi` to `web-ext-artifacts/`.
+2. In `about:addons`, open the gear menu, choose **Install Add-on From File…**, and select the signed `.xpi`.
+
+AMO validates each submission before it signs it. Signing can take up to 24 hours, and each version needs its own signature.
+
+Firefox ESR, Developer Edition, Nightly and unbranded builds install the unsigned `.xpi` when `xpinstall.signatures.required` is `false` in `about:config`.
+
+## Pairing and permissions
+
+Installing the extension opens the setup page (`app.html`), which lists the setup steps:
+
+1. **Start the daemon**: `omw start`, or `omw service install` to start at login. The step completes when the page reaches the daemon.
+2. **Pair this browser**: run `omw pair`. It prints a six-digit code that is valid for 5 minutes and 5 attempts. Type it into the pairing code field.
+3. **Allow scripts**: grants the optional `userScripts` permission.
+4. **Try it with an agent**: `omw install-skill ~/.agents/skills`, then ask the agent something.
+
+- **Access to all websites** is the `<all_urls>` host permission, requested at installation. You can turn it off under Permissions in `about:addons`. Without it, page actions, `screenshot` and `cookies` return `restricted_tab` and presets stop filtering requests. A `navigate` to a URL that answers 204 No Content or 205 Reset Content then waits until the command deadline. Turning the permission back on restores filtering.
+- **User scripts** is the optional `userScripts` permission. Choose **Allow scripts** in step 3, or under **Settings**, then **Pages**, and confirm the Firefox prompt. Firefox accepts the request only from a user action, so these buttons are the only place to grant it. Until it is granted, `evaluate` and `wait` with `expression` return `unsupported`.
+
+**Pause** in the popup disconnects the extension from the daemon until you select **Resume**.
+
+## Chrome and Firefox together
+
+The daemon keeps one Chrome connection and one Firefox connection at the same time. A second connection from the same browser gets HTTP 409.
+
+- A command with `browser` goes to that browser: `omw call --browser firefox SESSION ACTION` on the command line, `connect(session, { browser: "firefox" })` in the SDK.
+- A command without `browser` goes to the browser the session is bound to. An unbound session goes to the only connected browser, or to Chrome when both are connected.
+- The first command the daemon sends binds the session to that browser. Bindings are stored in `bindings.json` and survive extension reconnects and daemon restarts.
+- `browser` naming the other browser returns `session_browser` (HTTP 409). A bound browser that is not connected returns `browser_offline`; the daemon does not move the session to the other browser. `close_session` removes the binding.
+- `/json`, `/json/list`, `/json/version` and `/devtools/page/*` use Chrome. With only Firefox connected they return `unsupported` (HTTP 501).
+
+`omw status` and `omw doctor` print one connection line for each browser.
+
+## Actions
+
+Actions behave as in Chrome unless the table lists a difference. An action or parameter that Firefox cannot perform returns `unsupported` (HTTP 501), and the message names the action, the parameter and the reason.
+
+| Action                                                   | Firefox behavior                                                                                                                    |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `navigate`                                               | When a preset blocks the top-level page, the tab keeps its current page; `navigate` returns that URL, or `about:blank` in a new tab |
+| `window_new`                                             | Ignores `focused: false`; the new window takes focus                                                                                |
+| `click`, `dblclick`, `mouse_click`, `hover`, `send_keys` | Untrusted events; a page that checks `isTrusted` ignores them                                                                       |
+| `keyboard` (`down`, `up`), `mouse`, `drag`               | `unsupported`                                                                                                                       |
+| `key_type`, `keyboard` (`insertText`)                    | Returns `element_action_failed` when no editable element has focus                                                                  |
+| `scroll`                                                 | Fires no `wheel` event; an unknown `direction` returns `invalid_args`                                                               |
+| `snapshot`, `read_page`, `find`                          | Roles and names come from the DOM; the same page can give different text than in Chrome                                             |
+| `wait`                                                   | `expression` needs the user scripts permission                                                                                      |
+| `evaluate`                                               | Needs the user scripts permission; `contextId` returns `unsupported`                                                                |
+| `frame`                                                  | Returns a numeric `frameId` as a string and no `contextId`                                                                          |
+| `history`                                                | `back`, `forward` and `reload` work; `list` returns `unsupported`                                                                   |
+| `dialog`, `console`                                      | `unsupported`                                                                                                                       |
+| `dialog_status`                                          | Returns the URL only, without the dialog type or message                                                                            |
+| `emulate`                                                | Only `data` (extra request headers) works                                                                                           |
+| `cookies`                                                | Covers all cookie partitions; `set` writes an unpartitioned cookie                                                                  |
+| `upload`                                                 | The daemon reads the files: 16 MiB per command, 64 MiB in flight                                                                    |
+| `screenshot`                                             | Captures the tab without activating it; `selector` and `fullPage` need the main frame                                               |
+| `save_as_pdf`                                            | `unsupported`; `tabs.saveAsPDF` opens a save dialog and returns no PDF bytes                                                        |
+| `network`                                                | Up to 500 entries; a body over 1 MiB or a dropped body returns an error                                                             |
+| `preset`                                                 | Uses blocking `webRequest`; see [Presets](#presets)                                                                                 |
+| `cdp`, `cdp_attach`, `cdp_detach`, `list_targets`        | `unsupported`; Firefox has no CDP                                                                                                   |
+| `artifact_read`, `artifact_close`                        | `unsupported`; Firefox actions return no artifact streams                                                                           |
+
+A Firefox extension cannot produce trusted input. `click`, `dblclick`, `mouse_click`, `hover` and `send_keys` dispatch `pointer*`, `mouse*` and `key*` events with `isTrusted` set to `false`. The page gets no user activation. Popups from `window.open`, file choosers, fullscreen and clipboard reads that the page starts from these events fail. `click` still calls `element.click()` afterwards, which runs the default action of links, buttons and form controls. `fill` and `key_type` use `document.execCommand` and produce trusted `beforeinput` and `input` events. `hover` does not set `:hover`, so a menu that opens from CSS `:hover` stays closed. `send_keys` accepts `Backspace`, `Delete`, `Enter`, `Tab`, `Shift+Tab`, `Control+A` and `Meta+A`. Other keys return `unsupported`.
+
+## Background lifecycle
+
+The background runs as an MV3 event page. Firefox suspends an idle event page after 30 seconds, and WebSocket traffic does not count as activity. While the extension is connected it sends a ping every 20 seconds and calls `tabs.query`, which keeps the page loaded. An alarm every 30 seconds reconnects after a suspension. Session metadata lives in `storage.session`, which Firefox clears when it restarts.
+
+A background restart drops the `webRequest` listeners and the frame selection:
+
+- `preset {cmd:"status"}` reports `none` for existing tabs until the next navigation of the tab applies the session preset again.
+- Network recordings stop.
+- Extra request headers apply to new task tabs; existing tabs need `emulate {data}` again.
+
+## Presets
+
+Firefox presets use the same modes, filter lists, engine and session settings as Chrome, and they apply only to task tabs. [Page presets](./presets.mdx) describes the modes and the bundled lists.
+
+- Each task tab gets its own blocking `webRequest.onBeforeRequest` listener, filtered by `tabId`. It receives the requests of every frame, including cross-process iframes, and there is no per-tab target limit. Each request is matched synchronously once the lists have loaded.
+- A preset change applies to existing task tabs immediately and the response reports `appliesOn: "immediate"`. Reconfiguration replaces the listeners and sends nothing to the page, so a busy page does not delay it. A navigation with an unchanged preset keeps the listeners and the status counters; a preset with `environment` set reconfigures on each navigation.
+- `zen` blocks requests by type: `images` covers image and image set requests, `fonts` covers fonts, `css` covers stylesheets, and `javascript` covers scripts. With `javascript: true`, the extension also adds `Content-Security-Policy: script-src 'none'` to the document and iframe responses of the tab. Inline scripts and event handler attributes stop running, and `<noscript>` content does not render.
+- `environment` is accepted but reports `environmentState: "unavailable"` with a reason. Network filtering continues.
+- A blocked top-level page leaves the tab on its current page, with no error page.
+- Without **Access to all websites**, every request passes. Status reports `network: false` and records the reason. No request counts as blocked.
+- If the lists fail to load, requests pass unfiltered and `zen` type blocking still applies. The next preset configuration loads the lists again.
+- Engine data is released 30 seconds after the last filtering tab stops filtering.

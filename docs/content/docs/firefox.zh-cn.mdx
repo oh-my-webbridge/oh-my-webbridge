@@ -1,0 +1,117 @@
+---
+title: Firefox
+icon: Globe
+description: 安装 Firefox 扩展程序，与 daemon 配对，并了解它的动作与 Chrome 有何不同。
+---
+
+{/* Generated from firefox.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+Firefox 版本是适用于 Firefox 153 以上的 MV3 扩展程序。它与同一个 daemon 配对，并提供与 Chrome 扩展程序相同的动作，差异列于[动作](#actions)。Chrome 扩展程序使用 CDP 之处，Firefox 扩展程序改用 WebExtension API：页面动作在内容脚本中运行；预设、网络提取与额外的请求标头使用会阻挡的 `webRequest` 监听器；屏幕截图使用 `tabs.captureTab`；`evaluate` 使用 `userScripts`。
+
+## 安装 [#install]
+
+每个发布版本有两个 Firefox 文件。请都以 `SHA256SUMS` 核对。
+
+- `omw-<version>-firefox-mv3.tar.zst` 内含扩展程序目录。以 `zstd -dc archive.tar.zst | tar -xf - -C <directory>` 解开。
+- `omw-<version>-firefox-mv3-unsigned.xpi` 内含相同的扩展程序，已封装以供签章。
+
+### 暂时性扩展程序 [#temporary-extension]
+
+暂时性扩展程序会在 Firefox 结束时移除。
+
+1. 打开 `about:debugging`，选择**这个 Firefox**。
+2. 选择**加载暂时性附加组件…**。
+3. 选取 `dist/extension-firefox` 或已解开的发布版本目录中的 `manifest.json`。
+
+`pnpm run build` 会把 `dist/extension-firefox` 写在 Chrome 构建结果旁边。
+
+### 已签章的扩展程序 [#signed-extension]
+
+Firefox 正式版与 Beta 版只安装由 Mozilla 签章的扩展程序。已签章的扩展程序在重新启动后仍保持安装。
+
+1. 在 addons.mozilla.org 上以未公开上架（unlisted）、自行发布的方式为扩展程序签章。在 AMO 开发者中心上传未签章的 `.xpi`，或在解开的目录中运行 `web-ext sign --channel=unlisted --api-key=<JWT issuer> --api-secret=<JWT secret>`。`web-ext` 会把已签章的 `.xpi` 写入 `web-ext-artifacts/`。
+2. 在 `about:addons` 中打开齿轮菜单，选择**从文件安装附加组件…**，再选取已签章的 `.xpi`。
+
+AMO 会在签章前验证每次提交。签章最多可能需要 24 小时，而且每个版本都需要各自的签章。
+
+Firefox ESR、Developer Edition、Nightly 与未加品牌的构建版本，在 `about:config` 中 `xpinstall.signatures.required` 为 `false` 时，可安装未签章的 `.xpi`。
+
+## 配对与权限 [#pairing-and-permissions]
+
+安装扩展程序后，会打开初始设置页面（`app.html`），列出设置步骤：
+
+1. **启动 daemon**：运行 `omw start`，或运行 `omw service install` 以便登录时启动。页面连上 daemon 后，这个步骤即完成。
+2. **配对这个浏览器**：运行 `omw pair`。它会输出六位数的配对码，有效时间为 5 分钟，可尝试 5 次。把配对码输入配对码字段。
+3. **允许脚本**：授予选用的 `userScripts` 权限。
+4. **和 Agent 试试看**：运行 `omw install-skill ~/.agents/skills`，再请 Agent 做点事。
+
+- **访问所有网站**是 `<all_urls>` 主机权限，在安装时请求。你可以在 `about:addons` 的“权限”中关闭它。关闭后，页面动作、`screenshot` 与 `cookies` 会返回 `restricted_tab`，预设也会停止过滤请求。此时 `navigate` 到响应 204 No Content 或 205 Reset Content 的 URL，会一直等到命令的期限。重新打开这项权限即可恢复过滤。
+- **用户脚本**是选用的 `userScripts` 权限。请在步骤 3 选择**允许脚本**，或到**设置**，再到**网页**，并确认 Firefox 的提示。Firefox 只接受来自用户操作的请求，所以这些按钮是授予权限的唯一入口。在授予之前，`evaluate` 与带有 `expression` 的 `wait` 会返回 `unsupported`。
+
+弹出式窗口中的**暂停**会让扩展程序与 daemon 中断连接，直到你选择**继续**。
+
+## Chrome 与 Firefox 并用 [#chrome-and-firefox-together]
+
+daemon 同一时间各保持一个 Chrome 连接与一个 Firefox 连接。同一个浏览器的第二个连接会得到 HTTP 409。
+
+- 带有 `browser` 的命令会送往该浏览器：命令行用 `omw call --browser firefox SESSION ACTION`，SDK 用 `connect(session, { browser: "firefox" })`。
+- 不带 `browser` 的命令会送往会话所绑定的浏览器。未绑定的会话会送往唯一已连接的浏览器，两个浏览器都已连接时则送往 Chrome。
+- daemon 发送的第一个命令，会把会话绑定到那个浏览器。绑定保存在 `bindings.json`，在扩展程序重新连接与 daemon 重新启动后仍然保留。
+- `browser` 指定另一个浏览器时，会返回 `session_browser`（HTTP 409）。所绑定的浏览器未连接时，会返回 `browser_offline`；daemon 不会把会话移到另一个浏览器。`close_session` 会移除绑定。
+- `/json`、`/json/list`、`/json/version` 与 `/devtools/page/*` 使用 Chrome。只有 Firefox 连接时，它们会返回 `unsupported`（HTTP 501）。
+
+`omw status` 与 `omw doctor` 会为每个浏览器各输出一行连接信息。
+
+## 动作 [#actions]
+
+除非表格列出差异，动作的行为与 Chrome 相同。Firefox 无法运行的动作或参数会返回 `unsupported`（HTTP 501），消息中会指出动作、参数与原因。
+
+| 动作                                                     | Firefox 的行为                                                                                      |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `navigate`                                               | 预设拦截顶层页面时，标签页停留在目前的页面；`navigate` 返回该 URL，在新标签页中则返回 `about:blank` |
+| `window_new`                                             | 忽略 `focused: false`；新窗口会取得焦点                                                             |
+| `click`、`dblclick`、`mouse_click`、`hover`、`send_keys` | 不受信任事件；检查 `isTrusted` 的页面会忽略它们                                                     |
+| `keyboard`（`down`、`up`）、`mouse`、`drag`              | `unsupported`                                                                                       |
+| `key_type`、`keyboard`（`insertText`）                   | 没有可编辑元素取得焦点时，返回 `element_action_failed`                                              |
+| `scroll`                                                 | 不触发 `wheel` 事件；未知的 `direction` 返回 `invalid_args`                                         |
+| `snapshot`、`read_page`、`find`                          | 角色与名称取自 DOM；同一个页面得到的文字可能与 Chrome 不同                                          |
+| `wait`                                                   | `expression` 需要用户脚本权限                                                                       |
+| `evaluate`                                               | 需要用户脚本权限；`contextId` 返回 `unsupported`                                                    |
+| `frame`                                                  | 以字符串返回数值的 `frameId`，不返回 `contextId`                                                    |
+| `history`                                                | `back`、`forward` 与 `reload` 可用；`list` 返回 `unsupported`                                       |
+| `dialog`、`console`                                      | `unsupported`                                                                                       |
+| `dialog_status`                                          | 只返回 URL，不含对话框类型或消息                                                                    |
+| `emulate`                                                | 只有 `data`（额外的请求标头）可用                                                                   |
+| `cookies`                                                | 涵盖所有 cookie 分区；`set` 写入未分区的 cookie                                                     |
+| `upload`                                                 | 由 daemon 读取文件：每个命令 16 MiB，传输中共 64 MiB                                                |
+| `screenshot`                                             | 提取标签页但不激活它；`selector` 与 `fullPage` 需要主框架                                           |
+| `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 会打开保存对话框，且不返回 PDF 字节                                 |
+| `network`                                                | 最多 500 个项目；本文超过 1 MiB 或本文已被丢弃时，返回错误                                          |
+| `preset`                                                 | 使用会阻挡的 `webRequest`；见[预设](#presets)                                                       |
+| `cdp`、`cdp_attach`、`cdp_detach`、`list_targets`        | `unsupported`；Firefox 没有 CDP                                                                     |
+| `artifact_read`、`artifact_close`                        | `unsupported`；Firefox 的动作不返回 artifact 串流                                                   |
+
+Firefox 扩展程序无法产生受信任的输入。`click`、`dblclick`、`mouse_click`、`hover` 与 `send_keys` 会分派 `pointer*`、`mouse*` 与 `key*` 事件，其 `isTrusted` 为 `false`。页面不会取得用户激活状态。页面由这些事件发起的 `window.open` 弹出窗口、文件选择器、全屏幕与剪贴板读取都会失败。`click` 之后仍会调用 `element.click()`，运行链接、按钮与表单控制项的默认动作。`fill` 与 `key_type` 使用 `document.execCommand`，并产生受信任的 `beforeinput` 与 `input` 事件。`hover` 不会设置 `:hover`，所以由 CSS `:hover` 展开的菜单会保持关闭。`send_keys` 接受 `Backspace`、`Delete`、`Enter`、`Tab`、`Shift+Tab`、`Control+A` 与 `Meta+A`。其他按键会返回 `unsupported`。
+
+## 背景生命周期 [#background-lifecycle]
+
+背景以 MV3 事件页面的形式运行。Firefox 会在事件页面闲置 30 秒后将其暂停，而 WebSocket 流量不算作活动。扩展程序连接期间，每 20 秒发送一次 ping 并调用 `tabs.query`，让页面保持加载。每 30 秒触发一次的 alarm，会在暂停后重新连接。会话中继数据存放在 `storage.session`，Firefox 重新启动时会清除它。
+
+背景重新启动会丢失 `webRequest` 监听器与框架选择：
+
+- `preset {cmd:"status"}` 会为既有标签页回报 `none`，直到该标签页的下一次导航再次套用会话的预设。
+- 网络录制会停止。
+- 额外的请求标头套用于新的任务标签页；既有标签页需要再次运行 `emulate {data}`。
+
+## 预设 [#presets]
+
+Firefox 预设使用与 Chrome 相同的模式、过滤清单、引擎与会话设置，且只套用于任务标签页。[页面预设](./presets.mdx)说明各个模式与内置清单。
+
+- 每个任务标签页都有自己会阻挡的 `webRequest.onBeforeRequest` 监听器，并以 `tabId` 过滤。它会收到每个框架的请求，包括跨处理程序的框架，且没有每个标签页的目标数上限。清单加载后，每个请求都会同步比对。
+- 预设变更会立即套用到既有的任务标签页，响应会回报 `appliesOn: "immediate"`。重新设置会替换监听器，且不会对页面发送任何东西，所以忙碌的页面不会延迟它。预设未变更的导航会保留监听器与状态计数器；设置了 `environment` 的预设，每次导航都会重新设置。
+- `zen` 依类型拦截请求：`images` 涵盖图片与图片集请求，`fonts` 涵盖字体，`css` 涵盖样式表，`javascript` 涵盖脚本。`javascript: true` 时，扩展程序也会在该标签页的文档与框架响应中加上 `Content-Security-Policy: script-src 'none'`。行内脚本与事件处理常式属性会停止运行，`<noscript>` 的内容不会呈现。
+- `environment` 会被接受，但回报 `environmentState: "unavailable"` 并附上原因。网络过滤则继续进行。
+- 被拦截的顶层页面会让标签页停留在目前的页面，不显示错误页面。
+- 没有**访问所有网站**时，每个请求都会通过。状态回报 `network: false` 并记录原因。没有任何请求计为已拦截。
+- 清单加载失败时，请求会不经过滤而通过，`zen` 的类型拦截仍然有效。下一次设置预设时会重新加载清单。
+- 最后一个过滤中的标签页停止过滤 30 秒后，引擎数据即被释放。

@@ -1,0 +1,234 @@
+---
+title: 动作
+icon: Zap
+description: 命令端点、每个浏览器动作、选择器语法与错误码。
+---
+
+{/* Generated from actions.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+每个浏览器动作都经由 daemon 的 `POST /command`，地址为 `http://127.0.0.1:17373`。请求带有 `omw connection` 输出的 Bearer token。CLI 以 `omw call` 包装它，SDK 以 `call` 包装它（请见 [CLI](./cli.mdx) 与 [SDK](./sdk.mdx)）。
+
+## 请求 [#requests]
+
+| 字段        | 类型   | 意义                                                                                           |
+| ----------- | ------ | ---------------------------------------------------------------------------------------------- |
+| `session`   | string | 会话名称，由 1 到 96 个字符组成，可用字母（包括 CJK）、数字、`_`、`.` 或 `-`。必填。           |
+| `action`    | string | 下列表格中的动作名称。必填。                                                                   |
+| `args`      | object | 动作参数。默认为 `{}`。                                                                        |
+| `timeoutMs` | number | 期限，单位为毫秒，范围 1 到 120000，默认 30000。它涵盖排队与运行。                             |
+| `browser`   | string | `chrome` 或 `firefox`。省略时，依序使用已绑定到该会话的浏览器、唯一已连接的浏览器，或 Chrome。 |
+
+本文是一个 JSON 对象，上限 2 MiB，不可含有未知字段。名称与既有绑定重复的会话，依 [会话与标签页](../sessions.mdx) 的规则路由。
+
+```json
+{
+  "session": "research",
+  "action": "navigate",
+  "args": { "url": "https://example.com", "group_title": "Research" },
+  "timeoutMs": 30000
+}
+```
+
+成功的调用会返回 daemon 指派的 id 与动作结果：
+
+```json
+{
+  "id": "8f3c1a7d2b6e4c5a9f01d3b7e2c4a680",
+  "result": { "success": true, "tabId": 412, "url": "https://example.com/" }
+}
+```
+
+失败的调用返回 id 与错误，而不是结果，并带有 [错误](#errors) 表格中的 HTTP 状态码：
+
+```json
+{
+  "id": "8f3c1a7d2b6e4c5a9f01d3b7e2c4a680",
+  "error": { "code": "stale_ref", "message": "element reference expired; take a fresh snapshot" }
+}
+```
+
+页面动作在会话目前的标签页中运行。传入 `tabId`（或 `tab`），即可操作该会话持有的另一个标签页，而不必切换过去。
+
+## 导航与标签页 [#navigation-and-tabs]
+
+| 动作            | 参数                                       | 备注                                                                                                         |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `navigate`      | `url`、`newTab`、`group_title`、预设字段   | 除非会话已有目前标签页，或设置了 `newTab`，否则打开一个背景任务标签页。URL 必须是 HTTP(S) 或 `about:blank`。 |
+| `find_tab`      | `url`（完整 URL 或主机名称）、`active`     | 为会话认领既有标签页。`active: true` 借用浏览器的使用中标签页。返回 `tabId`、`url`、`borrowed`。             |
+| `list_tabs`     | 无                                         | 列出这个会话拥有或借用的标签页，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。             |
+| `switch_tab`    | `tabId`                                    | 让该标签页成为目前标签页。已被丢弃的标签页会先重新加载；结果会回报 `revived`。                               |
+| `window_new`    | `url`、预设字段                            | 打开独立的窗口，认领其标签页，并返回 `tabId` 与 `windowId`。                                                 |
+| `close_tab`     | `tabId`                                    | 关闭会话创建的标签页。借用的标签页不会被关闭。                                                               |
+| `close_session` | 无                                         | 关闭任务标签页、释放借用的标签页，并移除浏览器绑定。返回已关闭的标签页数量。                                 |
+| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 返回导航项目。每次 `history` 调用都会丢弃该标签页的引用与框架选择。                                   |
+
+一个会话最多持有 32 个标签页，任务标签页与借用的标签页合计。
+
+## 读取 [#reading]
+
+| 动作            | 参数                                                    | 备注                                                                                                                                                  |
+| --------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `snapshot`      | `interactive`、`maxDepth`                               | 带有 `@e` 引用的无障碍树，另含 `url`、`title`、`truncated`。深度上限为 64。输出在 4000 个节点或 192000 个字符时停止。                                 |
+| `find`          | `query`、快照字段                                       | 对快照各行做不分大小写的搜索。最多 100 笔符合。                                                                                                       |
+| `read_page`     | 无                                                      | `url`、`title`，以及 `document.body.innerText` 的前 192000 个字符。                                                                                   |
+| `evaluate`      | `code`、`contextId`                                     | 运行一个表达式，并返回 `{ type: "value", value }`。需要 `await` 时，使用异步 IIFE。                                                                   |
+| `get`           | `selector`、`property`、`attribute`                     | `text`、`html`、`value`、`attr`、`count`、`box`、`styles`、`title`、`url`。                                                                           |
+| `is`            | `selector`、`property`                                  | `visible`、`enabled`、`checked`、`editable`。返回布尔值 `value`。                                                                                     |
+| `locate`        | `by`、`value`、`name`、`nth`、`cmd`、`text`、`property` | 依 `by`（`role`、`text`、`label`、`placeholder`、`alt`、`title`、`testid`、`css`、`xpath`）创建选择器，并运行 `cmd`，这是一个元素动作，默认为 `get`。 |
+| `dialog_status` | 无                                                      | 以 `dialog` 返回待处理的 JavaScript 对话框，或返回 `null`。                                                                                           |
+
+## 输入 [#input]
+
+| 动作                               | 参数                                                               | 备注                                                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `click`、`dblclick`、`mouse_click` | `selector`，或 `x` 与 `y`、`button`                                | 在元素中心发送鼠标事件。                                                                                                                                            |
+| `hover`                            | `selector`                                                         | 把指针移到元素上。                                                                                                                                                  |
+| `fill`                             | `selector`、`value`                                                | 取代 input、textarea 或 contenteditable 元素的内容。`value` 为空字符串时会清空内容。                                                                                |
+| `key_type`                         | `text`、`selector`                                                 | 在已聚焦的元素插入文字，或先聚焦 `selector`。                                                                                                                       |
+| `send_keys`                        | `keys`                                                             | 单一按键，或 `Control+A`、`Meta+A` 这类组合键。具名按键包括 `Enter`、`Tab`、`Escape`、`Backspace`、`Delete`、方向键、`Home`、`End`、`PageUp`、`PageDown`、`Space`。 |
+| `keyboard`                         | `cmd`：`down`、`up`、`insertText`；`key`、`text`                   | 较低级的按键控制，用于按住修饰键。                                                                                                                                  |
+| `mouse`                            | `cmd`：`move`、`down`、`up`、`wheel`；`x`、`y`、`button`、`amount` | 原始的指针控制。                                                                                                                                                    |
+| `scroll`                           | `selector`，或 `direction`、`amount`、`x`、`y`                     | 指定选择器时，把该元素滚动到中间。否则依 `amount`（0 到 100000，默认 600）朝 `up`、`down`、`left` 或 `right` 滚动滚轮。                                             |
+| `select_option`                    | `selector`、`value`                                                | 以值或显示文字比对选项，然后触发 `input` 与 `change`。                                                                                                              |
+| `drag`                             | `from`、`to`                                                       | 在 `from` 按下，分十个步骤移动，并在 `to` 放开。                                                                                                                    |
+| `focus`、`check`、`uncheck`        | `selector`                                                         | `check` 与 `uncheck` 会先读取目前状态，并验证结果；重复运行不会切换状态。单选按钮只支持 `check`。                                                                   |
+| `dialog`                           | `accept`、`promptText`                                             | 响应待处理的对话框。`accept` 默认为 `false`。                                                                                                                       |
+
+## 等待 [#waiting]
+
+条件成立时，`wait` 立即返回；在请求期限之前，它每 75 ms 轮询一次。设置它的其中一个字段。
+
+| 字段         | 意义                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| `selector`   | 第一个符合的元素存在、有边界框，且不是 `visibility: hidden`。                             |
+| `text`       | `document.body.innerText` 包含该字符串。                                                  |
+| `url`        | 目前的 URL 符合。`*` 可比对任意一段字符。                                                 |
+| `expression` | JavaScript 表达式为真值。                                                                 |
+| `load`       | `load` 等待 `readyState === "complete"`；`domcontentloaded` 等待文档离开 `loading` 状态。 |
+| `state`      | `visible`（默认）或 `hidden`，后者会反转条件。                                            |
+
+## 框架 [#frames]
+
+| 动作或参数                                                                  | 意义                                                     |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `frame {"cmd": "list"}`                                                     | 列出框架，含 `id`、`name` 与 `url`，包括跨进程的子框架。 |
+| `frame {"selector": "iframe#panel"}`                                        | 选取包含符合之 iframe 元素的框架。                       |
+| `frame {"frameId": "..."}`、`frame {"name": "..."}`、`frame {"url": "..."}` | 依 id、名称或完整 URL 选取。                             |
+| `frame {"cmd": "main"}`                                                     | 回到主框架，并丢弃该框架的引用。                         |
+
+选取框架后，页面动作在该框架中运行。选取框架会丢弃先前的引用，并需要重新取得快照。
+
+## 文件与提取 [#files-and-capture]
+
+| 动作          | 参数                                                                                                                               | 备注                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `screenshot`  | `format`（`png`、`jpeg`）、`quality`（0 到 100）、`selector`、`fullPage`、`path`                                                   | 返回 `path`、`sizeBytes` 与 `mimeType`。没有 `path` 时，文件会放在 daemon 的成品目录下。既有的路径会被拒绝。 |
+| `save_as_pdf` | `paper_format`（默认 `letter`；另有 `legal`、`a4`、`a3`、`tabloid`）、`landscape`、`scale`（0.1 到 2）、`print_background`、`path` | 以分块方式把 PDF 串流写到磁盘，并返回 `path`、`sizeBytes`、`mimeType` 与 `pageTitle`。仅限 Chrome。          |
+| `upload`      | `selector`、`files`                                                                                                                | 运行浏览器之机器上的绝对路径。对 Firefox，daemon 会内嵌文件内容：每个命令 16 MiB，进行中的合计 64 MiB。      |
+| `download`    | `url`（HTTP(S)）、`filename`                                                                                                       | 在浏览器所在的主机上返回 `path`、`sizeBytes`、`mimeType` 与 `id`。取消或超时会中断下载。                     |
+
+编码后的结果超过 32 MiB 的屏幕截图，会以 `result_too_large` 失败。
+
+## 网络、控制台、保存空间与 cookie [#network-console-storage-and-cookies]
+
+| 动作      | 参数                                                                                          | 备注                                                                             |
+| --------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `network` | `cmd`：`start`、`stop`、`list`、`detail`；`filter`、`requestId`                               | 每个标签页保留最近 500 个请求。`filter` 是 URL 子字符串。`detail` 返回响应本文。 |
+| `console` | `cmd`：`start`、`list`、`clear`、`stop`                                                       | 每个标签页最多保存 200 笔项目，每笔截断为 8192 个字符。                          |
+| `storage` | `cmd`：`list`、`get`、`set`、`remove`、`clear`；`kind`（`local`、`session`）、`name`、`value` | 只读写目前的来源。返回 `origin`、`kind`，以及 `value` 或整个保存空间。           |
+| `cookies` | `cmd`：`list`、`set`、`delete`、`clear`；`data`、`name`                                       | 范围限于目前的 URL。`set` 把 `data` 直接传给 cookie 字段。                       |
+
+## 模拟 [#emulation]
+
+| 字段                          | 意义                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| `width`、`height`             | 视端口大小，单位为 CSS 像素，各为 1 到 16384。变更设备度量时，两者都必须提供。 |
+| `deviceScaleFactor`、`mobile` | 度量覆写所用的设备像素比与行动设备旗标。                                       |
+| `colorScheme`                 | 供 `prefers-color-scheme` 使用的 `dark` 或 `light`。                           |
+| `latitude`、`longitude`       | 地理位置。两者必须一起提供。                                                   |
+| `offline`                     | 让页面脱机或恢复连接。                                                         |
+| `data`                        | 额外的 HTTP 标头：最多 128 个字符串值与 32 KiB，不可含有 CR 或 LF。            |
+
+设置会在会话内持续有效，并在新标签页导航之前套用到它们。
+
+## 批量 [#batch]
+
+`batch` 接受 `steps`，这是由 `{ action, args }` 对象组成的数组，含 1 到 64 项。步骤在同一个请求中依序运行，并在第一个错误时停止。已完成的步骤不会还原。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 与 `artifact_close` 不能出现在批量内。
+
+## 预设 [#presets]
+
+| 字段          | 意义                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| `preset`      | `anti-ad`（默认）、`zen` 或 `none`。                              |
+| `environment` | 安装内附的外观规则与 scriptlet。从下一个文档起套用。              |
+| `zen`         | `images`、`fonts`、`css`、`javascript`。`true` 会拦截该资源类型。 |
+| `cmd`         | `status` 读取该标签页的计数器、拦截与后备原因。                   |
+
+配置保存在会话上，并套用到任务标签页。借用的标签页不在其内。`navigate` 接受相同的字段，并在导航开始后保存它们。请见[页面预设](../presets.mdx)。
+
+## CDP [#cdp]
+
+`cdp` 对标签页发送一个 Chrome DevTools Protocol 命令：`method`、`params`，以及子目标可选的 `sessionId`。它原封不动地返回协议结果。
+
+有两个方法会改变桥接器自身的状态。`Runtime.disable` 结束其会话的框架选择；没有 session id 的 `Page.disable` 使该标签页的 `@e` 引用失效；下一次快照或导航会重新激活这些事件。
+
+daemon 在内部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact_close` 与 `list_targets`。不要自行发送它们。
+
+## 选择器 [#selectors]
+
+每个接受 `selector` 的动作都接受下列形式。
+
+| 形式                             | 示例                                 | 比对方式                                                                   |
+| -------------------------------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| CSS                              | `button[type=submit]`、`css=.card a` | 选择器查找。也会搜索打开的 shadow root。                                   |
+| `@e` 引用                        | `@e<generation>.<index>`             | 最新 `snapshot` 中的节点。                                                 |
+| `role=`                          | `role=button[name="Submit"]`         | 无障碍角色，以及可选的名称。名称是 JSON 字符串，须完全相符。               |
+| `text=`                          | `text=Sign in`、`text="Sign in"`     | 转译后的文字。未加引号的值比对不分大小写的子字符串；加引号的值须完全相符。 |
+| `label=`                         | `label=Email`                        | 关联的标签文字或 `aria-label`。                                            |
+| `placeholder=`、`alt=`、`title=` | `placeholder=Search`                 | 对应的属性。                                                               |
+| `testid=`                        | `testid=search`                      | `data-testid` 属性。                                                       |
+| `xpath=`                         | `xpath=//table//a`                   | 只在目前文档中运行的 XPath。不会穿越 shadow root。                         |
+
+附加 ` >>nth=0` 取第一个符合项，或附加 ` >>nth=-1` 取最后一个。文字、CSS 与属性定位器会穿越打开的 shadow root。它们看不到封闭的 shadow root。
+
+## 引用的存续期间 [#reference-lifetime]
+
+`@e` 引用属于单一文档世代。在 Chrome 中，新的快照、框架选择、新的主文档（导航或重新加载），或标签页 URL 的变更，都会使它们失效。在所选框架内取得的快照，也会在该框架导航、重新加载、被移除，或选取结束时过期。其他 iframe 加载或导航，不影响它的有效性。在 Firefox 中，引用存在于产生它们的文档内；请见 [Firefox](../firefox.mdx)。
+
+## 错误 [#errors]
+
+每个错误都带有 `code` 与 `message`。HTTP 状态码列于下方；这里未列出的错误码返回 502。
+
+| 错误码                  | HTTP | 意义                                                                                                                        | 处理方式                                                                   |
+| ----------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `invalid_request`       | 400  | 本文被拒绝：有未知字段、缺少 action 或 session、会话名称含有不允许的字符、`browser` 无效，或 `timeoutMs` 超出 1 到 120000。 | 修正 JSON。消息会指出字段。                                                |
+| `invalid_args`          | 400  | 参数缺少、类型错误，或超出范围。                                                                                            | 阅读消息；它会指出动作与参数。                                             |
+| `unsupported`           | 501  | 目标浏览器没有这个动作，或没有它的某个参数。                                                                                | 不要重试。改用其他动作，或使用 Chrome 会话。                               |
+| `busy`                  | 429  | 容量限制已满：命令名额、每个会话 32 个标签页、每个浏览器 128 个会话、Firefox 上传额度，或两个同时进行的成品工作。           | 降低并行数量，并在先前的命令完成后重试。                                   |
+| `browser_offline`       | 503  | 目标浏览器没有扩展程序连接，包括绑定到未连接浏览器的会话。                                                                  | 检查 `omw doctor` 与扩展程序，或在新的会话中继续。                         |
+| `session_browser`       | 409  | 会话绑定到另一个浏览器，而请求指定了这个浏览器。                                                                            | 移除 `browser`，或关闭该会话并开始新的会话。                               |
+| `outcome_unknown`       | 504  | 命令可能已经运行：期限、传输写入或断线切断了回复。                                                                          | 重复之前，先观察页面或网络状态。切勿盲目重送提交、付款或发布操作。         |
+| `tab_busy`              | 409  | 该标签页属于另一个会话。                                                                                                    | 使用这个会话持有的标签页，或使用另一个会话。                               |
+| `stale_ref`             | 409  | `@e` 引用比它所属的文档存活得更久。                                                                                         | 重新取得 `snapshot`。                                                      |
+| `no_tab`                | 502  | 页面动作在会话还没有标签页时运行。                                                                                          | 先运行 `navigate` 或 `find_tab`。                                          |
+| `tab_missing`           | 502  | `find_tab` 没有符合的标签页。                                                                                               | 先在这个会话中打开该页面，或传入 `active: true` 借用浏览器的使用中标签页。 |
+| `restricted_tab`        | 502  | 该标签页不是一般的、非无痕的 HTTP(S) 页面。                                                                                 | 导航到 HTTP(S) 页面。浏览器内部页面无法用脚本操作。                        |
+| `borrowed_tab`          | 502  | 动作需要会话创建的标签页：关闭它，或对借用的标签页套用预设。                                                                | 用 `navigate` 打开任务标签页。                                             |
+| `element_missing`       | 502  | 选择器没有符合任何元素。                                                                                                    | 检查选择器，或重新取得快照。                                               |
+| `element_hidden`        | 502  | 元素没有边界框，因此没有可点击的中心。                                                                                      | 把它滚动到可见范围，或等待它转译完成。                                     |
+| `element_action_failed` | 502  | 页面拒绝了这个操作，例如填写不可编辑的元素，或选取不存在的选项。                                                            | 用 `get` 或 `is` 检查，并调整动作。                                        |
+| `state_mismatch`        | 502  | `check` 或 `uncheck` 让控制项停在错误的状态。                                                                               | 用 `is` 重新读取，然后重试，或改为点击它。                                 |
+| `evaluation_failed`     | 502  | `evaluate` 掷出例外，或内部页面脚本掷出例外。                                                                               | 修正表达式。消息带有页面例外。                                             |
+| `frame_missing`         | 502  | `frame` 找不到符合所给选择器、id、名称或 URL 的框架。                                                                       | 用 `frame {"cmd":"list"}` 列出框架，并选取其中一个。                       |
+| `frame_unavailable`     | 502  | 所选的框架已被取代、移除，或失去其运行环境。                                                                                | 之后的命令使用主框架；如果工作要在该框架继续，请重新选取它。               |
+| `history_missing`       | 502  | `history back` 或 `forward` 在该方向上没有项目。                                                                            | 先读取 `history {"cmd":"list"}`。                                          |
+| `request_missing`       | 502  | 该请求没有网络纪录，或纪录已被逐出。                                                                                        | 开始记录，重现问题，然后读取 `list`。                                      |
+| `request_pending`       | 502  | 响应本文尚未完整。                                                                                                          | 等 `list` 中出现 `complete: true`，再重试 `detail`。                       |
+| `request_failed`        | 502  | 请求本身失败。                                                                                                              | 读取该项目上的错误文字。                                                   |
+| `download_missing`      | 502  | 浏览器没有列出该下载。                                                                                                      | 重试 `download`。                                                          |
+| `download_failed`       | 502  | 浏览器中断了下载。                                                                                                          | 阅读消息并重试。                                                           |
+| `window_failed`         | 502  | 新窗口没有标签页。                                                                                                          | 重试 `window_new`。                                                        |
+| `result_too_large`      | 502  | 结果在传输时超过 32 MiB，或网络本文在 Chrome 中超过 2 Mi 个字符、在 Firefox 中超过 1 MiB。                                  | 缩小结果：屏幕截图使用 `selector` 或 `jpeg`，并读取较小的片段。            |
+| `debugger_unavailable`  | 502  | Chrome 拒绝附加调试工具，例如因为 DevTools 已打开，或原则拦截了它。                                                         | 关闭该标签页的 DevTools 并重试。                                           |
+| `browser_error`         | 502  | 扩展程序回报了没有错误码的错误。                                                                                            | 阅读消息，重试一次，然后回报。                                             |
+| `internal`              | 502  | daemon 端的失败，例如编码请求时出错。                                                                                       | 重试。如果持续发生，重新启动 daemon。                                      |
