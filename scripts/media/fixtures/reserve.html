@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Reserve · Harbor Table</title>
+    <link rel="icon" href="/icons/utensils.svg" />
+    <link rel="stylesheet" href="/site.css" />
+    <style>
+      main {
+        display: grid;
+        grid-template-columns: 1fr 440px;
+        gap: 48px;
+        padding: 40px 40px 0;
+      }
+      .intro h1 {
+        font-size: 44px;
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+        margin: 8px 0 16px;
+        font-weight: 600;
+      }
+      .eyebrow {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .intro p {
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--ink-2);
+        max-width: 420px;
+      }
+      .hours {
+        margin-top: 28px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 8px 24px;
+        font-size: 14px;
+      }
+      .hours dt {
+        color: var(--ink-2);
+      }
+      .hours dd {
+        margin: 0;
+      }
+      form {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 24px;
+        display: grid;
+        gap: 14px;
+        box-shadow: 0 12px 32px -16px rgb(60 40 20 / 0.18);
+      }
+      form h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .choice {
+        display: flex;
+        gap: 18px;
+        font-size: 14px;
+        align-items: center;
+      }
+      .choice label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--ink);
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site">
+      <img src="/icons/utensils.svg" alt="" />
+      <strong>Harbor Table</strong>
+      <nav><span>Menu</span><span>Private dining</span><span>Visit</span></nav>
+    </header>
+    <main>
+      <section class="intro">
+        <div class="eyebrow">Pier 9 · Since 2011</div>
+        <h1 class="serif">A table by the water, kept for you.</h1>
+        <p>
+          Seasonal plates from the morning catch, a short list of natural wines, and a terrace that
+          stays warm into November.
+        </p>
+        <dl class="hours">
+          <dt>Dinner</dt>
+          <dd>Tuesday to Sunday, 17:30 to 22:00</dd>
+          <dt>Terrace</dt>
+          <dd>Heated, first come first served</dd>
+          <dt>Groups</dt>
+          <dd>Up to 8 guests online</dd>
+        </dl>
+      </section>
+      <form onsubmit="event.preventDefault()">
+        <h2>Request a table</h2>
+        <div class="pair">
+          <div><label for="name">Name</label><input id="name" type="text" /></div>
+          <div><label for="email">Email</label><input id="email" type="email" /></div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="date">Date</label>
+            <select id="date">
+              <option value="">Choose</option>
+              <option>Fri, Nov 20</option>
+              <option>Sat, Nov 21</option>
+              <option>Sun, Nov 22</option>
+            </select>
+          </div>
+          <div>
+            <label for="time">Time</label>
+            <select id="time">
+              <option value="">Choose</option>
+              <option>18:00</option>
+              <option>19:30</option>
+              <option>21:00</option>
+            </select>
+          </div>
+          <div>
+            <label for="guests">Guests</label>
+            <select id="guests">
+              <option value="">Choose</option>
+              <option>2</option>
+              <option>3</option>
+              <option>4</option>
+              <option>6</option>
+            </select>
+          </div>
+        </div>
+        <div class="choice">
+          <label><input type="radio" name="seating" id="indoor" checked /> Dining room</label>
+          <label><input type="radio" name="seating" id="terrace" /> Terrace</label>
+        </div>
+        <div><label for="notes">Notes</label><textarea id="notes"></textarea></div>
+        <div class="actions">
+          <div class="choice">
+            <label><input type="checkbox" id="reminder" /> Text me a reminder</label>
+          </div>
+          <button class="primary" id="submit">Request table</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

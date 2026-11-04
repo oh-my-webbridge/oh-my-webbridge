@@ -1,0 +1,181 @@
+---
+title: JavaScript SDK
+icon: Code
+description: The Node.js client that sends actions to a daemon session.
+---
+
+The SDK is one module, `sdk/index.ts`, built to `dist/sdk.mjs` by `pnpm run build`. It is an ESM module for Node.js 24 and later. It reads `config.json` from the [configuration directory](./cli.mdx#configuration-directory) and sends actions to `POST /command`.
+
+`connect` returns a task object bound to one session name. The extension opens that session's tabs and tab group on demand, as it does for `omw call`.
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("research");
+await task.navigate("https://example.com/");
+const page = await task.evaluate("({title:document.title,url:location.href})");
+console.log(page.title);
+await task.close();
+```
+
+## connect(session, options)
+
+```ts
+const task = await connect("research", { browser: "firefox" });
+```
+
+| Argument          | Type                    | Meaning                                                                                                                               |
+| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`         | `string`                | Session name: 1 to 96 letters (including CJK), digits, `_`, `.` or `-`. Validated by the daemon.                                      |
+| `options.browser` | `"chrome" \| "firefox"` | Sends every command to this browser. Omitted, the daemon routes by the session binding, then the only connected browser, then Chrome. |
+
+`connect` rejects when:
+
+- `config.json` is missing or unreadable. Run `omw start` first; it creates the file.
+- `address` in the file is not `127.0.0.1:17373`; the message is `unsupported daemon address`.
+- `browser` is another string; the message is `unsupported browser: safari`.
+
+The returned object has `session`, `browser` (undefined when no browser was given), and the methods below.
+
+## Task methods
+
+| Method                            | Sends                | Resolves with                                                                                |
+| --------------------------------- | -------------------- | -------------------------------------------------------------------------------------------- |
+| `call(action, args, options)`     | `action` with `args` | The command result, untyped unless you pass a type argument.                                 |
+| `navigate(url, newTab = false)`   | `navigate`           | `{ success, tabId, url }`                                                                    |
+| `preset(preset, options)`         | `preset`             | `{ config, tabs }` with the state of each task tab. `options` takes `zen` and `environment`. |
+| `snapshot()`                      | `snapshot`           | `{ tree, truncated, url, title }`                                                            |
+| `click(selector)`                 | `click`              | `{ success: true }`                                                                          |
+| `fill(selector, value)`           | `fill`               | `{ success: true }`                                                                          |
+| `evaluate(code)`                  | `evaluate`           | The expression value, not the wrapper object.                                                |
+| `cdp(method, params, sessionId?)` | `cdp`                | The CDP command result.                                                                      |
+| `close()`                         | `close_session`      | `{ success, closed }` with the number of closed tabs.                                        |
+
+`evaluate` runs a JavaScript expression in the page. Wrap asynchronous code in an IIFE:
+
+```js
+const count = await task.evaluate("(async () => (await fetch('/api/count')).text())()");
+```
+
+```js
+const links = await task.evaluate("document.querySelectorAll('a').length");
+```
+
+Selectors accept the forms listed in the [action reference](./actions.mdx#selectors), including CSS, `@e` references from a snapshot, `role=`, `text=` and `xpath=`.
+
+## call(action, args, options)
+
+```ts
+const result = await task.call(
+  "get",
+  { selector: "#price", property: "text" },
+  { timeoutMs: 5000 },
+);
+```
+
+| Option      | Type          | Default | Meaning                                                                                    |
+| ----------- | ------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `timeoutMs` | `number`      | `30000` | Deadline for the command, including its time in the queue. The daemon accepts 1 to 120000. |
+| `signal`    | `AbortSignal` | none    | Cancels the request. It is combined with an internal timeout of `timeoutMs + 5000`.        |
+
+The request is aborted locally 5 seconds after the daemon deadline. That gives the daemon time to answer with `outcome_unknown` when the page did not finish.
+
+```js
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 2000);
+try {
+  await task.call("wait", { selector: "#done", state: "visible" }, { signal: controller.signal });
+} catch (error) {
+  console.log(error.name);
+}
+```
+
+## Errors
+
+A rejected call is an `Error` with a `code` property. When the daemon answers with a command error, `code` and `message` are the daemon's `error.code` and `error.message`.
+
+```js
+try {
+  await task.click("@e12");
+} catch (error) {
+  if (error.code === "stale_ref") {
+    await task.snapshot();
+  } else {
+    throw error;
+  }
+}
+```
+
+| `code`                                     | Cause                                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `stale_ref`, `tab_busy`, `session_browser` | The reference expired, another session holds the tab, or the session is bound to another browser. HTTP 409.                          |
+| `browser_offline`                          | The target browser has no connected extension. HTTP 503.                                                                             |
+| `unsupported`                              | The action or argument is not available in that browser. HTTP 501.                                                                   |
+| `busy`                                     | Command capacity is full. HTTP 429. Retry after a running command finishes.                                                          |
+| `outcome_unknown`                          | The command may have taken effect. Read the page before retrying. HTTP 504.                                                          |
+| `invalid_args`, `invalid_request`          | The arguments were rejected before dispatch. HTTP 400.                                                                               |
+| `http_error`                               | The reply was not JSON, so the daemon's error object is missing. The message is `HTTP <status>: <first 200 characters of the body>`. |
+
+The request never reached the command handler when the reply has no JSON content type. Causes: a rejected token, a non-loopback `Host`, a web `Origin`, or another service on port 17373.
+
+An aborted request rejects with an `AbortError` and no daemon fault code. A refused connection rejects with the `fetch` `TypeError`.
+
+The full list of codes and recovery steps is in the [action reference](./actions.mdx#errors).
+
+## Parallel tasks
+
+Each session owns its tabs. Give every task its own session name, then start them together with `Promise.all`. The daemon runs the commands concurrently, up to 128 in flight per browser.
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const tasks = [
+  { session: "chrome-docs", url: "https://developer.chrome.com/docs/extensions/" },
+  { session: "go-docs", url: "https://go.dev/doc/" },
+];
+
+const results = await Promise.all(
+  tasks.map(async ({ session, url }) => {
+    const task = await connect(session);
+    try {
+      await task.navigate(url);
+      const page = await task.evaluate("({title:document.title,url:location.href})");
+      return { session, ...page };
+    } finally {
+      await task.close();
+    }
+  }),
+);
+
+console.log(JSON.stringify(results, null, 2));
+```
+
+```json
+[
+  {
+    "session": "chrome-docs",
+    "title": "Chrome Extensions documentation",
+    "url": "https://developer.chrome.com/docs/extensions/"
+  },
+  {
+    "session": "go-docs",
+    "title": "The Go Programming Language",
+    "url": "https://go.dev/doc/"
+  }
+]
+```
+
+Two tasks with the same session name share their tabs and CDP state, so give independent work distinct names.
+
+Closing a task closes the tabs the session opened, releases borrowed tabs and deletes the session binding. When `close` is not called, the tabs stay open and the binding is kept, so a later `connect` with the same name resumes the session.
+
+## Types
+
+`sdk/index.ts` imports `Args`, `Browser`, `Json` and `Fault` from the extension protocol. `call` accepts a type parameter for the result:
+
+```ts
+const box = await task.call<{ x: number; y: number }>("get", {
+  selector: "#cart",
+  property: "box",
+});
+```

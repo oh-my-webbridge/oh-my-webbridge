@@ -1,0 +1,117 @@
+---
+title: Firefox
+icon: Globe
+description: 安裝 Firefox 擴充功能，與 daemon 配對，並了解它的動作與 Chrome 有何不同。
+---
+
+{/* Generated from firefox.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+Firefox 版本是適用於 Firefox 153 以上的 MV3 擴充功能。它與同一個 daemon 配對，並提供與 Chrome 擴充功能相同的動作，差異列於[動作](#actions)。Chrome 擴充功能使用 CDP 之處，Firefox 擴充功能改用 WebExtension API：頁面動作在內容指令碼中執行；預設集、網路擷取與額外的請求標頭使用會阻擋的 `webRequest` 監聽器；螢幕截圖使用 `tabs.captureTab`；`evaluate` 使用 `userScripts`。
+
+## 安裝 [#install]
+
+每個發行版本有兩個 Firefox 檔案。請都以 `SHA256SUMS` 核對。
+
+- `omw-<version>-firefox-mv3.tar.zst` 內含擴充功能目錄。以 `zstd -dc archive.tar.zst | tar -xf - -C <directory>` 解開。
+- `omw-<version>-firefox-mv3-unsigned.xpi` 內含相同的擴充功能，已封裝以供簽章。
+
+### 暫時性擴充功能 [#temporary-extension]
+
+暫時性擴充功能會在 Firefox 結束時移除。
+
+1. 開啓 `about:debugging`，選擇**這個 Firefox**。
+2. 選擇**載入暫時性附加元件…**。
+3. 選取 `dist/extension-firefox` 或已解開的發行版本目錄中的 `manifest.json`。
+
+`pnpm run build` 會把 `dist/extension-firefox` 寫在 Chrome 建置結果旁邊。
+
+### 已簽章的擴充功能 [#signed-extension]
+
+Firefox 正式版與 Beta 版只安裝由 Mozilla 簽章的擴充功能。已簽章的擴充功能在重新啓動後仍保持安裝。
+
+1. 在 addons.mozilla.org 上以未公開上架（unlisted）、自行發布的方式為擴充功能簽章。在 AMO 開發者中心上傳未簽章的 `.xpi`，或在解開的目錄中執行 `web-ext sign --channel=unlisted --api-key=<JWT issuer> --api-secret=<JWT secret>`。`web-ext` 會把已簽章的 `.xpi` 寫入 `web-ext-artifacts/`。
+2. 在 `about:addons` 中開啓齒輪選單，選擇**從檔案安裝附加元件…**，再選取已簽章的 `.xpi`。
+
+AMO 會在簽章前驗證每次提交。簽章最多可能需要 24 小時，而且每個版本都需要各自的簽章。
+
+Firefox ESR、Developer Edition、Nightly 與未加品牌的建置版本，在 `about:config` 中 `xpinstall.signatures.required` 為 `false` 時，可安裝未簽章的 `.xpi`。
+
+## 配對與權限 [#pairing-and-permissions]
+
+安裝擴充功能後，會開啓初始設定頁面（`app.html`），列出設定步驟：
+
+1. **啓動 daemon**：執行 `omw start`，或執行 `omw service install` 以便登入時啓動。頁面連上 daemon 後，這個步驟即完成。
+2. **配對這個瀏覽器**：執行 `omw pair`。它會印出六位數的配對碼，有效時間為 5 分鐘，可嘗試 5 次。把配對碼輸入配對碼欄位。
+3. **允許指令碼**：授予選用的 `userScripts` 權限。
+4. **和 Agent 試試看**：執行 `omw install-skill ~/.agents/skills`，再請 Agent 做點事。
+
+- **存取所有網站**是 `<all_urls>` 主機權限，在安裝時請求。你可以在 `about:addons` 的「權限」中關閉它。關閉後，頁面動作、`screenshot` 與 `cookies` 會回傳 `restricted_tab`，預設集也會停止過濾請求。此時 `navigate` 到回應 204 No Content 或 205 Reset Content 的 URL，會一直等到指令的期限。重新開啓這項權限即可恢復過濾。
+- **使用者指令碼**是選用的 `userScripts` 權限。請在步驟 3 選擇**允許指令碼**，或到**設定**，再到**網頁**，並確認 Firefox 的提示。Firefox 只接受來自使用者操作的請求，所以這些按鈕是授予權限的唯一入口。在授予之前，`evaluate` 與帶有 `expression` 的 `wait` 會回傳 `unsupported`。
+
+彈出式視窗中的**暫停**會讓擴充功能與 daemon 中斷連線，直到你選擇**繼續**。
+
+## Chrome 與 Firefox 並用 [#chrome-and-firefox-together]
+
+daemon 同一時間各保持一個 Chrome 連線與一個 Firefox 連線。同一個瀏覽器的第二個連線會得到 HTTP 409。
+
+- 帶有 `browser` 的指令會送往該瀏覽器：命令列用 `omw call --browser firefox SESSION ACTION`，SDK 用 `connect(session, { browser: "firefox" })`。
+- 不帶 `browser` 的指令會送往工作階段所綁定的瀏覽器。未綁定的工作階段會送往唯一已連線的瀏覽器，兩個瀏覽器都已連線時則送往 Chrome。
+- daemon 送出的第一個指令，會把工作階段綁定到那個瀏覽器。綁定儲存在 `bindings.json`，在擴充功能重新連線與 daemon 重新啓動後仍然保留。
+- `browser` 指定另一個瀏覽器時，會回傳 `session_browser`（HTTP 409）。所綁定的瀏覽器未連線時，會回傳 `browser_offline`；daemon 不會把工作階段移到另一個瀏覽器。`close_session` 會移除綁定。
+- `/json`、`/json/list`、`/json/version` 與 `/devtools/page/*` 使用 Chrome。只有 Firefox 連線時，它們會回傳 `unsupported`（HTTP 501）。
+
+`omw status` 與 `omw doctor` 會為每個瀏覽器各印出一行連線資訊。
+
+## 動作 [#actions]
+
+除非表格列出差異，動作的行為與 Chrome 相同。Firefox 無法執行的動作或參數會回傳 `unsupported`（HTTP 501），訊息中會指出動作、參數與原因。
+
+| 動作                                                     | Firefox 的行為                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `navigate`                                               | 預設集封鎖頂層頁面時，分頁停留在目前的頁面；`navigate` 回傳該 URL，在新分頁中則回傳 `about:blank` |
+| `window_new`                                             | 忽略 `focused: false`；新視窗會取得焦點                                                           |
+| `click`、`dblclick`、`mouse_click`、`hover`、`send_keys` | 不受信任事件；檢查 `isTrusted` 的頁面會忽略它們                                                   |
+| `keyboard`（`down`、`up`）、`mouse`、`drag`              | `unsupported`                                                                                     |
+| `key_type`、`keyboard`（`insertText`）                   | 沒有可編輯元素取得焦點時，回傳 `element_action_failed`                                            |
+| `scroll`                                                 | 不觸發 `wheel` 事件；未知的 `direction` 回傳 `invalid_args`                                       |
+| `snapshot`、`read_page`、`find`                          | 角色與名稱取自 DOM；同一個頁面得到的文字可能與 Chrome 不同                                        |
+| `wait`                                                   | `expression` 需要使用者指令碼權限                                                                 |
+| `evaluate`                                               | 需要使用者指令碼權限；`contextId` 回傳 `unsupported`                                              |
+| `frame`                                                  | 以字串回傳數值的 `frameId`，不回傳 `contextId`                                                    |
+| `history`                                                | `back`、`forward` 與 `reload` 可用；`list` 回傳 `unsupported`                                     |
+| `dialog`、`console`                                      | `unsupported`                                                                                     |
+| `dialog_status`                                          | 只回傳 URL，不含對話框類型或訊息                                                                  |
+| `emulate`                                                | 只有 `data`（額外的請求標頭）可用                                                                 |
+| `cookies`                                                | 涵蓋所有 cookie 分區；`set` 寫入未分區的 cookie                                                   |
+| `upload`                                                 | 由 daemon 讀取檔案：每個指令 16 MiB，傳輸中共 64 MiB                                              |
+| `screenshot`                                             | 擷取分頁但不啓用它；`selector` 與 `fullPage` 需要主框架                                           |
+| `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 會開啓儲存對話框，且不回傳 PDF 位元組                             |
+| `network`                                                | 最多 500 個項目；本文超過 1 MiB 或本文已被丟棄時，回傳錯誤                                        |
+| `preset`                                                 | 使用會阻擋的 `webRequest`；見[預設集](#presets)                                                   |
+| `cdp`、`cdp_attach`、`cdp_detach`、`list_targets`        | `unsupported`；Firefox 沒有 CDP                                                                   |
+| `artifact_read`、`artifact_close`                        | `unsupported`；Firefox 的動作不回傳 artifact 串流                                                 |
+
+Firefox 擴充功能無法產生受信任的輸入。`click`、`dblclick`、`mouse_click`、`hover` 與 `send_keys` 會分派 `pointer*`、`mouse*` 與 `key*` 事件，其 `isTrusted` 為 `false`。頁面不會取得使用者啓用狀態。頁面由這些事件發起的 `window.open` 彈出視窗、檔案選擇器、全螢幕與剪貼簿讀取都會失敗。`click` 之後仍會呼叫 `element.click()`，執行連結、按鈕與表單控制項的預設動作。`fill` 與 `key_type` 使用 `document.execCommand`，並產生受信任的 `beforeinput` 與 `input` 事件。`hover` 不會設定 `:hover`，所以由 CSS `:hover` 展開的選單會保持關閉。`send_keys` 接受 `Backspace`、`Delete`、`Enter`、`Tab`、`Shift+Tab`、`Control+A` 與 `Meta+A`。其他按鍵會回傳 `unsupported`。
+
+## 背景生命週期 [#background-lifecycle]
+
+背景以 MV3 事件頁面的形式執行。Firefox 會在事件頁面閒置 30 秒後將其暫停，而 WebSocket 流量不算作活動。擴充功能連線期間，每 20 秒送出一次 ping 並呼叫 `tabs.query`，讓頁面保持載入。每 30 秒觸發一次的 alarm，會在暫停後重新連線。工作階段中繼資料存放在 `storage.session`，Firefox 重新啓動時會清除它。
+
+背景重新啓動會丟失 `webRequest` 監聽器與框架選擇：
+
+- `preset {cmd:"status"}` 會為既有分頁回報 `none`，直到該分頁的下一次導覽再次套用工作階段的預設集。
+- 網路錄製會停止。
+- 額外的請求標頭套用於新的任務分頁；既有分頁需要再次執行 `emulate {data}`。
+
+## 預設集 [#presets]
+
+Firefox 預設集使用與 Chrome 相同的模式、過濾清單、引擎與工作階段設定，且只套用於任務分頁。[頁面預設集](./presets.mdx)説明各個模式與內建清單。
+
+- 每個任務分頁都有自己會阻擋的 `webRequest.onBeforeRequest` 監聽器，並以 `tabId` 過濾。它會收到每個框架的請求，包括跨處理程序的框架，且沒有每個分頁的目標數上限。清單載入後，每個請求都會同步比對。
+- 預設集變更會立即套用到既有的任務分頁，回應會回報 `appliesOn: "immediate"`。重新設定會替換監聽器，且不會對頁面送出任何東西，所以忙碌的頁面不會延遲它。預設集未變更的導覽會保留監聽器與狀態計數器；設定了 `environment` 的預設集，每次導覽都會重新設定。
+- `zen` 依類型封鎖請求：`images` 涵蓋圖片與圖片集請求，`fonts` 涵蓋字型，`css` 涵蓋樣式表，`javascript` 涵蓋指令碼。`javascript: true` 時，擴充功能也會在該分頁的文件與框架回應中加上 `Content-Security-Policy: script-src 'none'`。行內指令碼與事件處理常式屬性會停止執行，`<noscript>` 的內容不會呈現。
+- `environment` 會被接受，但回報 `environmentState: "unavailable"` 並附上原因。網路過濾則繼續進行。
+- 被封鎖的頂層頁面會讓分頁停留在目前的頁面，不顯示錯誤頁面。
+- 沒有**存取所有網站**時，每個請求都會通過。狀態回報 `network: false` 並記錄原因。沒有任何請求計為已封鎖。
+- 清單載入失敗時，請求會不經過濾而通過，`zen` 的類型封鎖仍然有效。下一次設定預設集時會重新載入清單。
+- 最後一個過濾中的分頁停止過濾 30 秒後，引擎資料即被釋放。

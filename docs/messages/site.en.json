@@ -1,0 +1,19 @@
+{
+  "byline": "Docs",
+  "description": "A local daemon and browser extensions that let an agent or script work in the Chrome or Firefox you already use.",
+  "repository": "GitHub repository: oh-my-webbridge/oh-my-webbridge",
+  "language": "Language",
+  "languageCurrent": "Language: {language}",
+  "theme": "Theme",
+  "themeCurrent": "Theme: {theme}",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "themeSystem": "System",
+  "pages": "Pages",
+  "notFoundTitle": "Page not found",
+  "notFoundBody": "The link is out of date, or the page has moved.",
+  "backToDocs": "Go to the docs",
+  "chooseLanguage": "Choose a language",
+  "codeBlock": "Code {index}",
+  "codeBlockTitled": "Code {index}: {title}"
+}

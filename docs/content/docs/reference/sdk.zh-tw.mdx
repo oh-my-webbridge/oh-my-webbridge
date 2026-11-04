@@ -1,0 +1,181 @@
+---
+title: JavaScript SDK
+icon: Code
+description: 對 daemon 工作階段送出動作的 Node.js 用戶端。
+---
+
+SDK 是單一模組 `sdk/index.ts`，由 `pnpm run build` 建置為 `dist/sdk.mjs`。它是供 Node.js 24 及更新版本使用的 ESM 模組。它從[組態目錄](./cli.mdx#configuration-directory)讀取 `config.json`，並把動作送到 `POST /command`。
+
+`connect` 回傳一個綁定到單一工作階段名稱的 task 物件。如同 `omw call`，擴充功能會依需求開啟該工作階段的分頁與分頁群組。
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("research");
+await task.navigate("https://example.com/");
+const page = await task.evaluate("({title:document.title,url:location.href})");
+console.log(page.title);
+await task.close();
+```
+
+## connect(session, options) [#connectsession-options]
+
+```ts
+const task = await connect("research", { browser: "firefox" });
+```
+
+| 引數              | 型別                    | 意義                                                                                               |
+| ----------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `session`         | `string`                | 工作階段名稱：由 1 到 96 個字元組成，可用字母（包括 CJK）、數字、`_`、`.` 或 `-`。由 daemon 驗證。 |
+| `options.browser` | `"chrome" \| "firefox"` | 把每個指令送往這個瀏覽器。省略時，daemon 依序依據工作階段綁定、唯一已連線的瀏覽器、Chrome 來路由。 |
+
+在下列情況，`connect` 會被拒絕：
+
+- `config.json` 不存在或無法讀取。請先執行 `omw start`；它會建立該檔案。
+- 檔案中的 `address` 不是 `127.0.0.1:17373`；訊息為 `unsupported daemon address`。
+- `browser` 是其他字串；訊息為 `unsupported browser: safari`。
+
+回傳的物件含有 `session`、`browser`（未指定瀏覽器時為 undefined），以及下列方法。
+
+## Task 方法 [#task-methods]
+
+| 方法                              | 送出                    | 解析為                                                                            |
+| --------------------------------- | ----------------------- | --------------------------------------------------------------------------------- |
+| `call(action, args, options)`     | 帶有 `args` 的 `action` | 指令結果；除非傳入型別引數，否則沒有型別。                                        |
+| `navigate(url, newTab = false)`   | `navigate`              | `{ success, tabId, url }`                                                         |
+| `preset(preset, options)`         | `preset`                | `{ config, tabs }`，含每個任務分頁的狀態。`options` 接受 `zen` 與 `environment`。 |
+| `snapshot()`                      | `snapshot`              | `{ tree, truncated, url, title }`                                                 |
+| `click(selector)`                 | `click`                 | `{ success: true }`                                                               |
+| `fill(selector, value)`           | `fill`                  | `{ success: true }`                                                               |
+| `evaluate(code)`                  | `evaluate`              | 運算式的值，而不是包裝物件。                                                      |
+| `cdp(method, params, sessionId?)` | `cdp`                   | CDP 指令的結果。                                                                  |
+| `close()`                         | `close_session`         | `{ success, closed }`，`closed` 為已關閉的分頁數量。                              |
+
+`evaluate` 在頁面中執行 JavaScript 運算式。把非同步程式碼包在 IIFE 中：
+
+```js
+const count = await task.evaluate("(async () => (await fetch('/api/count')).text())()");
+```
+
+```js
+const links = await task.evaluate("document.querySelectorAll('a').length");
+```
+
+選擇器接受[動作參考](./actions.mdx#selectors)中列出的形式，包括 CSS、快照中的 `@e` 參照、`role=`、`text=` 與 `xpath=`。
+
+## call(action, args, options) [#callaction-args-options]
+
+```ts
+const result = await task.call(
+  "get",
+  { selector: "#price", property: "text" },
+  { timeoutMs: 5000 },
+);
+```
+
+| 選項        | 型別          | 預設    | 意義                                                        |
+| ----------- | ------------- | ------- | ----------------------------------------------------------- |
+| `timeoutMs` | `number`      | `30000` | 指令的期限，包括它在佇列中的時間。daemon 接受 1 到 120000。 |
+| `signal`    | `AbortSignal` | 無      | 取消請求。它會與 `timeoutMs + 5000` 的內部逾時合併。        |
+
+請求在 daemon 期限之後 5 秒於本機中止。這讓 daemon 有時間在頁面沒有完成時，以 `outcome_unknown` 回應。
+
+```js
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 2000);
+try {
+  await task.call("wait", { selector: "#done", state: "visible" }, { signal: controller.signal });
+} catch (error) {
+  console.log(error.name);
+}
+```
+
+## 錯誤 [#errors]
+
+被拒絕的呼叫是帶有 `code` 屬性的 `Error`。當 daemon 以指令錯誤回應時，`code` 與 `message` 就是 daemon 的 `error.code` 與 `error.message`。
+
+```js
+try {
+  await task.click("@e12");
+} catch (error) {
+  if (error.code === "stale_ref") {
+    await task.snapshot();
+  } else {
+    throw error;
+  }
+}
+```
+
+| `code`                                     | 原因                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `stale_ref`、`tab_busy`、`session_browser` | 參照已過期、另一個工作階段持有該分頁，或該工作階段綁定到另一個瀏覽器。HTTP 409。           |
+| `browser_offline`                          | 目標瀏覽器沒有已連線的擴充功能。HTTP 503。                                                 |
+| `unsupported`                              | 該瀏覽器沒有這個動作或引數。HTTP 501。                                                     |
+| `busy`                                     | 指令容量已滿。HTTP 429。等執行中的指令完成後重試。                                         |
+| `outcome_unknown`                          | 指令可能已經生效。重試之前，先讀取頁面。HTTP 504。                                         |
+| `invalid_args`、`invalid_request`          | 引數在分派之前就被拒絕。HTTP 400。                                                         |
+| `http_error`                               | 回覆不是 JSON，因此缺少 daemon 的錯誤物件。訊息為 `HTTP <status>: <本文的前 200 個字元>`。 |
+
+回覆沒有 JSON 內容類型時，請求從未到達指令處理常式。可能的原因：token 被拒絕、`Host` 不是回送位址、網頁 `Origin`，或連接埠 17373 上是其他服務。
+
+被中止的請求以 `AbortError` 拒絕，沒有 daemon 的錯誤碼。被拒絕的連線以 `fetch` 的 `TypeError` 拒絕。
+
+完整的錯誤碼清單與復原步驟位於[動作參考](./actions.mdx#errors)。
+
+## 並行任務 [#parallel-tasks]
+
+每個工作階段擁有自己的分頁。給每個任務各自的工作階段名稱，然後用 `Promise.all` 一起啟動。daemon 並行執行這些指令，每個瀏覽器最多同時進行 128 個。
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const tasks = [
+  { session: "chrome-docs", url: "https://developer.chrome.com/docs/extensions/" },
+  { session: "go-docs", url: "https://go.dev/doc/" },
+];
+
+const results = await Promise.all(
+  tasks.map(async ({ session, url }) => {
+    const task = await connect(session);
+    try {
+      await task.navigate(url);
+      const page = await task.evaluate("({title:document.title,url:location.href})");
+      return { session, ...page };
+    } finally {
+      await task.close();
+    }
+  }),
+);
+
+console.log(JSON.stringify(results, null, 2));
+```
+
+```json
+[
+  {
+    "session": "chrome-docs",
+    "title": "Chrome Extensions documentation",
+    "url": "https://developer.chrome.com/docs/extensions/"
+  },
+  {
+    "session": "go-docs",
+    "title": "The Go Programming Language",
+    "url": "https://go.dev/doc/"
+  }
+]
+```
+
+兩個工作階段名稱相同的任務會共用分頁與 CDP 狀態，因此請給彼此獨立的工作不同的名稱。
+
+關閉 task 會關閉該工作階段開啟的分頁、釋放借用的分頁，並刪除工作階段綁定。沒有呼叫 `close` 時，分頁保持開啟，綁定也會保留，因此之後以相同名稱呼叫 `connect` 會繼續該工作階段。
+
+## 型別 [#types]
+
+`sdk/index.ts` 從擴充功能協定匯入 `Args`、`Browser`、`Json` 與 `Fault`。`call` 接受結果的型別參數：
+
+```ts
+const box = await task.call<{ x: number; y: number }>("get", {
+  selector: "#cart",
+  property: "box",
+});
+```

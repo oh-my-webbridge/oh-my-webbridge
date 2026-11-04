@@ -1,0 +1,140 @@
+---
+title: 开发
+icon: Wrench
+description: 仓库结构、工具链、构建输出、测试命令与发布流程。
+---
+
+{/* Generated from development.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+这个仓库产出一个 Go 二进制文件、两个扩展程序套件、一个 SDK 文件与文档网站。构建需要 Go 1.27.3 或更新版本、Node 24 与 pnpm 11。封装发布版本还需要 `PATH` 中有 `tar` 与 `zstd`。
+
+## 仓库结构 [#repository-layout]
+
+| 路径               | 内容                                                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `cmd/omw`          | CLI 进入点：`start`、`serve`、`stop`、`status`、`pair`、`connection`、`call`、`service`、`skill`、`install-skill`、`doctor`。     |
+| `internal/bridge`  | HTTP 与 WebSocket 服务器、hub 与路由、配对、绑定、CDP 代理、上传。                                                                |
+| `internal/config`  | 配置目录、token、地址、`OMW_HOME`。                                                                                               |
+| `internal/service` | `omw service install` 写入的 launchd 与 systemd 用户服务。                                                                        |
+| `extension/src`    | 两个浏览器共用的背景 worker、动作、快照、预设、网络提取、活动层。`extension/src/firefox` 存放 Firefox worker 与注入的 `page.js`。 |
+| `extension/ui`     | 弹出式窗口与应用程序页面（初始设置、设置）。使用 Vite、React 19、来自 coss registry 的 Base UI 基础组件，以及 Tailwind CSS 4。    |
+| `packages/brand`   | 图标 SVG 与 `theme.css`，由扩展程序页面与文档网站共用。                                                                           |
+| `sdk/`             | `index.ts`，也就是打包为 `dist/sdk.mjs` 的 JavaScript SDK。                                                                       |
+| `docs/`            | 以 Next 构建的 Fumadocs 网站，采静态导出。页面位于 `docs/content/docs`；`meta.json` 决定页面顺序。                                |
+| `scripts/`         | 构建、过滤清单编译、发布封装、发布、审核。                                                                                        |
+| `tests/`           | Node 测试套件、端对端测试套件与测试数据。                                                                                         |
+
+`benchmarks/` 存放浏览器工具的基准测试，`examples/` 存放 SDK 脚本，`skills/` 存放由 `omw install-skill` 安装的 Agent 技能，`third_party/` 存放固定版本的过滤清单及其授权文字。
+
+`pnpm-workspace.yaml` 列出根套件、`docs`、`extension/ui` 与 `packages/*`，因此 Changesets 会让根套件与工作区一起升版。
+
+## 工具链 [#toolchain]
+
+| 工具            | 版本与用途                                                                |
+| --------------- | ------------------------------------------------------------------------- |
+| Go              | 1.27.3 或更新版本。唯一的第三方模块是 `github.com/coder/websocket`。      |
+| Node            | 24 或更新版本，设置于 `engines`。运行构建、测试、发布脚本与文档网站。     |
+| pnpm            | 11，固定于 `packageManager`。运行任何脚本之前，先用 `pnpm install` 安装。 |
+| TypeScript      | 7，严格模式。扩展程序与 SDK 在 `pnpm run check` 中一并检查。              |
+| oxlint 与 oxfmt | 静态检查与格式化。`oxlint` 通过 `oxlint-tsgolint` 以类型感知模式运行。    |
+| Vite            | 8，构建扩展程序页面。esbuild 打包 worker 与 SDK。                         |
+
+## 构建 [#build]
+
+```sh
+pnpm install
+pnpm run build
+go build -trimpath -ldflags='-s -w' -o dist/omw ./cmd/omw
+```
+
+`make build` 运行相同的三个步骤，其中 `pnpm install` 带 `--frozen-lockfile`。
+
+`pnpm run build` 运行 `scripts/build.mjs`，它会：
+
+1. 检查 `package.json`、两份扩展程序 manifest，以及 `internal/bridge/protocol.go` 中的 `Version` 是否为同一个版本。
+2. 以 esbuild 将 `extension/src/worker.ts` 打包为 ES module，经过压缩，目标为 `chrome156`。
+3. 将 `extension/src/firefox/worker.ts` 打包，目标为 `firefox153`，并将 `extension/src/firefox/page.ts` 打包为 IIFE。
+4. 在 `extension/ui` 运行 Vite 构建，并把 `popup.html`、`app.html` 与其资源复制到两个扩展程序目录。
+5. 以 resvg 从 `packages/brand/icons` 的 SVG 转出工具栏图标与应用程序图标。
+6. 编译过滤清单，并复制所打包的 npm 套件与过滤清单来源的授权文字。
+7. 将 `sdk/index.ts` 打包为 `dist/sdk.mjs`，目标为 Node 24。
+8. 写出 `dist/extension.sha256.json` 与 `dist/extension-firefox.sha256.json`。
+
+输出为 `dist/omw`、Chrome 用的 `dist/extension`、Firefox 用的 `dist/extension-firefox`，以及 `dist/sdk.mjs`。Chrome 把 `dist/extension` 当作未封装的扩展程序加载。Firefox 把 `dist/extension-firefox` 当作暂时性扩展程序加载。
+
+## 扩展程序页面 [#extension-pages]
+
+弹出式窗口、初始设置页面与设置页面是同一个 Vite 项目。`extension/ui/vite.config.ts` 将 `popup.html` 与 `app.html` 列为输入，以相对 base 构建，让页面能从 `chrome-extension://` URL 运行，并输出到 `dist/extension-ui`。构建也会产生 `bundled-modules.json`，`scripts/build.mjs` 用它搜集页面套件中每个 npm 模块的授权。
+
+`app/app.tsx` 依 URL hash 选择初始设置页面或设置页面，因此 `app.html#settings` 会直接打开设置页面。取自 coss registry 的组件位于 `extension/ui/src/components/ui`，保持 registry 提供的原样；侧栏、步骤清单等组合组件位于 `extension/ui/src/components`。仓库根目录的 `design.md` 是这些页面与文档网站的呈现规则。页面从 `chrome.storage` 读取连接状态，并自行调用 `GET /ping` 与 `POST /pair`。WebSocket 由背景 worker 持有。
+
+## 检查与测试 [#checks-and-tests]
+
+```sh
+pnpm run check
+pnpm run format:check
+pnpm test
+go vet ./...
+go test -race ./...
+```
+
+`make check` 运行 `go vet`、类型感知的静态检查与格式检查。`make test` 运行 `go test -race` 与 Node 测试套件。
+
+| 命令                             | 运行内容                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `pnpm run build`                 | 上述的完整构建。                                                                                         |
+| `pnpm run check`                 | `oxlint --type-aware --type-check --deny-warnings --format=agent`。                                      |
+| `pnpm run format`                | `oxfmt`，并写入变更。`pnpm run format:check` 只回报，不写入。                                            |
+| `pnpm test`                      | `tests/` 中的单元测试套件：SDK、worker、动作、预设、预设生命周期、状态、Firefox、发布与基准测试。        |
+| `pnpm run test:e2e`              | 针对 Chrome 运行 `tests/e2e.test.mjs`。需要 `CHROME_BIN`。                                               |
+| `pnpm run test:e2e:firefox`      | 针对 Firefox 运行 `tests/e2e-firefox.test.mjs`。需要 `FIREFOX_BIN`。                                     |
+| `pnpm run test:e2e:dual`         | 两个浏览器连到同一个 daemon。需要两个变量。                                                              |
+| `pnpm run test:e2e:firefox-page` | 在 Firefox 内运行 `page.js`。需要 `FIREFOX_BIN`。                                                        |
+| `pnpm run bench`                 | `benchmarks/run.mjs`。                                                                                   |
+| `pnpm run release:plan`          | 预览下一个版本，不消耗变更片段。                                                                         |
+| `pnpm run release:check`         | 检查各处版本是否一致，以及变更片段能否解析；CI 会传入基准 commit，额外要求已发布的变更必须附有变更片段。 |
+| `pnpm run release:version`       | 消耗变更片段，并在本机准备版本。                                                                         |
+| `pnpm run release:pack`          | 构建发布封存盘。`pnpm run release:audit` 验证它们。                                                      |
+
+端对端测试套件会启动 `dist/omw`，并加载 `dist/extension` 或 `dist/extension-firefox`，因此请先运行构建。`CHROME_BIN` 与 `FIREFOX_BIN` 是浏览器二进制文件的绝对路径。缺少对应变量的测试套件会被略过。
+
+## 文档网站 [#documentation-site]
+
+```sh
+pnpm --filter @oh-my-webbridge/docs dev
+```
+
+开发服务器监听连接端口 3884。页面是 `docs/content/docs` 中的 MDX。`docs/content/docs/meta.json` 依侧边栏顺串行出页面，新页面必须加到该文件。每个路径都以语言段开头，例如 `/zh-tw/sessions/`；网站根目录会依浏览器的第一个语言把读者带到对应的文档。`pnpm --filter @oh-my-webbridge/docs build` 产生供 GitHub Pages 使用的静态导出。构建时会读取每个页面的 Git 历史，列出贡献者与页面历史，因此需要完整的 clone。
+
+示范视频与屏幕截图放在孤立分支 `assets`，Pages 工作流程会把它 checkout 到 `docs/public/media`。`pnpm run media` 用 Chrome for Testing 把它们录到 `dist/media`；`pnpm run media --language zh-TW` 以其他界面语言录制含有扩展程序文字的场景。
+
+## 翻译 [#translations]
+
+英文是来源语言。繁体中文（台湾）由英文人工翻译。`pnpm run i18n` 用 OpenCC 把 zh-TW 文字转成简体中文（zh-CN）以及香港、澳门用字（zh-HK、zh-MO），再用 oxfmt 格式化输出。只编辑英文与 zh-TW 文件：其他文件会被脚本覆写。产生的文件与来源不一致时，`pnpm run i18n:check` 会失败，CI 会运行这项检查。
+
+| 文字                 | 英文                    | zh-TW 来源                              | 产生的文件                                                      |
+| -------------------- | ----------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `extension/locales/` | `en.json`               | `zh-TW.json`                            | `zh-CN.json`、`zh-HK.json`、`zh-MO.json`、`extension/_locales/` |
+| `docs/content/docs/` | `page.mdx`、`meta.json` | `page.zh-tw.mdx`、`meta.zh-tw.json`     | `page.zh-cn.mdx`、`page.zh-hk.mdx`、`page.zh-mo.mdx`、`meta.*`  |
+| `docs/messages/`     | `site.en.json`          | `site.zh-tw.json`、`history.zh-tw.json` | `zh-cn`、`zh-hk` 与 `zh-mo` 文件                                |
+
+zh-CN 的转换先套用 OpenCC 的词汇表（`twp` 转 `cn`），再套用 `scripts/i18n.mjs` 里的中国大陆软件用语表。zh-HK 与 zh-MO 的转换只改字形（`tw` 转 `hk`）；OpenCC 没有独立的澳门标准。
+
+`en.json` 的每个键都必须出现在 `zh-TW.json`，而且 `{placeholders}` 相同，否则脚本会停止。翻译页面的标题沿用英文标题的锚点，例如 `## 选择器 [#selectors]`，让指向章节的链接在每种语言都有效。
+
+扩展程序页面、弹出式窗口、工具栏标题与活动层使用设置页选择的语言，或浏览器的语言。浏览器扩展程序清单中的扩展程序名称与说明来自 `extension/_locales`，一律依浏览器语言显示。
+
+## Changesets 与发布 [#changesets-and-releases]
+
+版本号与发布说明来自变更片段，而不是来自 commit 消息，也不会发布到 npm。
+
+- 每个用户可见的变更，在 `.changeset/` 下添加一个文件，并以该变更命名。front matter 记录升版类型：修正用 `patch`，新功能用 `minor`，破坏性行为用 `major`。
+- 内文先写一个简短的 H1 标题，接着写用户看到的结果、适用的迁移或范围说明，以及 PR 创建后的 PR 链接。变更片段以 GitHub Flavored Markdown 呈现，因此每个区块都要正确关闭，原始 HTML 只用于注解，链接以行内方式书写。
+- PR 若变更已发布的输入，例如源代码、构建脚本、相依套件、发布工作流程或扩展程序 manifest，没有新的变更片段就会让 CI 失败。测试与内部文档可以不附。编辑既有的变更片段不算数。
+- 推送到 `main` 会维护一个草稿 `release/next` 版本 PR。它的工作流程运行 `scripts/release-pr.mjs`，以 `scripts/release.mjs version` 消耗变更片段，同步套件、锁文件、daemon 与 manifest 的版本，并写出 `CHANGELOG.md` 与 `docs/releases/<version>.md`。
+- 版本 PR 合并后，版本工作流程会为 `chore(release): prepare <version>` 这个 commit 创建标签。该标签触发发布工作流程：它重新构建、审核每个封存盘、上传资产、验证其 SHA-256 摘要，之后才发布 GitHub Release。
+- 封存盘使用 zstd 层级 3，以 `zstd -dc archive.tar.zst | tar -xf - -C DIR` 解开。
+
+## 授权 [#license]
+
+本项目采用 Apache-2.0 授权。`NOTICE` 存放声明，`THIRD_PARTY.md` 列出所打包的过滤清单与 npm 套件。扩展程序构建在 `licenses/` 下附上完整的授权文字。

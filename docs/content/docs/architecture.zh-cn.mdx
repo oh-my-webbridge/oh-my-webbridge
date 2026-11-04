@@ -1,0 +1,101 @@
+---
+title: 架构
+icon: Network
+description: omw daemon 与浏览器扩展程序如何分工，以及一个命令如何抵达标签页。
+---
+
+{/* Generated from architecture.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+oh-my-webbridge 由两个进程组成。daemon `omw` 是 Go 二进制文件，监听 `127.0.0.1:17373`。扩展程序在 Chrome 或 Firefox 内运行，通过浏览器 API 操作标签页。Agent、CLI 与 SDK 通过 HTTP 调用 daemon；daemon 通过 WebSocket 调用扩展程序。
+
+## 组件 [#components]
+
+### Daemon [#daemon]
+
+daemon 保存的状态，不会随浏览器窗口关闭而消失。
+
+- 验证：除了 `GET /ping` 与 `POST /pair`，每个请求都在这里以 token 检查。
+- 路由：每个浏览器保留一条连接，并把每个命令送往 Chrome 或 Firefox。
+- 并行与期限：daemon 决定是否受理请求，套用超时，并在达到上限时响应 `busy`。
+- 文件：daemon 把屏幕截图与 PDF 写到你指定的路径，并为 Firefox 读取上传文件，因为 Firefox 的扩展程序无法读取本机文件。
+- CDP 前端：`GET /json`、`GET /json/version` 与 `GET /devtools/page/{tab}` 向 CDP 客户端呈现 Chrome 标签页，`omw serve --cdp` 则把 `/devtools/browser` 转送到原生 DevTools 端点。
+- 会话绑定：保存在配置目录的 `bindings.json`。
+
+### 扩展程序 [#extension]
+
+扩展程序负责浏览器端的工作。
+
+- 任务标签页与其标签页分组，包括借用已存在的标签页。
+- DOM 与无障碍树的 `snapshot`，以及由单一快照衍生的 `@e` 引用。
+- 输入：点击、悬停、输入、选取、勾选、聚焦、滚动、拖曳与上传。
+- Chrome：`chrome.debugger`，也就是 CDP。
+- Firefox：WebExtension API。`page.js` 依需求注入所选框架，`webRequest` 处理预设与标头，`tabs.captureTab` 截图，`userScripts.execute` 运行 `evaluate`。
+- 每个受控标签页的网络项目与控制台纪录。
+- 绘制在受控页面上方的活动层。
+
+Firefox 对部分动作响应 `unsupported`，因为它的扩展程序 API 没有对应的功能。差异列于 [Firefox](./firefox.mdx)。
+
+一个标签页同一时间只属于一个会话。创建标签页的会话把它们放在自己的标签页分组；借用的标签页留在你的分组，并在释放时归还。标签页分组不是 cookie 边界，也不是安全边界：个人资料内的每个标签页共用相同的登录状态。
+
+## 多浏览器路由 [#multi-browser-routing]
+
+daemon 最多保留一条 Chrome 连接与一条 Firefox 连接，并以 WebSocket 的 Origin 区分两者。扩展程序的 hello 会回报浏览器、浏览器版本，以及扩展程序持有的会话名称。
+
+命令可以带 `browser` 字段。会话在第一个命令时绑定到某个浏览器，并维持该绑定，直到 `close_session` 成功。绑定会写入 `bindings.json`，因此 daemon 重新启动后，会话仍会路由回同一个浏览器。下一次 hello 会重新回报会话名称，过期的绑定会被丢弃。
+
+没有绑定的会话，在 Chrome 已连接时送往 Chrome，否则送往 Firefox。`/json/list`、`/devtools/*` 与原始 `cdp` 需要 Chrome 扩展程序；即使没有浏览器连接，`/json/version` 仍会回报版本。同一个浏览器的第二条连接会被拒绝，并响应 409。
+
+## 请求生命周期与并行 [#request-lifecycle-and-concurrency]
+
+请求以 `POST /command` 抵达，本文上限为 2 MiB；也可以作为扩展程序 WebSocket 上的框架抵达。请求若没有 ID，daemon 会指派随机 ID；响应只会与同一条连接上带有该 ID 的待处理请求配对。连接中断时，该连接上所有进行中的命令都以 `outcome_unknown` 结束。重新连接后，只接受新的请求。
+
+同一个会话的命令依序运行，不同的会话并行运行。扩展程序也依会话排队，等待中的命令超过 32 个时响应 `busy`。`close_session` 与 `dialog` 不经过会话队列，使用 16 个保留名额，因此卡住的会话或打开中的对话框仍然可以被清除。页面 CDP 连接保留协议的多任务处理：同一个目标上有另一个命令在等待时，Fetch 或 Debugger 的接续仍会运行。
+
+默认超时为 30 秒，上限为 120 秒。请求超过期限会返回 `outcome_unknown`，SDK 不会重试结果不确定的命令。
+
+## 扩展程序生命周期 [#extension-lifecycle]
+
+Chrome 以 MV3 service worker 运行扩展程序背景。worker 与 daemon 保持一条 WebSocket，每 20 秒发送一次 ping，并在 45 秒没有流量后关闭该 socket。`chrome.alarms` 计时器每 30 秒触发一次，并在 worker 已停止时重新连接。重试间隔从 0.5 秒退避到 30 秒，并加入抖动。没有 offscreen document、静音音频或轮询循环让 worker 保持存活，Chrome 仍可能随时停止它。
+
+调试会话会比打开它的 worker 更长寿，并维持附加在标签页上。下一个 worker 启动时，不会有处理已暂停请求所需的状态。它在启动时会分离从前一个 worker 继承的调试会话，这会释放在那里暂停的所有请求，然后在下一个命令时重新附加。会话中继数据存放在 `chrome.storage.session`，而不是 worker 的全域变量。页面 CDP 会话会随打开它们的 daemon 连接结束。
+
+Firefox 运行 MV3 event page，浏览器在闲置 30 秒后会将它暂停。WebSocket 流量不算作活动，因此在连接打开期间，每 20 秒的心跳也会调用 `tabs.query`。暂停后，由 30 秒的 alarm 重新连接。重新加载背景页会丢掉 `webRequest` 监听器与框架选择。预设会在该标签页下一次受控导航时重新安装。
+
+## 本机信任模型 [#local-trust-model]
+
+daemon 只能从它所在的机器连接，token 是唯一的凭证。
+
+- 它绑定 `127.0.0.1:17373`，并拒绝 Host 不是 `127.0.0.1` 的请求。
+- 网页来源会被拒绝。只接受由 32 个 a 到 p 字母组成的 `chrome-extension://` 来源，以及带有 UUID 的 `moz-extension://` 来源，而且只限 `/extension`、`/ping` 与 `/pair`。
+- CLI 与 SDK 以 `Authorization: Bearer` 发送 token。扩展程序以 WebSocket 子协议 `omw-token.<token>` 发送 token，并与 `omw.v1` 并列。URL 中不会出现 token。
+- `GET /ping` 不需要 token 即可回报版本。`POST /pair` 需要扩展程序来源，并以六位数配对码换取 token。
+- 配对码的有效期为 5 分钟，可尝试 5 次。
+- 配置目录以 0700 权限创建。存放 token 的 `config.json` 先写入暂存盘，再以 0600 权限原子性地发布。
+- token 授予浏览器的完整控制权：任何标签页中的页面 JavaScript、原始 CDP，以及写入你指定之绝对路径的文件。它无法把你与以同一个操作系统用户运行的其他进程隔离，而且个人资料的 cookie 对每个标签页都可用。
+- Chrome 扩展程序没有 `<all_urls>` 主机权限、没有常驻的 content script，也没有外部消息入口。Firefox 声明 `<all_urls>`，屏幕截图、请求过滤、cookie 与跨来源框架都需要它；`userScripts` 维持为选用权限，在初始设置页面或在 **设置** 下的 **网页** 中授予。
+
+## 资源限制 [#resource-limits]
+
+这些是容量防护，不是 RSS 的上限：同时进行的屏幕截图，以及 Chrome 自己的标签页与网络缓存，仍会增加内存用量。
+
+| 资源                                                                              | 限制                                                          |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| HTTP 请求本文                                                                     | 2 MiB                                                         |
+| 正在读取或处理的 HTTP 请求                                                        | 288                                                           |
+| 每个浏览器的一般命令                                                              | 128                                                           |
+| 每个浏览器为 `close_session`、`dialog`、`cdp_detach`、`artifact_close` 保留的名额 | 16                                                            |
+| 扩展程序中每个会话的等待命令                                                      | 32                                                            |
+| 每个浏览器的会话                                                                  | 128                                                           |
+| 每个会话的标签页                                                                  | 32                                                            |
+| WebSocket 消息                                                                    | 32 MiB                                                        |
+| daemon 中缓冲的响应                                                               | 64 MiB，超过后命令返回 `outcome_unknown`                      |
+| 扩展程序发送缓冲区                                                                | 超过 4 MiB 后帧开始排队，排队上限 64 MiB，30 秒无法发送即关闭 |
+| 屏幕截图与 PDF 工作                                                               | 同时 2 个                                                     |
+| 命令超时                                                                          | 默认 30 秒，上限 120 秒                                       |
+| `snapshot` 输出                                                                   | 4000 个节点或 192000 个字符，并设置 `truncated`               |
+| 页面 CDP 订阅队列                                                                 | 32 个事件，每个事件 256 KiB                                   |
+| 网络提取                                                                          | 每个标签页 500 笔项目，Chrome 中缓冲的本文共 8 MiB            |
+| Firefox 网络响应本文                                                              | 每个响应 1 MiB，每个标签页 8 MiB                              |
+| Firefox 上传                                                                      | 每个命令 16 MiB，进行中的所有命令合计 64 MiB                  |
+| PDF 输出                                                                          | 100 MiB                                                       |
+| 成品文件                                                                          | 先写入暂存盘，再以 0600 权限写成，绝不覆写既有路径            |

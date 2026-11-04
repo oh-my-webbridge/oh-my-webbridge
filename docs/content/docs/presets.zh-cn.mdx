@@ -1,0 +1,126 @@
+---
+title: 页面预设
+icon: ShieldBan
+description: 以 anti-ad、zen 与 none 预设，控制会话所拥有的标签页可以发出哪些网络请求。
+---
+
+{/* Generated from presets.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+预设是会话配置的一部分。它套用在会话拥有的任务标签页上，包括之后才打开的标签页。
+
+| 模式      | 网络                       | 环境                       | 用途                               |
+| --------- | -------------------------- | -------------------------- | ---------------------------------- |
+| `anti-ad` | 内置的过滤清单             | 选用，默认关闭             | 一般任务页面                       |
+| `zen`     | `anti-ad` 加上资源类型限制 | 选用，`zen` 拦截脚本时略过 | 静态页面或封存页面、大量阅读       |
+| `none`    | 不做预设拦截               | 关闭                       | 被预设弄坏的页面，或不要过滤的运行 |
+
+<Tabs items={["anti-ad", "none"]}>
+  <Tab value="anti-ad">
+    <Demo
+      name="presets"
+      still
+      alt="任务标签页中的新闻首页套用 anti-ad 预设：报导占满页面，广告版位都不见了。"
+    />
+  </Tab>
+  <Tab value="none">
+    <Demo
+      name="presets-none"
+      still
+      alt="同一个新闻首页，预设设为 none：横幅广告、侧栏方块与信息流中的方块都显示广告。"
+    />
+  </Tab>
+</Tabs>
+
+## 设置预设 [#set-a-preset]
+
+```js
+const browser = await connect("archive");
+
+await browser.preset("anti-ad", { environment: true });
+await browser.navigate("https://example.com");
+
+const status = await browser.call("preset", { cmd: "status" });
+console.log(status);
+```
+
+`preset` 会保存会话的配置，并把它套用到会话拥有的标签页上。`navigate` 接受相同的 `preset`、`zen` 与 `environment` 字段，并在导航开始后保存这些字段。在命令行中：
+
+```sh
+omw call archive preset '{"preset":"zen","zen":{"images":true,"fonts":true,"css":false,"javascript":false}}'
+omw call archive preset '{"cmd":"status"}'
+```
+
+尚未选择预设的会话使用 `anti-ad`，这是新任务标签页的默认。
+
+## anti-ad [#anti-ad]
+
+这些清单在构建时编译进扩展程序。`pnpm run filters:update` 会下载它们，并把 URL、SHA-256 值、日期与原始声明记录在 `third_party/filters/sources.lock.json`。扩展程序不会从第三方服务器提取规则或更新，脱机时也能运行。
+
+内含的清单：
+
+- AdGuard Base（已移除与 EasyList 重复的项目）与 AdGuard Tracking Protection
+- EasyList 与 EasyPrivacy
+- uBlock Origin 中已激活的非地区性默认清单：filters、badware、privacy、unbreak、quick fixes、URLHaus 与 Peter Lowe
+
+不包含地区性清单与骚扰类清单。封装的 uBO scriptlet 与重新导向资源来自 Ghostery 固定版本的副本。
+
+引擎实作了请求拦截与例外。重新导向、响应本文与 HTML 改写、CSP 命令，以及进程序外观过滤（procedural cosmetics）均未实作。因此，同样的清单在 uBlock Origin 或 AdGuard 下与在这里的页面呈现可能不同。
+
+## zen [#zen]
+
+`zen` 在 `anti-ad` 之上增加资源类型拦截。每个开关都是布尔值，`true` 表示拦截该资源类型。
+
+| 开关         | 拦截             | 默认    |
+| ------------ | ---------------- | ------- |
+| `images`     | 图片与图片集请求 | `true`  |
+| `fonts`      | 字体请求         | `true`  |
+| `css`        | 样式表请求       | `false` |
+| `javascript` | 脚本请求         | `false` |
+
+`javascript: true` 也会停止行内脚本与事件处理常式属性。在 Chrome 中，脚本运行通过 CDP 禁用。在 Firefox 中，扩展程序会在该标签页的文档与框架响应中加上 `Content-Security-Policy: script-src 'none'`。此时 `<noscript>` 的内容不会呈现，因为浏览器仍回报脚本功能为激活。
+
+这些限制涵盖网络请求。行内图片与 data 图片、行内 CSS，以及已安装的 service worker 缓存不受影响。需要样式表或脚本的网站会因这些开关而损坏。请选择 `none`，或放宽某个开关，然后重新导航。
+
+## environment [#environment]
+
+`environment: true` 会加入内置清单中的外观过滤（cosmetics）与 scriptlet，并以文档主机名称作为防护。它默认关闭，而在 `zen` 的 `javascript` 打开时会略过。
+
+注册发生在目标文档加载之前，所以这项设置套用于标签页接下来显示的文档，不会改变已加载的页面。请重新导航。跨主机的重新导向，或来自其他主机的框架，只会得到网络过滤，因为防护机制绝不会注入其他主机的规则。
+
+环境注入不是反机器人的指纹伪造。解析失败或掷出例外的 scriptlet 只影响它自己。状态回报的是已安装，而不是每个 scriptlet 都成功运行。在 Firefox 中，`environment: true` 会被接受，但回报为 `environmentState: "unavailable"`，网络过滤则继续进行。
+
+## none [#none]
+
+`none` 会移除任务标签页上的拦截。通过 `cdp` 安装的原始 CDP Fetch 处理常式，会与同一标签页上的预设请求处理常式冲突。请先选择 `none`。
+
+## 借用的标签页 [#borrowed-tabs]
+
+预设只套用在会话拥有的标签页。借用的标签页绝不会被过滤，也不会为借用它的会话保留任何预设状态。针对借用标签页的导航若带有预设选项，会返回 `borrowed_tab`。
+
+## 状态 [#status]
+
+`preset {cmd:"status"}` 会读取目前的标签页，并返回：
+
+- 配置：`name`、`environment`、`images`、`fonts`、`css`、`javascript`
+- `blocked` 与 `allowed`：自预设安装以来的请求数
+- `network`：标签页上的拦截是否当前
+- `environmentState`：`off`、`active` 或 `unavailable`
+- `fallback`：最多 8 个原因，每个截断为 300 个字符
+
+任何其他的 `cmd` 值都会返回 `invalid_args`。配置调用会返回 `config`、每个任务标签页的状态项目、`appliesOn` 与 `borrowedTabsExcluded`。在 Chrome 中，`appliesOn` 为 `immediate; environment on next navigation`。
+
+## 成本与限制 [#costs-and-limits]
+
+- 比对在扩展程序背景中运行，所有标签页共用同一个过滤引擎。请求不会送到 daemon。
+- 最后一个过滤中的标签页停止过滤 30 秒后，引擎数据即被释放。下一次套用预设时会重新加载。
+- 网络与脚本限制会立即套用到既有的任务标签页与框架。环境注册则套用到下一个文档。
+- 重新设置标签页时，会先禁用该标签页每个目标上的拦截，所以页面请求会继续进行，而忙碌的框架只会延后其余的处理。安装新的预设需要目前的文档有响应。页面没有响应时，请用 `close_session` 复原。
+- 导航预设未变更的任务标签页时，会保留拦截，也不会发送重新设置的命令。`environment` 关闭时，状态计数器会在导航前后持续累计。
+- 清单加载失败时，请求会不经过滤而通过，状态会保留原因。`zen` 的类型拦截仍然有效。
+- Chrome 每个标签页最多拦截 128 个目标。超出的框架会放行（fail open），状态会记录原因。Firefox 没有每个标签页的目标数上限。
+- Chrome 重新启动扩展程序 worker 后，既有标签页的状态会回报 `none`，直到受控制的导航重新套用已保存的会话配置。不会重试任何网站动作。
+- `pnpm run filters:update` 会下载上游清单，更新 gzip 档与 `sources.lock.json`，并在下载错误或响应无效时失败。清单与其记录的 SHA-256 不符时，构建会失败。
+
+## Firefox [#firefox]
+
+Firefox 版本使用相同的模式、清单与会话设置。网络过滤在会阻挡的 `webRequest` 监听器中运行，环境注入无法使用，被拦截的顶层页面会让标签页停留在目前的页面。差异请见 [Firefox](./firefox.mdx#presets)。
