@@ -1,0 +1,92 @@
+---
+title: 会话与标签页
+icon: Layers
+description: Agent 如何把工作拆成会话、标签页如何打开、分组与借用，以及适用的限制。
+---
+
+{/* Generated from sessions.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+会话是 oh-my-webbridge 的工作单位。每个命令都会指定一个会话，daemon 再把命令送往该会话持有的标签页。会话打开的标签页会放进一个标签页分组，分组标题为会话名称，或 Agent 传入的标题。因此任务的页面会聚在一起，并与你自己使用的页面分开。
+
+<Demo
+  name="activity-read"
+  alt="会话示范在它打开的标签页中阅读文章：页面一节一节滚动，角落的标签显示会话名称。"
+/>
+
+## 每项任务一个会话 [#one-session-per-task]
+
+为每项任务取一个专属的会话名称，并在该任务的所有操作中沿用。同时运行的任务使用不同的名称。每个会话各自保有自己的标签页、标签页分组、目前标签页、预设与框架选择。浏览器会同时运行来自不同会话的命令。
+
+```sh
+omw call research navigate '{"url":"https://example.com/docs","group_title":"Research"}'
+omw call billing navigate '{"url":"https://example.com/pricing","group_title":"Billing"}'
+```
+
+会话从它的第一个命令开始。名称长度为 1 到 96 个字符，可用字母（含 CJK）、数字、`_`、`.` 或 `-`。
+
+## 会话固定在同一个浏览器 [#a-session-stays-in-one-browser]
+
+会话的第一个命令决定它所在的浏览器：由 `browser` 指定的浏览器、唯一已连接的浏览器，或两个浏览器都已连接时的 Chrome。该会话之后的命令都送往同一处，即使另一个浏览器之后才连接也一样。`close_session` 会移除这个绑定。要求使用另一个浏览器的命令会以 `session_browser` 失败。
+
+## 命令依抵达顺序运行 [#commands-run-in-arrival-order]
+
+每个会话有一个队列。同一会话的命令一次运行一个，顺序与 daemon 收到的顺序相同，所以接在快照之后的点击，会作用在该快照所描述的页面上。会话之间不共用队列，某个会话中响应缓慢的页面不会拖住其他会话。
+
+`dialog` 与 `close_session` 在会话队列之外响应，因此即使标签页的命令仍在等待，它们也能送达该标签页。一个会话最多可同时有 32 个命令在运行或等待。
+
+## 新标签页在背景打开 [#new-tabs-open-in-the-background]
+
+会话没有目前标签页，或命令设置了 `newTab` 时，`navigate` 会打开新标签页。标签页在背景打开，并加入该会话的标签页分组：
+
+```json
+{
+  "session": "research",
+  "action": "navigate",
+  "args": { "url": "https://example.com/docs", "newTab": true, "group_title": "Research" }
+}
+```
+
+- `group_title` 设置分组的标题。打开标签页的导航可以变更标题；否则维持目前的标题。默认为会话名称。
+- 分组创建时是折叠的，所以任务标签页不会让标签页列变宽。展开分组即可查看页面。
+- 之后不带 `newTab` 的 `navigate` 会重用目前标签页。一个会话最多持有 32 个标签页，任务标签页与借用的标签页合计。
+- `list_tabs` 只返回该会话的标签页，内容包括 URL、标题、当前旗标、分组标题，以及该标签页是否为借用。
+
+## 借用你的标签页 [#borrowing-one-of-your-tabs]
+
+带有 `active: true` 的 `find_tab` 会认领最后取得焦点的窗口中的当前标签页。URL 必须完全相符，或主机名称相符：
+
+```sh
+omw call research find_tab '{"url":"example.com","active":true}'
+```
+
+不带 `active: true` 时，`find_tab` 只在会话已持有的标签页中寻找。借用的标签页会保持打开，`close_tab` 会以 `borrowed_tab` 拒绝关闭它。会话使用该标签页，并在结束时释放它。一个标签页同一时间只属于一个会话，其他会话要求该标签页时会收到 `tab_busy`。预设只套用在会话自己打开的标签页。任务需要你已打开的页面时才借用标签页；否则请打开任务标签页。
+
+## 结束会话 [#ending-a-session]
+
+`close_session` 会取消会话仍在运行或等待的命令，关闭会话打开的标签页，并释放借用的标签页，这些标签页会保持打开。它会移除会话的浏览器绑定，并清除会话在借用标签页上记录的内容：框架选择、网络项目、控制台输出与 `@e` 引用。你自己关闭标签页时，该标签页会从会话中移除；会话只会由 `close_session` 结束。
+
+## 限制 [#limits]
+
+| 限制             | 值                                                        |
+| ---------------- | --------------------------------------------------------- |
+| 会话             | 每个浏览器 128 个                                         |
+| 每个会话的标签页 | 32 个，任务标签页与借用的标签页合计                       |
+| 同时运行的命令   | 每个浏览器 128 个；`close_session` 与 `dialog` 另有 16 个 |
+| 每个会话的命令   | 32 个运行中或等待中                                       |
+| 会话名称         | 1 到 96 个字母（含 CJK）、数字、`_`、`.` 或 `-`           |
+| `timeoutMs`      | 1 到 120000，默认 30000                                   |
+
+达到限制时，命令会以 `busy` 与 HTTP 429 失败，而不是等待。请降低并行数量，或关闭已完成的会话。
+
+## 超时与结果不确定 [#timeouts-and-uncertain-results]
+
+`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。时间用完，或命令运行到一半时浏览器中断连接，调用会返回 `outcome_unknown`。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。
+
+<Callout type="warn" title="收到 outcome_unknown 后重试">
+  重新使用命令之前，请先观察页面。`snapshot`、`read_page`、标签页 URL、`get`
+  与网络记录会显示页面做了什么。只有在状态显示动作没有发生时，才再次发送命令；付款、发布或提交，绝不可自动重送。
+</Callout>
+
+## 登录状态来自你的个人资料 [#logins-come-from-your-profile]
+
+任务标签页与借用的标签页都在你的浏览器个人资料中运行，使用其中的 cookie、会话与登录状态。会话与标签页分组是用来整理标签页，不是用来区分账号：每个会话看到的登录状态都相同，为某项任务清除 cookie 或网站保存空间，等于为整个个人资料清除。下一项任务需要从未登录开始时，请先注销该网站。

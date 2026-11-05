@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "lib": ["ESNext", "DOM"],
+    "types": ["chrome", "node"],
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["extension/src/**/*.ts", "sdk/**/*.ts"]
+}

@@ -1,0 +1,191 @@
+---
+title: CLI
+icon: Terminal
+description: omw daemon 与命令行客户端的命令。
+---
+
+{/* Generated from cli.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+`omw` 是 Go daemon，也是它的命令行客户端。它监听 `127.0.0.1:17373`，没有选项可以绑定其他地址或网络界面。`serve` 与 `start` 运行 daemon。`stop`、`status`、`doctor`、`pair` 与 `call` 需要已在运行中的 daemon。`connection`、`skill`、`install-skill`、`service install`、`version` 与 `help` 不需要 daemon。
+
+| 命令                  | 用途                                               |
+| --------------------- | -------------------------------------------------- |
+| `omw serve`           | 在前景运行 daemon。                                |
+| `omw start`           | 启动背景 daemon；daemon 已在运行时也可以安全运行。 |
+| `omw stop`            | 停止 daemon，并保持标签页打开。                    |
+| `omw status`          | 输出 daemon 状态，以及每个浏览器一行的状态。       |
+| `omw doctor`          | 与 `status` 相同，另外输出配置文件路径。           |
+| `omw pair`            | 输出浏览器扩展程序的配对码。                       |
+| `omw connection`      | 输出端点、token 与协议版本。                       |
+| `omw call`            | 对会话发送一个动作。                               |
+| `omw service install` | 安装 launchd 或 systemd 用户服务。                 |
+| `omw install-skill`   | 把内附的 Agent 指南写入指定目录之下。              |
+| `omw skill`           | 输出内附的 Agent 指南。                            |
+| `omw version`         | 输出 daemon 版本。                                 |
+| `omw help`            | 输出命令清单。                                     |
+
+每个命令成功时以状态码 0 结束。失败时，命令把 `omw: ` 与错误消息印到 stderr，然后以状态码 1 结束。
+
+## serve [#serve]
+
+```sh
+omw serve [--cdp ws://127.0.0.1:9222/devtools/browser/...]
+```
+
+在前景运行 daemon，直到收到 SIGINT 或 SIGTERM。监听地址固定为 `127.0.0.1:17373`。如果 `config.json` 指定了其他地址，daemon 会拒绝启动。
+
+`--cdp` 让 daemon 指向一个已激活远程调试的 Chrome 浏览器端点。URL 必须以 `ws://` 或 `wss://` 开头，并带有主机。使用这个旗标时，`/devtools/browser` 会代理该端点；请见 [CDP](./cdp.mdx#native-mode)。
+
+端点不会写入 `config.json`。该文件中已有的 `cdp` 字段会在启动时读取，旗标会在该进程中取代它。
+
+## start [#start]
+
+```sh
+omw start
+```
+
+在新的会话中启动 `omw serve`，与终端分离，并把 `OMW_HOME` 设为配置目录。输出写入该目录中的 `daemon.log`。每次启动都会清空该文件。命令会等待约两秒，让 daemon 响应 `/status`。
+
+成功时输出 `started`；daemon 已在连接端口上响应时，输出 `already running`。当其他进程占用连接端口，或 token 不符时，命令回报连接端口或凭证不符，并以状态码 1 结束。新的 daemon 在这段时间内没有响应时，命令会输出 `daemon.log` 的内容。
+
+## stop [#stop]
+
+```sh
+omw stop
+```
+
+发送 `POST /shutdown`，并输出回复 `{"stopping":true}`。会话打开的标签页会保持打开。`bindings.json` 中的绑定会保留。
+
+## status 与 doctor [#status-and-doctor]
+
+```sh
+omw status
+omw doctor
+```
+
+两者都把 daemon 的 `/status` JSON 印到 stdout，并把每个浏览器一行的状态印到 stderr：
+
+```text
+chrome: connected (156.0.8078.80)
+firefox: not connected
+```
+
+`doctor` 会在这些行之前，先把 `config.json` 的路径印到 stderr。
+
+`status` 是需要验证的请求。没有运行中的 daemon 时，它以状态码 1 结束，并输出连接错误。
+
+## pair [#pair]
+
+```sh
+omw pair
+```
+
+向 daemon 要求配对码，并以两组各三位数的格式输出：
+
+```text
+Enter this code in the oh-my-webbridge extension:
+
+    482 913
+
+It works once and expires in 5 minutes.
+```
+
+配对码的有效期为 5 分钟，可尝试 5 次。命令每 500 ms 轮询一次 daemon，在扩展程序兑换配对码时，输出 `Paired with Chrome.` 或 `Paired with Firefox.`。配对码过期时，命令以状态码 1 结束。没有运行中的 daemon 时，它会输出提示，要求运行 `omw start`。
+
+## connection [#connection]
+
+```sh
+omw connection
+```
+
+输出一个 JSON 对象：
+
+```json
+{
+  "endpoint": "ws://127.0.0.1:17373/extension",
+  "token": "64 hex characters",
+  "protocol": 1
+}
+```
+
+token 是以十六进制表示的 32 个随机字节，与 `config.json` 保存的值相同。它授权除了 `GET /ping` 与 `POST /pair` 之外的每个请求，包括 WebSocket 升级与 CDP 连接。请把它当作机密：不要贴到 issue、日志或网页中。
+
+## call [#call]
+
+```sh
+omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]
+```
+
+对 daemon 发送一个动作，并输出它的 JSON 回复。会话名称由 1 到 96 个字符组成，可用字母（包括 CJK）、数字、`_`、`.` 或 `-`。`ACTION` 是[动作参考](./actions.mdx)中的其中一个动作。
+
+选用的第三个参数是含有动作参数的 JSON 对象。使用 `-` 时，命令从 stdin 读取该对象，上限 2 MiB。省略时，daemon 收到 `{}`。
+
+```sh
+omw call research navigate '{"url":"https://example.com/"}'
+echo '{"selector":"#submit"}' | omw call --browser firefox form click -
+```
+
+`--browser` 把动作送往指定的浏览器。省略时，daemon 依序依据会话绑定、唯一已连接的浏览器、Chrome 来路由。
+
+客户端最多等待 125 秒。daemon 套用命令自己的期限，默认为 30 秒。回复照 daemon 发送的内容输出。HTTP 状态码为 400 或以上时，命令在输出回复后以状态码 1 结束。
+
+## service install [#service-install]
+
+```sh
+omw service install
+```
+
+安装用户服务，在登录时运行 `omw serve`，并把 `OMW_HOME` 设为命令所用的配置目录。
+
+| 平台  | 文件                                               | 激活方式                                                                                       |
+| ----- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| macOS | `~/Library/LaunchAgents/app.oh-my-webbridge.plist` | `launchctl bootstrap gui/$UID`                                                                 |
+| Linux | `~/.config/systemd/user/oh-my-webbridge.service`   | `systemctl --user daemon-reload`，然后 `systemctl --user enable --now oh-my-webbridge.service` |
+
+服务让 daemon 持续运行：macOS 使用 `KeepAlive`，Linux 使用 `Restart=on-failure`，延迟 3 秒。macOS 会舍弃输出；systemd 单元保留默认的 journal。
+
+## install-skill 与 skill [#install-skill-and-skill]
+
+```sh
+omw install-skill DIRECTORY
+omw skill
+```
+
+`install-skill` 把内附的 Agent 指南以 0600 权限写入 `DIRECTORY/oh-my-webbridge/SKILL.md`，并以 0700 权限创建目录。它拒绝覆写既有文件。
+
+`skill` 把同一份指南印到 stdout。
+
+```sh
+omw install-skill ~/.agents/skills
+```
+
+## version 与 help [#version-and-help]
+
+```sh
+omw version
+omw --version
+omw help
+```
+
+`version` 输出 daemon 版本。`help`、`--help` 与单独的 `omw` 输出命令清单。
+
+未知的命令会输出 `omw: unknown command "NAME"; run omw help`，并以状态码 1 结束。
+
+## 配置目录 [#configuration-directory]
+
+目录依下列顺序决定：
+
+1. `OMW_HOME`（有设置时）。
+2. macOS：`~/Library/Application Support/oh-my-webbridge`。
+3. Linux：`$XDG_CONFIG_HOME/oh-my-webbridge`；`XDG_CONFIG_HOME` 未设置时为 `~/.config/oh-my-webbridge`。
+
+CLI、daemon、用户服务与 [SDK](./sdk.mdx) 都读取同一个目录。每个读取配置的命令，在目录不存在时都会以 0700 权限创建它。
+
+| 文件            | 内容                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| `config.json`   | `token`（64 个十六进制字符）、`address`，以及选用的 `cdp` 端点。首次使用时以 0600 权限创建。 |
+| `bindings.json` | 会话与浏览器的绑定，权限 0600，在启动时读取。                                                |
+| `daemon.log`    | 由 `omw start` 启动的 daemon 的输出，每次启动都会清空。                                      |
+| `artifacts/`    | 未指定明确 `path` 时保存的屏幕截图与 PDF。                                                   |
+
+`config.json` 中的 token 是唯一的凭证。任何人读到这个文件，就能操控已配对的浏览器，因此请让这个目录保持私有，也不要在机器之间复制 `config.json`。

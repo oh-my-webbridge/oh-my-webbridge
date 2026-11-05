@@ -1,0 +1,22 @@
+{
+  "byline": "文档",
+  "previewTitle": "技术预览",
+  "previewBody": "omw 目前是技术预览版，正在快速迭代。",
+  "previewWarning": "之后的版本一定会有破坏兼容性的变更。",
+  "description": "本机 daemon 与浏览器扩展程序，让 Agent 或脚本在你平常使用的 Chrome 或 Firefox 里工作。",
+  "repository": "GitHub 仓库：oh-my-webbridge/oh-my-webbridge",
+  "language": "语言",
+  "languageCurrent": "语言：{language}",
+  "theme": "主题",
+  "themeCurrent": "主题：{theme}",
+  "themeLight": "浅色",
+  "themeDark": "深色",
+  "themeSystem": "跟随系统",
+  "pages": "目录",
+  "notFoundTitle": "找不到页面",
+  "notFoundBody": "链接已经过时，或是页面换了位置。",
+  "backToDocs": "前往文档首页",
+  "chooseLanguage": "选择语言",
+  "codeBlock": "代码 {index}",
+  "codeBlockTitled": "代码 {index}：{title}"
+}

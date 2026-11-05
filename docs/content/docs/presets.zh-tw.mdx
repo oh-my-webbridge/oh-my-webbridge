@@ -1,0 +1,124 @@
+---
+title: 頁面預設集
+icon: ShieldBan
+description: 以 anti-ad、zen 與 none 預設集，控制工作階段所擁有的分頁可以發出哪些網路請求。
+---
+
+預設集是工作階段組態的一部分。它套用在工作階段擁有的任務分頁上，包括之後才開啟的分頁。
+
+| 模式      | 網路                       | 環境                         | 用途                                 |
+| --------- | -------------------------- | ---------------------------- | ------------------------------------ |
+| `anti-ad` | 內建的過濾清單             | 選用，預設關閉               | 一般任務頁面                         |
+| `zen`     | `anti-ad` 加上資源類型限制 | 選用，`zen` 封鎖指令碼時略過 | 靜態頁面或封存頁面、大量閱讀         |
+| `none`    | 不做預設集攔截             | 關閉                         | 被預設集弄壞的頁面，或不要過濾的執行 |
+
+<Tabs items={["anti-ad", "none"]}>
+  <Tab value="anti-ad">
+    <Demo
+      name="presets"
+      still
+      alt="任務分頁中的新聞首頁套用 anti-ad 預設集：報導占滿頁面，廣告版位都不見了。"
+    />
+  </Tab>
+  <Tab value="none">
+    <Demo
+      name="presets-none"
+      still
+      alt="同一個新聞首頁，預設集設為 none：橫幅廣告、側欄方塊與資訊流中的方塊都顯示廣告。"
+    />
+  </Tab>
+</Tabs>
+
+## 設定預設集 [#set-a-preset]
+
+```js
+const browser = await connect("archive");
+
+await browser.preset("anti-ad", { environment: true });
+await browser.navigate("https://example.com");
+
+const status = await browser.call("preset", { cmd: "status" });
+console.log(status);
+```
+
+`preset` 會儲存工作階段的組態，並把它套用到工作階段擁有的分頁上。`navigate` 接受相同的 `preset`、`zen` 與 `environment` 欄位，並在導覽開始後儲存這些欄位。在命令列中：
+
+```sh
+omw call archive preset '{"preset":"zen","zen":{"images":true,"fonts":true,"css":false,"javascript":false}}'
+omw call archive preset '{"cmd":"status"}'
+```
+
+尚未選擇預設集的工作階段使用 `anti-ad`，這是新任務分頁的預設。
+
+## anti-ad [#anti-ad]
+
+這些清單在建置時編譯進擴充功能。`pnpm run filters:update` 會下載它們，並把 URL、SHA-256 值、日期與原始聲明記錄在 `third_party/filters/sources.lock.json`。擴充功能不會從第三方伺服器擷取規則或更新，離線時也能運作。
+
+內含的清單：
+
+- AdGuard Base（已移除與 EasyList 重複的項目）與 AdGuard Tracking Protection
+- EasyList 與 EasyPrivacy
+- uBlock Origin 中已啟用的非地區性預設清單：filters、badware、privacy、unbreak、quick fixes、URLHaus 與 Peter Lowe
+
+不包含地區性清單與騷擾類清單。封裝的 uBO scriptlet 與重新導向資源來自 Ghostery 固定版本的副本。
+
+引擎實作了請求封鎖與例外。重新導向、回應本文與 HTML 改寫、CSP 指令，以及程序式外觀過濾（procedural cosmetics）均未實作。因此，同樣的清單在 uBlock Origin 或 AdGuard 下與在這裡的頁面呈現可能不同。
+
+## zen [#zen]
+
+`zen` 在 `anti-ad` 之上增加資源類型封鎖。每個開關都是布林值，`true` 表示封鎖該資源類型。
+
+| 開關         | 封鎖             | 預設    |
+| ------------ | ---------------- | ------- |
+| `images`     | 圖片與圖片集請求 | `true`  |
+| `fonts`      | 字型請求         | `true`  |
+| `css`        | 樣式表請求       | `false` |
+| `javascript` | 指令碼請求       | `false` |
+
+`javascript: true` 也會停止行內指令碼與事件處理常式屬性。在 Chrome 中，指令碼執行透過 CDP 停用。在 Firefox 中，擴充功能會在該分頁的文件與框架回應中加上 `Content-Security-Policy: script-src 'none'`。此時 `<noscript>` 的內容不會呈現，因為瀏覽器仍回報指令碼功能為啟用。
+
+這些限制涵蓋網路請求。行內圖片與 data 圖片、行內 CSS，以及已安裝的 service worker 快取不受影響。需要樣式表或指令碼的網站會因這些開關而損壞。請選擇 `none`，或放寬某個開關，然後重新導覽。
+
+## environment [#environment]
+
+`environment: true` 會加入內建清單中的外觀過濾（cosmetics）與 scriptlet，並以文件主機名稱作為防護。它預設關閉，而在 `zen` 的 `javascript` 開啟時會略過。
+
+註冊發生在目標文件載入之前，所以這項設定套用於分頁接下來顯示的文件，不會改變已載入的頁面。請重新導覽。跨主機的重新導向，或來自其他主機的框架，只會得到網路過濾，因為防護機制絕不會注入其他主機的規則。
+
+環境注入不是反機器人的指紋偽造。解析失敗或擲出例外的 scriptlet 只影響它自己。狀態回報的是已安裝，而不是每個 scriptlet 都成功執行。在 Firefox 中，`environment: true` 會被接受，但回報為 `environmentState: "unavailable"`，網路過濾則繼續進行。
+
+## none [#none]
+
+`none` 會移除任務分頁上的攔截。透過 `cdp` 安裝的原始 CDP Fetch 處理常式，會與同一分頁上的預設集請求處理常式衝突。請先選擇 `none`。
+
+## 借用的分頁 [#borrowed-tabs]
+
+預設集只套用在工作階段擁有的分頁。借用的分頁絕不會被過濾，也不會為借用它的工作階段保留任何預設集狀態。針對借用分頁的導覽若帶有預設集選項，會回傳 `borrowed_tab`。
+
+## 狀態 [#status]
+
+`preset {cmd:"status"}` 會讀取目前的分頁，並回傳：
+
+- 組態：`name`、`environment`、`images`、`fonts`、`css`、`javascript`
+- `blocked` 與 `allowed`：自預設集安裝以來的請求數
+- `network`：分頁上的攔截是否作用中
+- `environmentState`：`off`、`active` 或 `unavailable`
+- `fallback`：最多 8 個原因，每個截斷為 300 個字元
+
+任何其他的 `cmd` 值都會回傳 `invalid_args`。組態呼叫會回傳 `config`、每個任務分頁的狀態項目、`appliesOn` 與 `borrowedTabsExcluded`。在 Chrome 中，`appliesOn` 為 `immediate; environment on next navigation`。
+
+## 成本與限制 [#costs-and-limits]
+
+- 比對在擴充功能背景中執行，所有分頁共用同一個過濾引擎。請求不會送到 daemon。
+- 最後一個過濾中的分頁停止過濾 30 秒後，引擎資料即被釋放。下一次套用預設集時會重新載入。
+- 網路與指令碼限制會立即套用到既有的任務分頁與框架。環境註冊則套用到下一個文件。
+- 重新設定分頁時，會先停用該分頁每個目標上的攔截，所以頁面請求會繼續進行，而忙碌的框架只會延後其餘的處理。安裝新的預設集需要目前的文件有回應。頁面沒有回應時，請用 `close_session` 復原。
+- 導覽預設集未變更的任務分頁時，會保留攔截，也不會送出重新設定的指令。`environment` 關閉時，狀態計數器會在導覽前後持續累計。
+- 清單載入失敗時，請求會不經過濾而通過，狀態會保留原因。`zen` 的類型封鎖仍然有效。
+- Chrome 每個分頁最多攔截 128 個目標。超出的框架會放行（fail open），狀態會記錄原因。Firefox 沒有每個分頁的目標數上限。
+- Chrome 重新啟動擴充功能 worker 後，既有分頁的狀態會回報 `none`，直到受控制的導覽重新套用已儲存的工作階段組態。不會重試任何網站動作。
+- `pnpm run filters:update` 會下載上游清單，更新 gzip 檔與 `sources.lock.json`，並在下載錯誤或回應無效時失敗。清單與其記錄的 SHA-256 不符時，建置會失敗。
+
+## Firefox [#firefox]
+
+Firefox 版本使用相同的模式、清單與工作階段設定。網路過濾在會阻擋的 `webRequest` 監聽器中執行，環境注入無法使用，被封鎖的頂層頁面會讓分頁停留在目前的頁面。差異請見 [Firefox](./firefox.mdx#presets)。

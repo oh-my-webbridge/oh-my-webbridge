@@ -1,0 +1,101 @@
+---
+title: 架構
+icon: Network
+description: omw daemon 與瀏覽器擴充功能如何分工，以及一個指令如何抵達分頁。
+---
+
+{/* Generated from architecture.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+oh-my-webbridge 由兩個行程組成。daemon `omw` 是 Go 二進位檔，監聽 `127.0.0.1:17373`。擴充功能在 Chrome 或 Firefox 內執行，透過瀏覽器 API 操作分頁。Agent、CLI 與 SDK 透過 HTTP 呼叫 daemon；daemon 透過 WebSocket 呼叫擴充功能。
+
+## 元件 [#components]
+
+### Daemon [#daemon]
+
+daemon 保存的狀態，不會隨瀏覽器視窗關閉而消失。
+
+- 驗證：除了 `GET /ping` 與 `POST /pair`，每個請求都在這裏以 token 檢查。
+- 路由：每個瀏覽器保留一條連線，並把每個指令送往 Chrome 或 Firefox。
+- 並行與期限：daemon 決定是否受理請求，套用逾時，並在達到上限時回應 `busy`。
+- 檔案：daemon 把螢幕截圖與 PDF 寫到你指定的路徑，並為 Firefox 讀取上傳檔案，因為 Firefox 的擴充功能無法讀取本機檔案。
+- CDP 前端：`GET /json`、`GET /json/version` 與 `GET /devtools/page/{tab}` 向 CDP 用户端呈現 Chrome 分頁，`omw serve --cdp` 則把 `/devtools/browser` 轉送到原生 DevTools 端點。
+- 工作階段綁定：儲存在組態目錄的 `bindings.json`。
+
+### 擴充功能 [#extension]
+
+擴充功能負責瀏覽器端的工作。
+
+- 任務分頁與其分頁羣組，包括借用已存在的分頁。
+- DOM 與無障礙樹的 `snapshot`，以及由單一快照衍生的 `@e` 參照。
+- 輸入：點擊、懸停、輸入、選取、勾選、聚焦、捲動、拖曳與上傳。
+- Chrome：`chrome.debugger`，也就是 CDP。
+- Firefox：WebExtension API。`page.js` 依需求注入所選框架，`webRequest` 處理預設集與標頭，`tabs.captureTab` 擷取螢幕截圖，`userScripts.execute` 執行 `evaluate`。
+- 每個受控分頁的網路項目與主控台紀錄。
+- 繪製在受控頁面上方的活動層。
+
+Firefox 對部分動作回應 `unsupported`，因為它的擴充功能 API 沒有對應的功能。差異列於 [Firefox](./firefox.mdx)。
+
+一個分頁同一時間只屬於一個工作階段。建立分頁的工作階段把它們放在自己的分頁羣組；借用的分頁留在你的羣組，並在釋放時歸還。分頁羣組不是 cookie 邊界，也不是安全邊界：設定檔內的每個分頁共用相同的登入狀態。
+
+## 多瀏覽器路由 [#multi-browser-routing]
+
+daemon 最多保留一條 Chrome 連線與一條 Firefox 連線，並以 WebSocket 的 Origin 區分兩者。擴充功能的 hello 會回報瀏覽器、瀏覽器版本，以及擴充功能持有的工作階段名稱。
+
+指令可以帶 `browser` 欄位。工作階段在第一個指令時綁定到某個瀏覽器，並維持該綁定，直到 `close_session` 成功。綁定會寫入 `bindings.json`，因此 daemon 重新啓動後，工作階段仍會路由回同一個瀏覽器。下一次 hello 會重新回報工作階段名稱，過期的綁定會被丟棄。
+
+沒有綁定的工作階段，在 Chrome 已連線時送往 Chrome，否則送往 Firefox。`/json/list`、`/devtools/*` 與原始 `cdp` 需要 Chrome 擴充功能；即使沒有瀏覽器連線，`/json/version` 仍會回報版本。同一個瀏覽器的第二條連線會被拒絕，並回應 409。
+
+## 請求生命週期與並行 [#request-lifecycle-and-concurrency]
+
+請求以 `POST /command` 抵達，本文上限為 2 MiB；也可以作為擴充功能 WebSocket 上的框架抵達。請求若沒有 ID，daemon 會指派隨機 ID；回應只會與同一條連線上帶有該 ID 的待處理請求配對。連線中斷時，該連線上所有進行中的指令都以 `outcome_unknown` 結束。重新連線後，只接受新的請求。
+
+同一個工作階段的指令依序執行，不同的工作階段並行執行。擴充功能也依工作階段排隊，等待中的指令超過 32 個時回應 `busy`。`close_session` 與 `dialog` 不經過工作階段佇列，使用 16 個保留名額，因此卡住的工作階段或開啓中的對話框仍然可以被清除。頁面 CDP 連線保留協定的多工處理：同一個目標上有另一個指令在等待時，Fetch 或 Debugger 的接續仍會執行。
+
+預設逾時為 30 秒，上限為 120 秒。請求超過期限會回傳 `outcome_unknown`，SDK 不會重試結果不確定的指令。
+
+## 擴充功能生命週期 [#extension-lifecycle]
+
+Chrome 以 MV3 service worker 執行擴充功能背景。worker 與 daemon 保持一條 WebSocket，每 20 秒送出一次 ping，並在 45 秒沒有流量後關閉該 socket。`chrome.alarms` 計時器每 30 秒觸發一次，並在 worker 已停止時重新連線。重試間隔從 0.5 秒退避到 30 秒，並加入抖動。沒有 offscreen document、靜音音訊或輪詢迴圈讓 worker 保持存活，Chrome 仍可能隨時停止它。
+
+偵錯工作階段會比開啓它的 worker 更長壽，並維持附加在分頁上。下一個 worker 啓動時，不會有處理已暫停請求所需的狀態。它在啓動時會分離從前一個 worker 繼承的偵錯工作階段，這會釋放在那裏暫停的所有請求，然後在下一個指令時重新附加。工作階段中繼資料存放在 `chrome.storage.session`，而不是 worker 的全域變數。頁面 CDP 工作階段會隨開啓它們的 daemon 連線結束。
+
+Firefox 執行 MV3 event page，瀏覽器在閒置 30 秒後會將它暫停。WebSocket 流量不算作活動，因此在連線開啓期間，每 20 秒的心跳也會呼叫 `tabs.query`。暫停後，由 30 秒的 alarm 重新連線。重新載入背景頁會丟掉 `webRequest` 監聽器與框架選擇。預設集會在該分頁下一次受控導覽時重新安裝。
+
+## 本機信任模型 [#local-trust-model]
+
+daemon 只能從它所在的機器連線，token 是唯一的憑證。
+
+- 它綁定 `127.0.0.1:17373`，並拒絕 Host 不是 `127.0.0.1` 的請求。
+- 網頁來源會被拒絕。只接受由 32 個 a 到 p 字母組成的 `chrome-extension://` 來源，以及帶有 UUID 的 `moz-extension://` 來源，而且只限 `/extension`、`/ping` 與 `/pair`。
+- CLI 與 SDK 以 `Authorization: Bearer` 傳送 token。擴充功能以 WebSocket 子協定 `omw-token.<token>` 傳送 token，並與 `omw.v1` 並列。URL 中不會出現 token。
+- `GET /ping` 不需要 token 即可回報版本。`POST /pair` 需要擴充功能來源，並以六位數配對碼換取 token。
+- 配對碼的有效期為 5 分鐘，可嘗試 5 次。
+- 組態目錄以 0700 權限建立。存放 token 的 `config.json` 先寫入暫存檔，再以 0600 權限原子性地發布。
+- token 授予瀏覽器的完整控制權：任何分頁中的頁面 JavaScript、原始 CDP，以及寫入你指定之絕對路徑的檔案。它無法把你與以同一個作業系統使用者執行的其他行程隔離，而且設定檔的 cookie 對每個分頁都可用。
+- Chrome 擴充功能沒有 `<all_urls>` 主機權限、沒有常駐的 content script，也沒有外部訊息入口。Firefox 宣告 `<all_urls>`，螢幕截圖、請求過濾、cookie 與跨來源框架都需要它；`userScripts` 維持為選用權限，在初始設定頁面或在 **設定** 下的 **網頁** 中授予。
+
+## 資源限制 [#resource-limits]
+
+這些是容量防護，不是 RSS 的上限：同時進行的螢幕截圖，以及 Chrome 自己的分頁與網路快取，仍會增加記憶體用量。
+
+| 資源                                                                              | 限制                                                            |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| HTTP 請求本文                                                                     | 2 MiB                                                           |
+| 正在讀取或處理的 HTTP 請求                                                        | 288                                                             |
+| 每個瀏覽器的一般指令                                                              | 128                                                             |
+| 每個瀏覽器為 `close_session`、`dialog`、`cdp_detach`、`artifact_close` 保留的名額 | 16                                                              |
+| 擴充功能中每個工作階段的等待指令                                                  | 32                                                              |
+| 每個瀏覽器的工作階段                                                              | 128                                                             |
+| 每個工作階段的分頁                                                                | 32                                                              |
+| WebSocket 訊息                                                                    | 32 MiB                                                          |
+| daemon 中緩衝的回應                                                               | 64 MiB，超過後指令回傳 `outcome_unknown`                        |
+| 擴充功能傳送緩衝區                                                                | 超過 4 MiB 後訊框開始排隊，排隊上限 64 MiB，30 秒無法傳送即關閉 |
+| 螢幕截圖與 PDF 工作                                                               | 同時 2 個                                                       |
+| 指令逾時                                                                          | 預設 30 秒，上限 120 秒                                         |
+| `snapshot` 輸出                                                                   | 4000 個節點或 192000 個字元，並設定 `truncated`                 |
+| 頁面 CDP 訂閲佇列                                                                 | 32 個事件，每個事件 256 KiB                                     |
+| 網路擷取                                                                          | 每個分頁 500 筆項目，Chrome 中緩衝的本文共 8 MiB                |
+| Firefox 網路回應本文                                                              | 每個回應 1 MiB，每個分頁 8 MiB                                  |
+| Firefox 上傳                                                                      | 每個指令 16 MiB，進行中的所有指令合計 64 MiB                    |
+| PDF 輸出                                                                          | 100 MiB                                                         |
+| 成品檔案                                                                          | 先寫入暫存檔，再以 0600 權限寫成，絕不覆寫既有路徑              |

@@ -1,0 +1,80 @@
+/*
+ * Color tokens and type roles of the docs site (design.md). The values come from the brand palette
+ * in packages/brand/theme.css; the Fumadocs shadcn preset maps these names to the fd-* colors.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: var(--omw-ink);
+  --card: var(--omw-canvas);
+  --card-foreground: var(--omw-ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--omw-ink);
+  /* Ink reaches 18.6:1 on white and 17.1:1 on the card surface. */
+  --primary: var(--omw-primary);
+  --primary-foreground: var(--omw-primary-foreground);
+  --secondary: var(--omw-canvas);
+  --secondary-foreground: var(--omw-ink);
+  --muted: var(--omw-canvas);
+  --muted-foreground: var(--omw-ink-secondary);
+  --accent: var(--omw-primary-tint);
+  --accent-foreground: var(--omw-ink);
+  --destructive: var(--omw-danger);
+  --success: var(--omw-success);
+  --warning: var(--omw-warning);
+  --border: var(--omw-hairline);
+  --input: var(--omw-control);
+  --ring: var(--omw-primary);
+  --radius: 10px;
+  --radius-card: 14px;
+  --shadow-overlay: var(--omw-shadow-float);
+  color-scheme: light;
+}
+
+.dark {
+  --background: var(--omw-canvas);
+  --card: var(--omw-surface);
+  --popover: var(--omw-surface);
+  --secondary: var(--omw-surface);
+  --muted: var(--omw-surface);
+  color-scheme: dark;
+}
+
+/* Negative tracking suits Latin headings only. */
+:root {
+  --omw-tracking-display: -0.02em;
+  --omw-tracking-heading: -0.01em;
+}
+:root:lang(zh) {
+  --omw-tracking-display: 0em;
+  --omw-tracking-heading: 0em;
+}
+
+/* Type roles */
+@utility text-h1 {
+  font-size: 1.875rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: var(--omw-tracking-display);
+  text-wrap: balance;
+}
+@utility text-section-title {
+  font-size: 1.25rem;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: var(--omw-tracking-heading);
+}
+@utility text-card-title {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+@utility text-body {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  font-weight: 400;
+}
+@utility text-meta {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 400;
+}

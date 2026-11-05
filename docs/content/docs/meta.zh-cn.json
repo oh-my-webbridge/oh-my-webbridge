@@ -1,0 +1,17 @@
+{
+  "title": "oh-my-webbridge 文档",
+  "pages": [
+    "index",
+    "getting-started",
+    "---指南---",
+    "sessions",
+    "activity",
+    "presets",
+    "firefox",
+    "---参考---",
+    "...reference",
+    "---项目---",
+    "architecture",
+    "development"
+  ]
+}

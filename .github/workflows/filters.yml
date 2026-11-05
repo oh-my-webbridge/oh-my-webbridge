@@ -1,0 +1,27 @@
+name: refresh filter sources
+on:
+  schedule:
+    - cron: "41 5 * * 2"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: filter-preparation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Refresh sources through a reviewed draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/filter-pr.mjs

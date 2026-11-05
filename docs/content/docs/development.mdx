@@ -1,0 +1,138 @@
+---
+title: Development
+icon: Wrench
+description: Repository layout, toolchain, build output, test commands, and the release path.
+---
+
+The repository produces one Go binary, two extension bundles, one SDK file and the documentation site. Building needs Go 1.27.3 or newer, Node 24 and pnpm 11. Packaging a release also needs `tar` and `zstd` on `PATH`.
+
+## Repository layout
+
+| Path               | Contents                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cmd/omw`          | CLI entry point: `start`, `serve`, `stop`, `status`, `pair`, `connection`, `call`, `service`, `skill`, `install-skill`, `doctor`.                                               |
+| `internal/bridge`  | HTTP and WebSocket server, hub and routing, pairing, bindings, CDP proxy, uploads.                                                                                              |
+| `internal/config`  | Config directory, token, address, `OMW_HOME`.                                                                                                                                   |
+| `internal/service` | launchd and systemd user service written by `omw service install`.                                                                                                              |
+| `extension/src`    | Background worker for both browsers, actions, snapshots, presets, network capture, activity layer. `extension/src/firefox` holds the Firefox worker and the injected `page.js`. |
+| `extension/ui`     | Popup and app pages (setup, settings). Vite, React 19, Base UI primitives from the coss registry, Tailwind CSS 4.                                                               |
+| `packages/brand`   | Icon SVGs and `theme.css`, shared by the extension pages and the docs site.                                                                                                     |
+| `sdk/`             | `index.ts`, the JavaScript SDK that is bundled to `dist/sdk.mjs`.                                                                                                               |
+| `docs/`            | Fumadocs site on Next, a static export. Pages live in `docs/content/docs`; `meta.json` sets their order.                                                                        |
+| `scripts/`         | Build, filter compilation, release packaging, publishing, auditing.                                                                                                             |
+| `tests/`           | Node test suites, end-to-end suites and fixtures.                                                                                                                               |
+
+`benchmarks/` holds the browser tool benchmark, `examples/` holds SDK scripts, `skills/` holds the agent skill that `omw install-skill` installs, and `third_party/` holds the pinned filter lists and their license texts.
+
+`pnpm-workspace.yaml` lists the root package, `docs`, `extension/ui` and `packages/*`, so Changesets versions the root package together with the workspace.
+
+## Toolchain
+
+| Tool             | Version and role                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Go               | 1.27.3 or newer. The only third-party module is `github.com/coder/websocket`.            |
+| Node             | 24 or newer, set in `engines`. Runs the build, tests, release scripts and the docs site. |
+| pnpm             | 11, pinned in `packageManager`. Install with `pnpm install` before any script runs.      |
+| TypeScript       | 7, strict. The extension and SDK are checked as part of `pnpm run check`.                |
+| oxlint and oxfmt | Lint and format. `oxlint` runs type-aware through `oxlint-tsgolint`.                     |
+| Vite             | 8, builds the extension pages. esbuild bundles the workers and the SDK.                  |
+
+## Build
+
+```sh
+pnpm install
+pnpm run build
+go build -trimpath -ldflags='-s -w' -o dist/omw ./cmd/omw
+```
+
+`make build` runs the same three steps, with `pnpm install --frozen-lockfile`.
+
+`pnpm run build` runs `scripts/build.mjs`, which:
+
+1. Checks that `package.json`, both extension manifests and `Version` in `internal/bridge/protocol.go` carry the same version.
+2. Bundles `extension/src/worker.ts` with esbuild as an ES module, minified, for `chrome156`.
+3. Bundles `extension/src/firefox/worker.ts` for `firefox153`, and `extension/src/firefox/page.ts` as an IIFE.
+4. Runs the Vite build in `extension/ui` and copies `popup.html`, `app.html` and their assets into both extension directories.
+5. Renders the toolbar and app icons from the SVGs in `packages/brand/icons` with resvg.
+6. Compiles the filter lists and copies the license texts of the bundled npm packages and filter sources.
+7. Bundles `sdk/index.ts` to `dist/sdk.mjs` for Node 24.
+8. Writes `dist/extension.sha256.json` and `dist/extension-firefox.sha256.json`.
+
+The outputs are `dist/omw`, `dist/extension` for Chrome, `dist/extension-firefox` for Firefox and `dist/sdk.mjs`. Chrome loads `dist/extension` as an unpacked extension. Firefox loads `dist/extension-firefox` as a temporary extension.
+
+## Extension pages
+
+The popup, the setup page and the settings page are one Vite project. `extension/ui/vite.config.ts` lists `popup.html` and `app.html` as inputs, builds with a relative base so the pages work from a `chrome-extension://` URL, and writes to `dist/extension-ui`. The build also emits `bundled-modules.json`, which `scripts/build.mjs` uses to collect the license of every npm module in the page bundle.
+
+`app/app.tsx` picks the setup or settings page from the URL hash, so `app.html#settings` opens the settings page directly. Components taken from the coss registry live in `extension/ui/src/components/ui` as the registry provides them; compositions such as the side rail and the step list live in `extension/ui/src/components`. `design.md` in the repository root holds the presentation rules for these pages and the docs site. The pages read connection state from `chrome.storage` and call `GET /ping` and `POST /pair` themselves. The background worker owns the WebSocket.
+
+## Checks and tests
+
+```sh
+pnpm run check
+pnpm run format:check
+pnpm test
+go vet ./...
+go test -race ./...
+```
+
+`make check` runs `go vet`, the type-aware lint and the format check. `make test` runs `go test -race` and the Node suites.
+
+| Command                          | What it runs                                                                                                                      |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm run build`                 | The full build described above.                                                                                                   |
+| `pnpm run check`                 | `oxlint --type-aware --type-check --deny-warnings --format=agent`.                                                                |
+| `pnpm run format`                | `oxfmt`, writing changes. `pnpm run format:check` reports without writing.                                                        |
+| `pnpm test`                      | The unit suites in `tests/`: SDK, worker, actions, presets, preset lifecycle, state, Firefox, release and benchmark.              |
+| `pnpm run test:e2e`              | `tests/e2e.test.mjs` against Chrome. Needs `CHROME_BIN`.                                                                          |
+| `pnpm run test:e2e:firefox`      | `tests/e2e-firefox.test.mjs` against Firefox. Needs `FIREFOX_BIN`.                                                                |
+| `pnpm run test:e2e:dual`         | Both browsers connected to one daemon. Needs both variables.                                                                      |
+| `pnpm run test:e2e:firefox-page` | Runs `page.js` inside Firefox. Needs `FIREFOX_BIN`.                                                                               |
+| `pnpm run bench`                 | `benchmarks/run.mjs`.                                                                                                             |
+| `pnpm run release:plan`          | Previews the next version without consuming fragments.                                                                            |
+| `pnpm run release:check`         | Checks that the versions agree and the fragments parse; CI passes a base commit to also require a fragment for published changes. |
+| `pnpm run release:version`       | Consumes fragments and prepares versions locally.                                                                                 |
+| `pnpm run release:pack`          | Builds the release archives. `pnpm run release:audit` validates them.                                                             |
+
+The end-to-end suites start `dist/omw` and load `dist/extension` or `dist/extension-firefox`, so run the build first. `CHROME_BIN` and `FIREFOX_BIN` are absolute paths to the browser binaries. A suite without its variable is skipped.
+
+## Documentation site
+
+```sh
+pnpm --filter @oh-my-webbridge/docs dev
+```
+
+The dev server listens on port 3884. Pages are MDX in `docs/content/docs`. `docs/content/docs/meta.json` lists them in sidebar order, and a new page has to be added there. Every path starts with a language segment, for example `/en/sessions/`; the site root sends a reader to the first browser language. `pnpm --filter @oh-my-webbridge/docs build` produces a static export for GitHub Pages. The build reads the Git history of each page for its contributors and page history, so it needs a full clone.
+
+The demo videos and screenshots live on the orphan `assets` branch, which the Pages workflow checks out into `docs/public/media`. `pnpm run media` records them into `dist/media` with Chrome for Testing; `pnpm run media --language zh-TW` records the scenes that show extension text in another interface language.
+
+## Translations
+
+English is the source language. The Traditional Chinese (Taiwan) text is translated from it by hand. `pnpm run i18n` converts the zh-TW text to Simplified Chinese (zh-CN) and to the Hong Kong and Macau variants (zh-HK, zh-MO) with OpenCC, then formats the output with oxfmt. Edit only the English and zh-TW files: the script overwrites the others. `pnpm run i18n:check` fails when a generated file differs from its source, and CI runs it.
+
+| Text                 | English                 | zh-TW source                            | Generated                                                       |
+| -------------------- | ----------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `extension/locales/` | `en.json`               | `zh-TW.json`                            | `zh-CN.json`, `zh-HK.json`, `zh-MO.json`, `extension/_locales/` |
+| `docs/content/docs/` | `page.mdx`, `meta.json` | `page.zh-tw.mdx`, `meta.zh-tw.json`     | `page.zh-cn.mdx`, `page.zh-hk.mdx`, `page.zh-mo.mdx`, `meta.*`  |
+| `docs/messages/`     | `site.en.json`          | `site.zh-tw.json`, `history.zh-tw.json` | The `zh-cn`, `zh-hk` and `zh-mo` files                          |
+
+The zh-CN conversion applies the OpenCC phrase tables (`twp` to `cn`), then the Mainland software terms listed in `scripts/i18n.mjs`, for example 分頁 to 标签页 and 工作階段 to 会话. The zh-HK and zh-MO conversions change character variants only (`tw` to `hk`); OpenCC has no separate Macau standard.
+
+Each key in `en.json` must also be in `zh-TW.json`, with the same `{placeholders}`; otherwise the script stops. A heading in a translated page keeps the anchor of the English heading, for example `## 選擇器 [#selectors]`, so links to a section work in every language.
+
+The extension pages, the popup, the toolbar title and the activity layer use the language chosen on the settings page, or the browser language. The extension name and description in the browser's extension list come from `extension/_locales` and always follow the browser language.
+
+## Changesets and releases
+
+Version numbers and release notes come from fragments, not from commit messages, and nothing is published to npm.
+
+- Add one file per user-visible change under `.changeset/`, named after the change. The front matter holds the bump: `patch` for a fix, `minor` for a capability, `major` for breaking behavior.
+- The body is a short H1 title followed by the result the user sees, migration or scope notes where they apply, and the PR link once the PR exists. Fragments are rendered as GitHub Flavored Markdown, so close every block, keep raw HTML to comments, and write links inline.
+- A PR that changes published inputs, such as source, build scripts, dependencies, the release workflows or the extension manifests, fails CI without a new fragment. Tests and internal docs can omit one. Editing an existing fragment does not count.
+- A push to `main` maintains a draft `release/next` version PR. Its workflow runs `scripts/release-pr.mjs`, which consumes the fragments with `scripts/release.mjs version`, synchronizes the package, lockfile, daemon and manifest versions, and writes `CHANGELOG.md` and `docs/releases/<version>.md`.
+- After the version PR merges, the version workflow tags the `chore(release): prepare <version>` commit. The tag runs the release workflow, which rebuilds, audits every archive, uploads the assets, verifies their SHA-256 digests, and publishes the GitHub Release after that.
+- Archives use zstd level 3 and extract with `zstd -dc archive.tar.zst | tar -xf - -C DIR`.
+
+## License
+
+The project is licensed under Apache-2.0. `NOTICE` holds the notices, and `THIRD_PARTY.md` lists the bundled filter lists and npm packages. Extension builds ship the full license texts under `licenses/`.

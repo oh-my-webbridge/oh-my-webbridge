@@ -1,0 +1,62 @@
+/* oh-my-webbridge brand palette and type stacks. Each surface maps these
+   values to its own component tokens: the extension pages to coss tokens in
+   extension/ui/src/styles.css, the docs site to Fumadocs tokens in
+   docs/app/tokens.css. The brand is ink on paper; amber is the only signal. */
+:root {
+  --omw-primary: #101318;
+  --omw-primary-hover: #2b3038;
+  --omw-primary-foreground: #ffffff;
+  --omw-primary-tint: rgb(16 19 24 / 0.07);
+  --omw-primary-soft: #eceef1;
+  /* The side rail of the full-page views. */
+  --omw-rail: #101318;
+  --omw-rail-deep: #0b0d11;
+  --omw-rail-ink: #ffffff;
+  --omw-rail-ink-secondary: #b3b9c3;
+  --omw-rail-fill: rgb(255 255 255 / 0.1);
+  /* The signal color: an agent controls this page. */
+  --omw-live: #ffb020;
+  --omw-live-ink: #8a5300;
+  --omw-danger: #b3261e;
+  --omw-success: #1d7a4c;
+  --omw-warning: #8a5300;
+  --omw-canvas: #f4f5f7;
+  --omw-surface: #ffffff;
+  --omw-ink: #101318;
+  --omw-ink-secondary: #5a6270;
+  --omw-hairline: rgb(16 19 24 / 0.09);
+  --omw-control: rgb(16 19 24 / 0.14);
+  --omw-fill: rgb(16 19 24 / 0.045);
+  --omw-shadow-float: 0 12px 32px rgb(16 19 24 / 0.14), 0 2px 6px rgb(16 19 24 / 0.06);
+  --omw-font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "PingFang SC",
+    "Microsoft JhengHei", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --omw-font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.dark {
+  --omw-primary: #f2f3f5;
+  --omw-primary-hover: #ffffff;
+  --omw-primary-foreground: #101318;
+  --omw-primary-tint: rgb(242 243 245 / 0.12);
+  --omw-primary-soft: rgb(242 243 245 / 0.08);
+  --omw-rail: #15181d;
+  --omw-rail-deep: #0b0d11;
+  --omw-rail-ink: #ffffff;
+  --omw-rail-ink-secondary: #9aa1ac;
+  --omw-rail-fill: rgb(255 255 255 / 0.08);
+  --omw-live: #ffb020;
+  --omw-live-ink: #ffc453;
+  --omw-danger: #ff8f6b;
+  --omw-success: #5fd39a;
+  --omw-warning: #ffc453;
+  --omw-canvas: #0b0d11;
+  --omw-surface: #15181d;
+  --omw-ink: #f2f3f5;
+  --omw-ink-secondary: #9aa1ac;
+  --omw-hairline: rgb(255 255 255 / 0.08);
+  --omw-control: rgb(255 255 255 / 0.14);
+  --omw-fill: rgb(255 255 255 / 0.06);
+  --omw-shadow-float: 0 12px 32px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+}

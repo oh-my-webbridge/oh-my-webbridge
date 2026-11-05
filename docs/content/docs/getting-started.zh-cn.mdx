@@ -1,0 +1,160 @@
+---
+title: 快速开始
+icon: Rocket
+description: 安装 daemon 与浏览器扩展程序，配对浏览器，并运行第一批命令。
+---
+
+{/* Generated from getting-started.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+Chrome 与 Firefox 可以并行使用，且各自独立配对。
+
+## 系统需求 [#requirements]
+
+- Chrome 156 或更新版本，或 Firefox 153 或更新版本。
+- macOS 或 Linux，且与浏览器在同一台电脑上。
+- 解开发布版本封存盘需要 `zstd`。
+- 从源代码构建需要 Go 1.27.3、Node 24 与 pnpm 11。
+
+## 安装 daemon [#install-the-daemon]
+
+<Tabs items={["发布版本封存盘", "从源代码构建"]}>
+<Tab value="发布版本封存盘">
+
+从[发布版本页面](https://github.com/oh-my-webbridge/oh-my-webbridge/releases)下载适用于你平台的 `omw-<version>-<os>-<arch>.tar.zst`，并以同一个发布版本中的 `SHA256SUMS` 文件核对。接着解开封存盘：
+
+```sh
+zstd -dc omw-<version>-darwin-arm64.tar.zst | tar -xf - -C "$HOME/.local"
+```
+
+封存盘内含 `bin/omw`、`README.md` 与授权档。请把可执行文件放在 `PATH` 内；登录时启动的服务会记录该路径。
+
+</Tab>
+<Tab value="从源代码构建">
+
+在仓库根目录运行构建：
+
+```sh
+pnpm install
+pnpm run build
+go build -trimpath -ldflags='-s -w' -o dist/omw ./cmd/omw
+```
+
+`pnpm run build` 会把 Chrome 扩展程序写入 `dist/extension`，把 Firefox 扩展程序写入 `dist/extension-firefox`，并把 SDK 写入 `dist/sdk.mjs`。
+
+</Tab>
+</Tabs>
+
+## 安装扩展程序 [#install-the-extension]
+
+<Tabs items={["Chrome", "Firefox"]}>
+<Tab value="Chrome">
+
+把 `omw-<version>-chrome-mv3.tar.zst` 解开到一个文件夹。打开 `chrome://extensions`，打开“开发人员模式”，选择**加载未封装项目**，再选取该文件夹；manifest 位于封存盘根目录。从源代码构建时，以同样方式加载 `dist/extension`。
+
+</Tab>
+<Tab value="Firefox">
+
+解开 `omw-<version>-firefox-mv3.tar.zst`。打开 `about:debugging`，选择**这个 Firefox**，再选择**加载暂时性附加组件…**，然后选取解开后文件夹中的 `manifest.json`。Firefox 重新启动时会移除暂时性扩展程序。要永久安装，需要来自 addons.mozilla.org 的自行发布模式签章；请把 `omw-<version>-firefox-mv3-unsigned.xpi` 提交到该网站。从源代码构建时，加载 `dist/extension-firefox`。
+
+</Tab>
+</Tabs>
+
+## 设置浏览器 [#set-up-the-browser]
+
+安装扩展程序后，会打开初始设置页面。浏览器尚未配对、daemon 未运行，或 daemon 拒绝连接时，可在弹出式窗口中按**打开初始设置**重新打开该页面。
+
+<Steps>
+<Step>
+### 启动 daemon [#start-the-daemon]
+
+运行 `omw start`。它会在背景启动 daemon，并输出 `started`；若已有 daemon 在运行，则输出 `already running`。页面连上 daemon 后，这个步骤会自动完成；在此之前，页面显示“正在等待 127.0.0.1:17373 上的 daemon”。
+
+</Step>
+<Step>
+### 配对这个浏览器 [#pair-this-browser]
+
+运行 `omw pair`。它会输出六位数的配对码，例如 `482 913`，有效时间为 5 分钟，可尝试 5 次。把配对码输入配对码字段。扩展程序会保存 daemon 的 token，并显示“这个浏览器已配对。”
+
+</Step>
+<Step>
+### 和 Agent 试试看 [#try-it-with-an-agent]
+
+以 `omw install-skill ~/.agents/skills` 安装 Agent 技能，再请 Agent 运行浏览器任务，例如读取当前的标签页。
+
+</Step>
+</Steps>
+
+Firefox 在最后一步之前多一个步骤：**允许脚本**，其按钮使用相同的文字。`evaluate` 动作需要选用的用户脚本权限；你可以在该步骤授予，也可以之后到**设置**，再到**网页**授予。
+
+扩展程序的页面、弹出式窗口与工具栏提示使用浏览器的语言。若要改用其他语言，请在初始设置页或设置页侧栏底部打开语言菜单。扩展程序提供英文、繁体中文（台湾、香港与澳门）与简体中文。
+
+<Demo name="setup" alt="初始设置页面，显示各个步骤、配对码字段与已连接状态。" />
+
+## 登录时启动 [#start-at-login]
+
+先把可执行文件移到你打算长期使用的路径，再运行：
+
+```sh
+omw service install
+```
+
+在 macOS 上，这个命令会写入 `~/Library/LaunchAgents/app.oh-my-webbridge.plist`，并以 `launchctl` 加载。在 Linux 上，它会写入 `~/.config/systemd/user/oh-my-webbridge.service`，并以 `systemctl --user` 激活该 unit。这个 unit 会以安装命令所用的配置目录运行 `omw serve`。安装服务之前，请先停止由 `omw start` 启动的 daemon，因为服务会自行启动另一个 daemon。请通过服务管理员停止服务：
+
+```sh
+launchctl bootout gui/$(id -u)/app.oh-my-webbridge
+```
+
+```sh
+systemctl --user disable --now oh-my-webbridge.service
+```
+
+`omw stop` 会要求运行中的 daemon 结束，并保留已打开的标签页。已安装服务时，请使用服务管理员，以免 daemon 再次启动。
+
+## 安装 Agent 技能 [#install-the-agent-skill]
+
+`omw install-skill DIR` 会写入 `DIR/oh-my-webbridge/SKILL.md`，并复制内置于可执行文件的指南。它拒绝覆写既有文件，所以重新安装前请先删除旧文件。`omw skill` 会输出同一份指南。这份指南告诉 Agent 要运行哪些命令、会话与标签页拥有权如何运行，以及可能遇到哪些错误。
+
+## 第一批命令 [#first-commands]
+
+```sh
+omw call research navigate '{"url":"https://example.com","group_title":"Research"}'
+omw call research snapshot
+omw call research evaluate '{"code":"document.title"}'
+omw call research close_session
+```
+
+`omw call` 后的第一个参数是会话名称；每项任务使用一个名称。每个命令都会在 stdout 输出 JSON。
+
+- `navigate` 会在标题为 `Research` 的新分组中打开背景标签页，并返回标签页 id。同一个会话之后的导航会重用该标签页；传入 `newTab` 则打开另一个标签页。
+- `snapshot` 会返回无障碍树，其中的 `@e` 引用可供 `click` 与 `fill` 使用。
+- `evaluate` 会返回表达式的值。
+- `close_session` 会关闭该会话拥有的标签页，并释放任何借用的标签页。
+
+第三个参数是 JSON 对象。传入 `-` 可从 stdin 读取，避免 shell 引号问题：
+
+```sh
+omw call research evaluate - < request.json
+```
+
+两个浏览器都已连接时，请在 `omw call` 后立即指定其中一个：
+
+```sh
+omw call --browser firefox research snapshot
+```
+
+## 检查连接 [#check-the-connection]
+
+`omw doctor` 会在 stderr 输出配置文件路径，在 stdout 输出状态 JSON，然后在 stderr 为每个浏览器输出一行：
+
+```text
+chrome: connected (VERSION)
+firefox: not connected
+```
+
+`omw status` 会输出相同的状态 JSON 与浏览器行，但不印配置文件路径。daemon 没有响应时，两者都以非零状态码结束。
+
+<Callout type="warn" title="token 就是浏览器的凭证">
+
+`omw connection` 会输出 daemon 端点与 token。任何持有 token 的人都能操控两个已配对的浏览器，因此请不要让它出现在日志文件或聊天中。若要不使用六位数配对码来配对，请到**设置**，再到**高级**，再到 **daemon token**，粘贴 64 个十六进制字符。
+
+</Callout>

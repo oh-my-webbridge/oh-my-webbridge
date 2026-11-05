@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "oh-my-webbridge"
+  },
+  "extensionDescription": {
+    "message": "Connects this browser to the omw daemon on this computer. Agents can then open tabs, read pages and act on them."
+  }
+}

@@ -1,0 +1,163 @@
+---
+title: CDP
+icon: Plug
+description: 透過 daemon 存取 Chrome DevTools Protocol，分為擴充功能模式與原生模式。
+---
+
+{/* Generated from cdp.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+daemon 以兩種模式在 `127.0.0.1:17373` 提供 Chrome DevTools Protocol，位址與連接埠和它其餘的 API 相同：
+
+- **擴充功能模式**透過 Chrome 擴充功能中的 `chrome.debugger` 提供頁面目標。它需要已配對的 Chrome 擴充功能，並可搭配你已開啓的設定檔使用。
+- **原生模式**是通往 Chrome 瀏覽器端點的 WebSocket 代理，該瀏覽器由你以遠端偵錯啓動。以 `omw serve --cdp` 啓用。
+
+每個請求都需要 `Authorization: Bearer <token>`，包括 WebSocket 升級。用 `omw connection` 取得 token。`Host` 標頭必須是 `127.0.0.1`。帶有網頁 `Origin` 的請求會以 403 拒絕。
+
+## 擴充功能模式的端點 [#endpoints-in-extension-mode]
+
+| 端點                     | 方法      | 回覆                                  |
+| ------------------------ | --------- | ------------------------------------- |
+| `/json`、`/json/list`    | GET       | 開啓中的頁面目標，為 JSON 陣列。      |
+| `/json/version`          | GET       | 不含瀏覽器 WebSocket URL 的版本物件。 |
+| `/devtools/page/{tabId}` | WebSocket | 一個分頁的一個 CDP 工作階段。         |
+
+只有 Firefox 擴充功能已連線時，這些端點以 HTTP 501 回應，錯誤碼為 `unsupported`。沒有任何瀏覽器連線時，`/json` 與 `/json/list` 以 HTTP 503 回應，而 `/json/version` 仍回傳它的物件。
+
+### /json/list [#jsonlist]
+
+```sh
+TOKEN=$(omw connection | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:17373/json/list
+```
+
+```json
+[
+  {
+    "id": "123456789",
+    "type": "page",
+    "url": "https://example.com/",
+    "title": "Example Domain",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:17373/devtools/page/123456789"
+  }
+]
+```
+
+`id` 是分頁 id。清單涵蓋屬於工作階段的非無痕 HTTP(S) 與 `about:blank` 分頁，以及你自己開啓的分頁，因為擴充功能可以附加到這兩者。
+
+### /json/version [#jsonversion]
+
+```json
+{
+  "Browser": "oh-my-webbridge/0.2.0",
+  "Protocol-Version": "1.3",
+  "User-Agent": "oh-my-webbridge",
+  "transport": "chrome.debugger (page targets only)"
+}
+```
+
+這個物件沒有 `webSocketDebuggerUrl`，因此在此模式下，透過 `/json/version` 探索目標的用户端找不到任何目標。
+
+## 頁面連線 [#page-connections]
+
+連線到 `ws://127.0.0.1:17373/devtools/page/{tabId}`，並在升級請求上帶 Bearer 標頭。在接受 WebSocket 之前，daemon 會要求擴充功能附加到該分頁。
+
+- 另一個工作階段正在使用的分頁，會以 HTTP 409 回應，而且不會被接管。
+- 用户端中斷連線、分頁關閉、偵錯工具分離，以及 daemon 停止或擴充功能暫停或中斷連線時，該分頁都會被釋放。之後用户端可以重新連線。
+- 該分頁的事件在附加開始之前就已訂閲，因此在附加回覆之前抵達的事件仍會被轉送。
+
+訊息使用 CDP 的格式。指令需要 `id` 與 `method`：
+
+```json
+{ "id": 1, "method": "Page.navigate", "params": { "url": "https://example.com/" } }
+```
+
+回覆帶有 `result`，或帶有錯誤碼 `-32000` 的錯誤物件：
+
+```json
+{ "id": 1, "error": { "code": -32000, "message": "..." } }
+```
+
+事件帶有 `method`、`params`，並在事件屬於子目標時帶有 `sessionId`。回覆可能亂序抵達；原始的 id 會保留。
+
+單一頁面連線的限制：
+
+| 限制           | 值     |
+| -------------- | ------ |
+| 進行中的指令   | 32     |
+| 每個指令的期限 | 30 秒  |
+| 訊息大小       | 32 MiB |
+
+大於 32 MiB 的事件不會被轉送。橋接器會為該分頁送出 `Inspector.detached` 並關閉連線。事件的參數超過 256 KiB 時，daemon 也會關閉連線。跟不上事件串流的用户端會被中斷連線，而不是悄悄遺失事件。
+
+當頁面回報沒有 `sessionId` 的 `Inspector.detached` 時，daemon 會轉送它並關閉 WebSocket，這與 Chrome 自己的頁面端點行為一致。
+
+## cdp 動作 [#the-cdp-action]
+
+`cdp` 動作在工作階段目前的分頁上送出一個協定指令，必要時會附加該分頁。它與頁面連線使用相同的傳輸，只是沒有 WebSocket。
+
+```sh
+omw call research cdp '{"method":"Page.navigate","params":{"url":"https://example.com/"}}'
+```
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("research");
+const { frameTree } = await task.cdp("Page.getFrameTree");
+```
+
+| 引數        | 型別     | 意義                                                                                                                       |
+| ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `method`    | `string` | 協定方法，例如 `Page.navigate`。                                                                                           |
+| `params`    | `object` | 方法參數。預設為 `{}`。                                                                                                    |
+| `sessionId` | `string` | 子目標工作階段，用於以 `flatten: true` 的 `Target.attachToTarget` 開啓的扁平工作階段。省略時，指令送往該分頁的根工作階段。 |
+
+這個動作僅限 Chrome。Firefox 以 HTTP 501 回應 `unsupported`，訊息為 `cdp is not available in Firefox: Firefox has no Chrome DevTools Protocol`。
+
+有兩個方法會與橋接器的其他部分互動：
+
+- 根工作階段上的 `Page.disable` 會清除該分頁的 `@e` 參照。下一次 `snapshot` 或 `navigate` 會重新啓用 Page 事件。
+- `Runtime.disable` 結束該工作階段的框架選擇。之後的指令在主框架中執行，直到 `frame` 再次選取框架。
+
+## 原生模式 [#native-mode]
+
+```sh
+omw serve --cdp ws://127.0.0.1:9222/devtools/browser/8b0d3f7c-...
+```
+
+URL 必須以 `ws://` 或 `wss://` 開頭，並包含主機。否則 daemon 會拒絕啓動。以 `--remote-debugging-port=9222` 啓動 Chrome，即可從 `http://127.0.0.1:9222/json/version` 取得該 URL。
+
+在原生模式下，`/json/version` 會加入瀏覽器 WebSocket URL，並回報另一種傳輸：
+
+```json
+{
+  "Browser": "oh-my-webbridge/0.2.0",
+  "Protocol-Version": "1.3",
+  "User-Agent": "oh-my-webbridge",
+  "transport": "native CDP passthrough",
+  "webSocketDebuggerUrl": "ws://127.0.0.1:17373/devtools/browser"
+}
+```
+
+`/devtools/browser` 開啓通往該 URL 的 WebSocket，並雙向複製框架，因此每個 CDP 網域與每個瀏覽器層級的目標都可使用。尚未設定原生模式時，它以 HTTP 503 回應（只有 Firefox 擴充功能已連線時為 501），無法連到所設定的端點時以 HTTP 502 回應。上游撥接的逾時為 10 秒。
+
+Playwright 可以連線到這個代理：
+
+```js
+import { chromium } from "playwright-core";
+
+const browser = await chromium.connectOverCDP("http://127.0.0.1:17373", {
+  headers: { Authorization: `Bearer ${process.env.OMW_TOKEN}` },
+});
+```
+
+把 `OMW_TOKEN` 設為 `omw connection` 輸出中的 `token` 值。Playwright 讀取 `/json/version`，並使用它找到的 `webSocketDebuggerUrl`。
+
+原生模式不取代擴充功能模式。`/json/list` 仍然透過 Chrome 擴充功能列出目標，因此沒有 Chrome 擴充功能時，即使代理可以運作，它仍以 HTTP 503 回應（只有 Firefox 擴充功能已連線時為 501）。
+
+## 限制 [#limits]
+
+- 擴充功能模式只提供頁面目標。瀏覽器目標端點無法使用，而 Chrome 允許 `chrome.debugger` 使用的網域，只是完整協定的子集。該清單請見 [`chrome.debugger` 參考](https://developer.chrome.com/docs/extensions/reference/api/debugger)。
+- 原生模式轉送所設定的端點接受的一切內容；daemon 不過濾網域或方法。
+- 在目前的版本中，Chrome 不接受 `--remote-debugging-port` 與預設設定檔目錄並用。請讓它指向另一個使用者資料目錄；請見[遠端偵錯](https://developer.chrome.com/blog/remote-debugging-port)。
+- CDP 回覆、事件與 `cdp` 動作的結果，共用橋接器其餘部分的 32 MiB 訊息上限。動作的引數與任何 `/command` 本文一樣，上限為 2 MiB。
