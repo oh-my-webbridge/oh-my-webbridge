@@ -15,15 +15,15 @@ permissions:
   contents: read
 env:
   COMMAND: ${{ inputs.submit && 'submit' || 'status' }}
-  GH_TOKEN: ${{ github.token }}
 jobs:
   chrome-web-store:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: chrome-web-store
-    # One upload at a time: a second one would replace the item's draft.
+    # One submission at a time: a second upload would replace the item's
+    # draft. Status runs only read and use their own group.
     concurrency:
-      group: chrome-web-store
+      group: chrome-web-store-${{ inputs.submit && 'submit' || 'status' }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -51,12 +51,13 @@ jobs:
       - run: node scripts/stores.mjs chrome "$COMMAND"
         env:
           CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          GH_TOKEN: ${{ github.token }}
   addons-mozilla-org:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: addons-mozilla-org
     concurrency:
-      group: addons-mozilla-org
+      group: addons-mozilla-org-${{ inputs.submit && 'submit' || 'status' }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -67,3 +68,4 @@ jobs:
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          GH_TOKEN: ${{ github.token }}

@@ -89,6 +89,7 @@ export function chromeWebStore({
 }
 
 const pendingStates = ["PENDING_REVIEW", "STAGED"];
+const doneStates = [...pendingStates, "PUBLISHED", "PUBLISHED_TO_TESTERS"];
 
 // Uploads the package and submits it for review; the store publishes it after
 // approval. A version the store has published, or has in review or staged, is
@@ -100,7 +101,7 @@ export async function submitChrome(store, version, zip, { interval = 5000, attem
   if (published?.versions.includes(version))
     return [`Chrome Web Store: ${version} is already published (${published.state})`];
   if (submitted?.versions.includes(version)) {
-    if (pendingStates.includes(submitted.state))
+    if (doneStates.includes(submitted.state))
       return [`Chrome Web Store: ${version} is already submitted (${submitted.state})`];
     throw Error(
       `Chrome Web Store: the submission of ${version} is ${submitted.state}; resolve it in the developer dashboard`,

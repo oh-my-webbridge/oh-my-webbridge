@@ -122,6 +122,10 @@ test("Chrome Web Store submission keeps the store's versions and pending submiss
       "Chrome Web Store: 0.2.1 is already submitted (PENDING_REVIEW)",
     ],
     [
+      { submittedItemRevisionStatus: revision("PUBLISHED", "0.2.1") },
+      "Chrome Web Store: 0.2.1 is already submitted (PUBLISHED)",
+    ],
+    [
       { publishedItemRevisionStatus: revision("PUBLISHED", "0.2.1") },
       "Chrome Web Store: 0.2.1 is already published (PUBLISHED)",
     ],
