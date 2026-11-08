@@ -1,14 +1,15 @@
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { openAsBlob } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { SignJWT } from "jose";
+import { verifyReleaseAssets } from "./release-assets.mjs";
 
 const exec = promisify(execFile);
 const repository = "https://github.com/oh-my-webbridge/oh-my-webbridge";
+const sourceName = (version) => `oh-my-webbridge-${version}`;
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 // Both store APIs explain a refused request in the response body, so a failed
@@ -48,7 +49,10 @@ export function chromeWebStore({
       headers: { authorization: `Bearer ${token}`, ...init.headers },
     });
   const revision = (status) =>
-    status && { state: status.state, version: status.distributionChannels?.[0]?.crxVersion };
+    status && {
+      state: status.state,
+      versions: (status.distributionChannels ?? []).map((channel) => channel.crxVersion),
+    };
   return {
     async status() {
       const status = await call(`/v2/${name}:fetchStatus`);
@@ -84,21 +88,27 @@ export function chromeWebStore({
   };
 }
 
+const pendingStates = ["PENDING_REVIEW", "STAGED"];
+
 // Uploads the package and submits it for review; the store publishes it after
-// approval. A version the store already has is left as it is, so reruns of a
-// release are safe. Another version waiting for review or publication stops
-// the submission, because a new upload would replace it.
+// approval. A version the store has published, or has in review or staged, is
+// left as it is, so reruns of a release are safe. A rejected or cancelled
+// submission of the version, and another version in review or staged, stop the
+// submission for a decision in the developer dashboard.
 export async function submitChrome(store, version, zip, { interval = 5000, attempts = 60 } = {}) {
-  const before = await store.status();
-  for (const [label, revision] of Object.entries({
-    published: before.published,
-    submitted: before.submitted,
-  }))
-    if (revision?.version === version)
-      return [`Chrome Web Store: ${version} is already ${label} (${revision.state})`];
-  if (["PENDING_REVIEW", "STAGED"].includes(before.submitted?.state))
+  const { published, submitted } = await store.status();
+  if (published?.versions.includes(version))
+    return [`Chrome Web Store: ${version} is already published (${published.state})`];
+  if (submitted?.versions.includes(version)) {
+    if (pendingStates.includes(submitted.state))
+      return [`Chrome Web Store: ${version} is already submitted (${submitted.state})`];
     throw Error(
-      `Chrome Web Store: ${before.submitted.version} is ${before.submitted.state}; cancel or publish it in the developer dashboard before submitting ${version}`,
+      `Chrome Web Store: the submission of ${version} is ${submitted.state}; resolve it in the developer dashboard`,
+    );
+  }
+  if (pendingStates.includes(submitted?.state))
+    throw Error(
+      `Chrome Web Store: ${submitted.versions.join(", ")} is ${submitted.state}; cancel or publish it in the developer dashboard before submitting ${version}`,
     );
   let upload = await store.upload(zip);
   for (let attempt = 1; upload.state === "IN_PROGRESS"; attempt++) {
@@ -111,10 +121,10 @@ export async function submitChrome(store, version, zip, { interval = 5000, attem
     throw Error(`Chrome Web Store: the upload of ${version} ended in ${upload.state}`);
   if (upload.version && upload.version !== version)
     throw Error(`Chrome Web Store: the uploaded package is ${upload.version}, not ${version}`);
-  const published = await store.publish();
+  const submission = await store.publish();
   return [
-    `Chrome Web Store: submitted ${version} (${published.state})`,
-    ...published.warnings.map((warning) => `Chrome Web Store warning: ${warning}`),
+    `Chrome Web Store: submitted ${version} (${submission.state})`,
+    ...submission.warnings.map((warning) => `Chrome Web Store warning: ${warning}`),
   ];
 }
 
@@ -212,14 +222,20 @@ export function addonsMozillaOrg({
 
 // Uploads the add-on to the listed channel, waits for validation, creates the
 // version with notes for the reviewers and attaches the source archive. A
-// version AMO already has keeps its notes; it only receives the source archive
-// when it has none, which completes an interrupted submission.
+// listed version AMO already has keeps its notes; it only receives the source
+// archive when it has none, which completes an interrupted submission. Version
+// numbers are unique across channels, so the number in another channel stops
+// the submission.
 export async function submitFirefox(
   amo,
   { version, xpi, source, approvalNotes, releaseNotes },
   { interval = 5000, attempts = 120 } = {},
 ) {
   const existing = await amo.version(version);
+  if (existing && existing.channel !== "listed")
+    throw Error(
+      `addons.mozilla.org: ${version} already exists in the ${existing.channel} channel and cannot be listed`,
+    );
   if (existing?.source)
     return [
       `addons.mozilla.org: ${version} already exists (${existing.channel}, ${existing.status})`,
@@ -234,7 +250,9 @@ export async function submitFirefox(
       upload = await amo.uploadStatus(upload.uuid);
     }
     if (!upload.valid)
-      throw Error(`addons.mozilla.org rejected ${version}: ${upload.errors.join("; ")}`);
+      throw Error(
+        `addons.mozilla.org rejected ${version}${upload.errors.length ? `: ${upload.errors.join("; ")}` : ` without error messages (upload ${upload.uuid})`}`,
+      );
     if (upload.version !== version)
       throw Error(`addons.mozilla.org: the uploaded add-on is ${upload.version}, not ${version}`);
     created = await amo.createVersion({ upload: upload.uuid, approvalNotes, releaseNotes });
@@ -248,7 +266,7 @@ export async function submitFirefox(
 // Notes for the AMO reviewers: where the source comes from and how to rebuild
 // and exercise the add-on.
 export function approvalNotes({ version, commit, node, pnpm, go }) {
-  const directory = `oh-my-webbridge-${version}`;
+  const directory = sourceName(version);
   return `Source code: ${directory}-source.zip is \`git archive\` of commit ${commit} (${repository}). The extension code is TypeScript bundled and minified with esbuild; the popup and setup pages are React built with Vite and Tailwind CSS.
 
 Build (Node.js ${node}, pnpm ${pnpm}; macOS or Linux):
@@ -281,17 +299,62 @@ const required = (name) => {
   return value;
 };
 
-// The release directory must come from the checked-out commit, the commit the
-// source archive is made from.
-async function releaseCommit(version) {
+// The stores receive the assets of the published GitHub Release, the files
+// users download: each must match GitHub's digest and SHA256SUMS. The release
+// must come from the checked-out commit, the commit of the source archive.
+export async function releaseAssets(version, names, directory) {
+  const repo = process.env.GITHUB_REPOSITORY ?? "oh-my-webbridge/oh-my-webbridge";
+  const tag = `v${version}`;
+  const gh = async (...args) =>
+    (await exec("gh", args, { encoding: "buffer", maxBuffer: 256 << 20 })).stdout;
+  const release = JSON.parse((await gh("api", `repos/${repo}/releases/tags/${tag}`)).toString());
+  const download = async (name) => {
+    const asset = release.assets.find((a) => a.name === name);
+    if (!asset) throw Error(`release ${tag} has no ${name}`);
+    const bytes = await gh(
+      "api",
+      `repos/${repo}/releases/assets/${asset.id}`,
+      "-H",
+      "Accept: application/octet-stream",
+    );
+    if (`sha256:${createHash("sha256").update(bytes).digest("hex")}` !== asset.digest)
+      throw Error(`${name} downloaded from release ${tag} does not match its digest`);
+    return bytes;
+  };
+  verifyReleaseAssets(release.assets, (await download("SHA256SUMS")).toString());
+  const provenance = JSON.parse((await download("provenance.json")).toString());
   const commit = (await exec("git", ["rev-parse", "HEAD"])).stdout.trim();
-  const provenance = JSON.parse(await readFile("dist/release/provenance.json", "utf8"));
   if (provenance.version !== version || provenance.commit !== commit)
     throw Error(
-      `dist/release holds ${provenance.version} from ${provenance.commit}, not ${version} from ${commit}`,
+      `release ${tag} holds ${provenance.version} from ${provenance.commit}, not ${version} from ${commit}`,
     );
-  return commit;
+  await mkdir(directory, { recursive: true });
+  const files = {};
+  for (const name of names) {
+    files[name] = join(directory, name);
+    await writeFile(files[name], await download(name));
+  }
+  return { provenance, files };
 }
+
+// `git archive` of the checked-out commit, with the top directory that the
+// reviewer notes enter.
+export async function sourceArchive(version, directory) {
+  const archive = resolve(directory, `${sourceName(version)}-source.zip`);
+  await mkdir(directory, { recursive: true });
+  await exec("git", [
+    "archive",
+    "--format=zip",
+    `--prefix=${sourceName(version)}/`,
+    "-o",
+    archive,
+    "HEAD",
+  ]);
+  return archive;
+}
+
+const storeDirectory = "dist/stores";
+const file = async (path) => new File([await readFile(path)], basename(path));
 
 async function chrome(command, version) {
   const store = chromeWebStore({
@@ -300,8 +363,9 @@ async function chrome(command, version) {
     item: required("CWS_ITEM"),
   });
   if (command === "status") return [`Chrome Web Store: ${JSON.stringify(await store.status())}`];
-  await releaseCommit(version);
-  return submitChrome(store, version, await readFile(`dist/release/omw-${version}-chrome-mv3.zip`));
+  const zip = `omw-${version}-chrome-mv3.zip`;
+  const { files } = await releaseAssets(version, [zip], storeDirectory);
+  return submitChrome(store, version, await readFile(files[zip]));
 }
 
 async function firefox(command, version) {
@@ -315,23 +379,19 @@ async function firefox(command, version) {
     return (await amo.versions()).map(
       (v) => `addons.mozilla.org: ${v.version} (${v.channel}, ${v.status}, source ${v.source})`,
     );
-  const commit = await releaseCommit(version);
-  const directory = `oh-my-webbridge-${version}`;
-  const archive = resolve("dist", `${directory}-source.zip`);
-  await exec("git", ["archive", "--format=zip", `--prefix=${directory}/`, "-o", archive, "HEAD"]);
+  const xpi = `omw-${version}-firefox-mv3-unsigned.xpi`;
+  const { provenance, files } = await releaseAssets(version, [xpi], storeDirectory);
   const pkg = JSON.parse(await readFile("package.json", "utf8"));
-  const go = (await readFile("go.mod", "utf8")).match(/^go (\S+)$/mu)[1];
-  const xpi = resolve(`dist/release/omw-${version}-firefox-mv3-unsigned.xpi`);
   return submitFirefox(amo, {
     version,
-    xpi: new File([await openAsBlob(xpi)], basename(xpi)),
-    source: new File([await openAsBlob(archive)], basename(archive)),
+    xpi: await file(files[xpi]),
+    source: await file(await sourceArchive(version, storeDirectory)),
     approvalNotes: approvalNotes({
       version,
-      commit,
-      node: process.versions.node,
+      commit: provenance.commit,
+      node: provenance.node.replace(/^v/u, ""),
       pnpm: pkg.packageManager.replace(/^pnpm@/u, ""),
-      go,
+      go: provenance.go.match(/\bgo(\d\S*)/u)[1],
     }),
     releaseNotes: `[Release notes for ${version}](${repository}/releases/tag/v${version})`,
   });

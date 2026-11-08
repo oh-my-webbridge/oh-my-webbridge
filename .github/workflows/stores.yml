@@ -1,24 +1,30 @@
 name: stores
-# Release runs call this workflow with the release assets and submit them to
-# the Chrome Web Store and addons.mozilla.org. A manual run reads each store's
-# status, which checks the credentials of both environments.
+# Release runs call this workflow after the GitHub Release is published; it
+# submits the release assets to the Chrome Web Store and addons.mozilla.org. A
+# manual run reads each store's status, which checks the credentials of both
+# environments.
 on:
   workflow_call:
     inputs:
-      artifact:
-        description: Release assets artifact of the calling run.
-        type: string
+      submit:
+        description: Submit the assets of the published GitHub Release for the checked-out version.
+        type: boolean
         required: true
   workflow_dispatch:
 permissions:
   contents: read
 env:
-  COMMAND: ${{ inputs.artifact && 'submit' || 'status' }}
+  COMMAND: ${{ inputs.submit && 'submit' || 'status' }}
+  GH_TOKEN: ${{ github.token }}
 jobs:
   chrome-web-store:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: chrome-web-store
+    # One upload at a time: a second one would replace the item's draft.
+    concurrency:
+      group: chrome-web-store
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -30,11 +36,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           package: oh-my-webbridge
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        if: inputs.artifact
-        with:
-          name: ${{ inputs.artifact }}
-          path: dist/release/
       # Workload Identity Federation exchanges the job's GitHub OIDC token for
       # a short-lived access token of the publisher service account.
       - id: google
@@ -54,16 +55,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: addons-mozilla-org
+    concurrency:
+      group: addons-mozilla-org
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup
         with:
           package: oh-my-webbridge
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        if: inputs.artifact
-        with:
-          name: ${{ inputs.artifact }}
-          path: dist/release/
       - run: node scripts/stores.mjs firefox "$COMMAND"
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
