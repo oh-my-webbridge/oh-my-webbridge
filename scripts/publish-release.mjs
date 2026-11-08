@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 const exec = promisify(execFile);
 const version = JSON.parse(await readFile("package.json", "utf8")).version;
 const tag = `v${version}`;
@@ -26,6 +27,18 @@ async function findRelease() {
       `${tag} has ${releases.length} releases (${releases.map((r) => `${r.id}${r.draft ? " draft" : ""}`).join(", ")}); keep one before publishing`,
     );
   return releases[0];
+}
+
+// The release list can leave out a draft for some seconds after it is
+// created, and gh release upload finds a draft through the same list. Wait
+// for the new draft before uploading to it.
+async function createdDraft() {
+  for (let attempt = 1; attempt <= 30; attempt++) {
+    const found = await findRelease();
+    if (found?.draft) return found;
+    await delay(1000);
+  }
+  throw Error(`created draft for ${tag} is missing from the release list after 30 seconds`);
 }
 
 let release = await findRelease();
@@ -58,8 +71,7 @@ if (!release) {
     "--notes-file",
     `docs/releases/${version}.md`,
   );
-  release = await findRelease();
-  if (!release?.draft) throw Error(`created draft for ${tag} is missing from the release list`);
+  release = await createdDraft();
 }
 const id = release.id;
 await gh(
