@@ -285,7 +285,7 @@ const idOf = async (tab, selector) =>
   (await ok(tab, "get", { selector, property: "attr", attribute: "id" })).value;
 const valueOf = async (tab, selector) =>
   (await ok(tab, "get", { selector, property: "value" })).value;
-const generic = (tree) => tree.replace(/@e[0-9a-f]{32}\./gu, "@eG.");
+const generic = (tree) => tree.replace(/@e[0-9a-z]{1,13}\./gu, "@eG.");
 const refFor = (tree, text) =>
   tree
     .split("\n")
@@ -297,7 +297,7 @@ test("snapshot derives roles, names, values and states in Chrome's line format",
   const tab = await open(t, "/snapshot");
   const snap = await ok(tab, "snapshot");
   assert.equal(snap.truncated, false);
-  assert.equal(new Set(snap.tree.match(/@e[0-9a-f]{32}(?=\.)/gu)).size, 1);
+  assert.equal(new Set(snap.tree.match(/@e[0-9a-z]{1,13}(?=\.)/gu)).size, 1);
   const password = JSON.stringify("\u2022".repeat(6));
   assert.equal(
     generic(snap.tree),

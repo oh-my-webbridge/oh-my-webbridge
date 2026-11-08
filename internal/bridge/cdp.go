@@ -2,6 +2,8 @@ package bridge
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,6 +14,16 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
+
+// pageClientSession names the session of a new page CDP client: "cdp-" and
+// 32 random hex digits, the form that extension/src/state.ts recognizes. The
+// name stays inside the daemon and the extension, and a session name that an
+// agent picks, such as "cdp-research", does not take this form by chance.
+func pageClientSession() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:]) // crypto/rand.Read never returns an error.
+	return "cdp-" + hex.EncodeToString(b[:])
+}
 
 // firefoxOnly answers a request for the extension CDP transport while only the
 // Firefox extension, which has no CDP, is connected.
@@ -71,7 +83,7 @@ func (s *Server) pageCDP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	session := "cdp-" + NewID()
+	session := pageClientSession()
 	args, _ := json.Marshal(map[string]int{"tabId": tab})
 	attachCtx, attachCancel := context.WithTimeout(ctx, 5*time.Second)
 	cleanup := func() {
