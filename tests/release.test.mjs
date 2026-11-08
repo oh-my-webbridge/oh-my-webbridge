@@ -610,7 +610,7 @@ test("fragments close their blocks, limit raw HTML to comments and define no lab
   assert.doesNotMatch(notes.stdout, /## \[0\.1\.1\]/u);
 });
 
-async function publishFixture(t, prefix, releases) {
+async function publishFixture(t, prefix, releases, extra = {}) {
   const { dir, write, run } = await scriptFixture(t, prefix, [
     "scripts/publish-release.mjs",
     "scripts/release-assets.mjs",
@@ -634,7 +634,7 @@ async function publishFixture(t, prefix, releases) {
   await cp("tests/fixtures/fake-gh.mjs", join(dir, "bin/gh"));
   await chmod(join(dir, "bin/gh"), 0o755);
   const state = join(dir, "gh-state.json");
-  await writeFile(state, JSON.stringify({ nextId: 100, releases, files: {}, calls: [] }));
+  await writeFile(state, JSON.stringify({ nextId: 100, releases, files: {}, calls: [], ...extra }));
   return async () => {
     const result = await run(process.execPath, ["scripts/publish-release.mjs"], {
       PATH: `${join(dir, "bin")}:${process.env.PATH}`,
@@ -682,6 +682,22 @@ test("publication reuses a draft left by a failed run", async (t) => {
     [[7, false, 2]],
   );
   assert.ok(!result.calls.some((c) => c.startsWith("release create")), result.calls.join("\n"));
+});
+
+test("publication waits for a new draft that the release list leaves out", async (t) => {
+  // The first list call precedes the draft; the next two leave it out.
+  const publish = await publishFixture(t, "omw-publish-lag-", [], { draftLag: 3 });
+  const result = await publish();
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(
+    result.releases.map((r) => [r.draft, r.assets.length]),
+    [[false, 2]],
+  );
+  const created = result.calls.findIndex((c) => c.startsWith("release create"));
+  const lists = result.calls.filter(
+    (c, index) => index > created && c.startsWith("api repos/fixture/omw/releases --paginate"),
+  );
+  assert.equal(lists.length, 3, result.calls.join("\n"));
 });
 
 test("publication refuses several releases for one tag", async (t) => {

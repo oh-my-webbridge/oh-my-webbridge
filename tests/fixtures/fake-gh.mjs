@@ -2,7 +2,9 @@
 // gh stand-in for the release script tests, following the documented REST
 // behavior: GET releases/tags/{tag} returns only published releases, the
 // release list and GET releases/{id} include drafts, and several drafts may
-// share one tag. `gh release upload` resolves a release by tag like gh. Tag
+// share one tag. The release list leaves out drafts for its next
+// state.draftLag calls, as GitHub does for a short time after a draft is
+// created. `gh release upload` resolves a release by tag like gh. Tag
 // refs, workflow dispatches and pull requests are kept in the same state file.
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -60,7 +62,10 @@ if (args[0] === "api") {
   }
   if (route === "releases" && method === "GET") {
     if (jq !== ".[]") fail(`unexpected jq filter ${jq}`);
-    reply(state.releases.map((r) => JSON.stringify(r) + "\n").join(""));
+    const lagging = (state.draftLag ?? 0) > 0;
+    if (lagging) state.draftLag--;
+    const listed = state.releases.filter((r) => !(lagging && r.draft));
+    reply(listed.map((r) => JSON.stringify(r) + "\n").join(""));
   }
   match = route.match(/^releases\/tags\/(.+)$/u);
   if (match) {
