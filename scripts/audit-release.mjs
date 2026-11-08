@@ -74,26 +74,31 @@ if (
   firefox.browser_specific_settings?.gecko?.id !== "oh-my-webbridge@oh-my-webbridge.github.io"
 )
   throw Error("invalid Firefox MV3 release");
-// The unsigned add-on must hold exactly the files of the Firefox archive.
-const xpi = `omw-${version}-firefox-mv3-unsigned.xpi`;
-const addon = unzipSync(await readFile(join(root, xpi)));
-await withTarZst(join(root, `omw-${version}-firefox-mv3.tar.zst`), async (archive) => {
-  const unpacked = join(dirname(archive), "extension");
-  await mkdir(unpacked);
-  await exec("tar", ["-xf", archive, "-C", unpacked]);
-  const files = (await readdir(unpacked, { recursive: true, withFileTypes: true }))
-    .filter((e) => e.isFile())
-    .map((e) => relative(unpacked, join(e.parentPath, e.name)))
-    .sort((a, b) => a.localeCompare(b));
-  const entries = Object.keys(addon)
-    .filter((name) => !name.endsWith("/"))
-    .sort((a, b) => a.localeCompare(b));
-  if (JSON.stringify(entries) !== JSON.stringify(files))
-    throw Error(`${xpi} entries differ from the Firefox MV3 archive`);
-  for (const file of files)
-    if (!Buffer.from(addon[file]).equals(await readFile(join(unpacked, file))))
-      throw Error(`${xpi} ${file} differs from the Firefox MV3 archive`);
-});
+// The store packages, the Chrome Web Store zip and the unsigned add-on, must
+// hold exactly the files of their extension archives.
+for (const [store, browser, label] of [
+  [`omw-${version}-chrome-mv3.zip`, "chrome", "Chrome MV3"],
+  [`omw-${version}-firefox-mv3-unsigned.xpi`, "firefox", "Firefox MV3"],
+]) {
+  const packaged = unzipSync(await readFile(join(root, store)));
+  await withTarZst(join(root, `omw-${version}-${browser}-mv3.tar.zst`), async (archive) => {
+    const unpacked = join(dirname(archive), "extension");
+    await mkdir(unpacked);
+    await exec("tar", ["-xf", archive, "-C", unpacked]);
+    const files = (await readdir(unpacked, { recursive: true, withFileTypes: true }))
+      .filter((e) => e.isFile())
+      .map((e) => relative(unpacked, join(e.parentPath, e.name)))
+      .sort((a, b) => a.localeCompare(b));
+    const entries = Object.keys(packaged)
+      .filter((name) => !name.endsWith("/"))
+      .sort((a, b) => a.localeCompare(b));
+    if (JSON.stringify(entries) !== JSON.stringify(files))
+      throw Error(`${store} entries differ from the ${label} archive`);
+    for (const file of files)
+      if (!Buffer.from(packaged[file]).equals(await readFile(join(unpacked, file))))
+        throw Error(`${store} ${file} differs from the ${label} archive`);
+  });
+}
 // Both extensions redistribute the filtering engine and the pinned list data
 // with their licenses and original notices; see THIRD_PARTY.md. The AdGuard,
 // uBlock Origin and EasyList data is distributed under GPL-3.0, and the URLhaus
@@ -164,5 +169,5 @@ if (provenance.benchmarkIncluded) {
     throw Error(`${raw} results.json was not measured at ${commit}`);
 }
 console.log(
-  `Verified ${files.length} artifacts, four native architectures, Chrome and Firefox MV3, the unsigned Firefox add-on, agent kit, provenance and ${provenance.benchmarkIncluded ? "benchmark data" : "no benchmark"} (${version})`,
+  `Verified ${files.length} artifacts, four native architectures, Chrome and Firefox MV3, the Chrome Web Store package, the unsigned Firefox add-on, agent kit, provenance and ${provenance.benchmarkIncluded ? "benchmark data" : "no benchmark"} (${version})`,
 );
