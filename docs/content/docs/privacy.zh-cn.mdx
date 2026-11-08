@@ -1,0 +1,36 @@
+---
+title: 隐私权
+icon: Lock
+description: 扩展程序与 daemon 读取哪些数据、数据送往何处，以及在磁盘上保存哪些内容。
+---
+
+{/* Generated from privacy.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+浏览器扩展程序与 omw daemon 都在你的电脑上运行。本项目不经营任何服务器，也不从两者接收任何数据。
+
+## 扩展程序读取的数据 [#data-the-extension-reads]
+
+扩展程序只为了运行 daemon 送来的命令而读取浏览器中的数据。依命令不同，它会读取：
+
+- 会话所用标签页，或 [CDP](./reference/cdp.mdx) 客户端所连接标签页中网页的网址、标题与内容：文字、无障碍树、元素的值、屏幕截图与 PDF
+- Cookie 与网页保存空间，供 `cookies` 与 `storage` 动作使用
+- 会话记录网络流量期间，标签页的请求与响应
+- 已打开标签页的网址与标题，供 CDP 目标清单（`/json/list`）使用，以及会话寻找要借用的标签页时
+
+## 数据的去向 [#where-the-data-goes]
+
+配对后，扩展程序只连接到一个地址：同一台电脑上 `127.0.0.1:17373` 的 daemon。它把每个结果送到那里，不送往其他地址。daemon 只接受来自同一台电脑的连接，并把结果交给发送命令的程序，例如 Agent 或脚本。数据之后如何处理由该程序决定；Agent 可能把网页内容传给它使用的模型服务商。
+
+## 磁盘上的数据 [#data-on-disk]
+
+- 扩展程序把 daemon token 与设置保存在浏览器的扩展程序保存空间。会话状态保存在会话保存空间，浏览器重新启动时会清除。
+- daemon 把设置（包括 token）与会话绑定保存在设置目录：macOS 为 `~/Library/Application Support/oh-my-webbridge`，Linux 为 `~/.config/oh-my-webbridge`，或 `OMW_HOME` 指定的目录。屏幕截图与 PDF 写入命令指定的路径，未指定时写入该目录下的 `artifacts`。
+- `download` 动作保存的文件位于浏览器的下载文件夹。
+
+## 分析 [#analytics]
+
+扩展程序与 daemon 都不含分析、遥测、崩溃报告或广告。[页面预设](./presets.mdx)使用的过滤清单随扩展程序一起提供，运行时不下载任何内容。
+
+## 问题 [#questions]
+
+隐私权相关问题请在 [GitHub Issues](https://github.com/oh-my-webbridge/oh-my-webbridge/issues) 提出。
