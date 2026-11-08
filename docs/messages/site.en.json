@@ -18,8 +18,5 @@
   "backToDocs": "Go to the docs",
   "chooseLanguage": "Choose a language",
   "codeBlock": "Code {index}",
-  "codeBlockTitled": "Code {index}: {title}",
-  "languageCode": "language code",
-  "llmsIndex": "This index lists the {language} pages. Each language has its own index at {pattern}:",
-  "llmsSamePath": "A page has the same path in every language: change the language code in its link to read it in another language."
+  "codeBlockTitled": "Code {index}: {title}"
 }

@@ -1,9 +1,9 @@
 import { llms, loader } from "fumadocs-core/source";
-import { renderMarkdownUrl } from "fumadocs-extras/llms";
+import { renderLanguageTips, renderLlmsIndex, renderMarkdownUrl } from "fumadocs-extras/llms";
 import { defineDocs } from "fumadocs-mdx/macro";
 import { i18n, isLocale, languageNames, type Locale } from "./i18n";
 import { resolveIcon } from "./icons";
-import { fill, sentenceGap, siteText } from "./layout.shared";
+import { sentenceGap, siteText } from "./layout.shared";
 import { llmsIndexPath } from "./markdown-path";
 import { absoluteUrl, pageMarkdownPath, pagePath } from "./shared";
 
@@ -58,40 +58,22 @@ ${previewNotice(page.locale ?? i18n.defaultLanguage)}
 ${await page.data.getText("processed")}`,
 });
 
-/** The `<tips>` block of an `llms.txt`: the index of every language, in the language of the index. */
-function languageTips(lang: Locale): string {
-  const text = siteText[lang];
-  const pattern = absoluteUrl(llmsIndexPath(`[${text.languageCode}]`));
-  return [
-    "<tips>",
-    fill(text.llmsIndex, { language: languageNames[lang], pattern: `\`${pattern}\`` }),
-    "",
-    ...i18n.languages.map(
-      (language) =>
-        `- ${language}: [${languageNames[language]}](${absoluteUrl(llmsIndexPath(language))})`,
-    ),
-    "",
-    text.llmsSamePath,
-    "</tips>",
-  ].join("\n");
-}
-
 /**
- * The `llms.txt` of a language: the title of its page tree, the site description, the language
- * guide, then the page tree as `index()` of `llms()` lists it.
+ * The `llms.txt` of a language: the title of its page tree, the site description, a `<tips>` block
+ * in English that links the index of every language, then the pages.
  */
 export function llmsIndex(lang: Locale): string {
-  const tree = publicSource.getPageTree(lang);
-  if (typeof tree.name !== "string") throw new Error(`The page tree of ${lang} has no text title`);
-  return [
-    `# ${tree.name}`,
-    "",
-    `> ${siteText[lang].description}`,
-    "",
-    languageTips(lang),
-    "",
-    ...tree.children.map((node) => docsLlms.indexNode(node, lang)),
-  ].join("\n");
+  return renderLlmsIndex(publicSource, docsLlms, {
+    lang,
+    description: siteText[lang].description,
+    sections: [
+      renderLanguageTips({
+        language: lang,
+        languages: languageNames,
+        indexUrl: (language) => absoluteUrl(llmsIndexPath(language)),
+      }),
+    ],
+  });
 }
 
 /** The public-URL twin of a site page, for the Markdown routes. */

@@ -18,8 +18,5 @@
   "backToDocs": "前往使用手冊首頁",
   "chooseLanguage": "選擇語言",
   "codeBlock": "程式碼 {index}",
-  "codeBlockTitled": "程式碼 {index}：{title}",
-  "languageCode": "語言代碼",
-  "llmsIndex": "這份索引列出{language}的頁面。每種語言都有自己的索引，位於 {pattern}：",
-  "llmsSamePath": "同一頁在每種語言的路徑都相同，把連結中的語言代碼換成其他語言，就能讀到該語言的版本。"
+  "codeBlockTitled": "程式碼 {index}：{title}"
 }
