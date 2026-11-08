@@ -1,4 +1,5 @@
 import { requiredEnv } from "./env";
+import { markdownPath } from "./markdown-path";
 
 /** Deployment prefix without a trailing slash, set by `site.config.ts` through `next.config.mjs`. */
 export const basePath = requiredEnv("NEXT_PUBLIC_BASE_PATH", process.env["NEXT_PUBLIC_BASE_PATH"]);
@@ -22,7 +23,7 @@ function localePath(page: PageRef): string[] {
 
 /** The Markdown copy of a page, for "Copy Markdown" and LLM tools. Next.js adds no prefix to route handlers. */
 export function pageMarkdownPath(page: PageRef): string {
-  return `/md/${[...localePath(page), "content.md"].join("/")}`;
+  return markdownPath(localePath(page));
 }
 
 /** The Open Graph image of a page, rendered at build time. */

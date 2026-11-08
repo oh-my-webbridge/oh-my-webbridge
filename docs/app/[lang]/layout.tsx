@@ -39,6 +39,8 @@ export default async function Layout({ params, children }: LayoutProps) {
   return (
     <html lang={htmlLang[lang]} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col font-sans">
+        {/* The llms.txt of the language covers its pages; React places the link in the head. */}
+        <link rel="describedby" href={absoluteUrl(`/${lang}/llms.txt`)} />
         <RootProvider
           i18n={i18nProvider(translations, lang)}
           search={{ SearchDialog: DocsSearchDialog }}

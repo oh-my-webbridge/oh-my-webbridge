@@ -1,9 +1,10 @@
 import { llms, loader } from "fumadocs-core/source";
+import { renderMarkdownUrl } from "fumadocs-extras/llms";
 import { defineDocs } from "fumadocs-mdx/macro";
 import { i18n, isLocale } from "./i18n";
 import { resolveIcon } from "./icons";
 import { sentenceGap, siteText } from "./layout.shared";
-import { absoluteUrl, pagePath } from "./shared";
+import { absoluteUrl, pageMarkdownPath, pagePath } from "./shared";
 
 export const docs = defineDocs({
   dir: "content/docs",
@@ -43,10 +44,12 @@ function previewNotice(locale: string): string {
 }
 
 /**
- * Markdown for LLMs. `remarkContentLinks` has made content links public; the heading carries the
- * page URL, and the developer preview notice follows it as on the site.
+ * Markdown for LLMs. A static site cannot answer `Accept: text/markdown` on a page URL, so the
+ * `llms.txt` entries link the Markdown copies, as `remarkContentLinks` does for content links. The
+ * heading carries the page URL, and the developer preview notice follows it as on the site.
  */
 export const docsLlms = llms(publicSource, {
+  renderUrl: renderMarkdownUrl(publicSource, (page) => absoluteUrl(pageMarkdownPath(page))),
   renderPage: async (page) => `# ${page.data.title} (${page.url})
 
 ${previewNotice(page.locale ?? i18n.defaultLanguage)}
