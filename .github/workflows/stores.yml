@@ -1,0 +1,71 @@
+name: stores
+# Release runs call this workflow after the GitHub Release is published; it
+# submits the release assets to the Chrome Web Store and addons.mozilla.org. A
+# manual run reads each store's status, which checks the credentials of both
+# environments.
+on:
+  workflow_call:
+    inputs:
+      submit:
+        description: Submit the assets of the published GitHub Release for the checked-out version.
+        type: boolean
+        required: true
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  COMMAND: ${{ inputs.submit && 'submit' || 'status' }}
+jobs:
+  chrome-web-store:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: chrome-web-store
+    # One submission at a time: a second upload would replace the item's
+    # draft. Status runs only read and use their own group.
+    concurrency:
+      group: chrome-web-store-${{ inputs.submit && 'submit' || 'status' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CWS_PUBLISHER: 5d3f17dd-bc48-4ce9-84dd-5d93afa0dfb6
+      CWS_ITEM: gfhmonnkmdapbocacedanaplhgkofebi
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
+        with:
+          package: oh-my-webbridge
+      # Workload Identity Federation exchanges the job's GitHub OIDC token for
+      # a short-lived access token of the publisher service account.
+      - id: google
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/811897492921/locations/global/workloadIdentityPools/github/providers/oh-my-webbridge
+          service_account: cws-publisher@omw-store-publishing.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          access_token_lifetime: 900s
+          create_credentials_file: false
+          export_environment_variables: false
+      - run: node scripts/stores.mjs chrome "$COMMAND"
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          GH_TOKEN: ${{ github.token }}
+  addons-mozilla-org:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: addons-mozilla-org
+    concurrency:
+      group: addons-mozilla-org-${{ inputs.submit && 'submit' || 'status' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
+        with:
+          package: oh-my-webbridge
+      - run: node scripts/stores.mjs firefox "$COMMAND"
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          GH_TOKEN: ${{ github.token }}

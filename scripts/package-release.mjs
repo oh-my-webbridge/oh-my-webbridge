@@ -48,18 +48,24 @@ for (const GOOS of ["darwin", "linux"])
       "THIRD_PARTY.md",
     ]);
   }
-await packTarZst(join(directory, `omw-${version}-chrome-mv3.tar.zst`), "dist/extension", ["."]);
+// The store packages keep manifest.json at the archive root, the layout the
+// Chrome Web Store, Firefox and AMO signing read. Entries are sorted for a
+// stable listing.
+async function zipExtension(source, target) {
+  const files = {};
+  for (const entry of (await readdir(source, { recursive: true, withFileTypes: true }))
+    .filter((e) => e.isFile())
+    .map((e) => relative(source, join(e.parentPath, e.name)))
+    .sort((a, b) => a.localeCompare(b)))
+    files[entry] = await readFile(join(source, entry));
+  await writeFile(target, zipSync(files));
+}
+const chrome = "dist/extension";
+await packTarZst(join(directory, `omw-${version}-chrome-mv3.tar.zst`), chrome, ["."]);
+await zipExtension(chrome, join(directory, `omw-${version}-chrome-mv3.zip`));
 const firefox = "dist/extension-firefox";
 await packTarZst(join(directory, `omw-${version}-firefox-mv3.tar.zst`), firefox, ["."]);
-// The unsigned add-on package keeps manifest.json at the archive root, the
-// layout Firefox and AMO signing read. Entries are sorted for a stable listing.
-const addon = {};
-for (const entry of (await readdir(firefox, { recursive: true, withFileTypes: true }))
-  .filter((e) => e.isFile())
-  .map((e) => relative(firefox, join(e.parentPath, e.name)))
-  .sort((a, b) => a.localeCompare(b)))
-  addon[entry] = await readFile(join(firefox, entry));
-await writeFile(join(directory, `omw-${version}-firefox-mv3-unsigned.xpi`), zipSync(addon));
+await zipExtension(firefox, join(directory, `omw-${version}-firefox-mv3-unsigned.xpi`));
 const kit = join(staging, "agent-kit");
 await mkdir(kit, { recursive: true });
 await cp("dist/sdk.mjs", join(kit, "sdk.mjs"));

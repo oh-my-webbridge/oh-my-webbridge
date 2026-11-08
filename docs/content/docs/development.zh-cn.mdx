@@ -133,6 +133,9 @@ zh-CN 的转换先套用 OpenCC 的词汇表（`twp` 转 `cn`），再套用 `sc
 - PR 若变更已发布的输入，例如源代码、构建脚本、相依套件、发布工作流程或扩展程序 manifest，没有新的变更片段就会让 CI 失败。测试与内部文档可以不附。编辑既有的变更片段不算数。
 - 推送到 `main` 会维护一个草稿 `release/next` 版本 PR。它的工作流程运行 `scripts/release-pr.mjs`，以 `scripts/release.mjs version` 消耗变更片段，同步套件、锁文件、daemon 与 manifest 的版本，并写出 `CHANGELOG.md` 与 `docs/releases/<version>.md`。
 - 版本 PR 合并后，版本工作流程会为 `chore(release): prepare <version>` 这个 commit 创建标签。该标签触发发布工作流程：它重新构建、审核每个封存盘、上传资产、验证其 SHA-256 摘要，之后才发布 GitHub Release。
+- GitHub Release 发布后，商店工作流程（`.github/workflows/stores.yml`）把 `omw-<version>-chrome-mv3.zip` 提交到 Chrome Web Store，并把未签章的附加组件连同标签 commit 的 `git archive` 与给审查人员的构建说明提交到 addons.mozilla.org。两个套件都从已发布的 GitHub Release 下载，并以其摘要与 `SHA256SUMS` 验证。各商店审查通过后才发布该版本。商店已有的版本保持不变，因此发布可以重新运行。Chrome 若有另一个版本仍在审查或等待发布，Chrome 的提交会停止。
+- Chrome 的工作在 `chrome-web-store` 环境中运行。Google Workload Identity Federation 把工作的 GitHub OIDC token 换成发布者服务帐户的短期 access token。Workload Identity 提供者只接受本仓库在该环境中运行的 `stores.yml`，因此不保存任何 Google 密钥。AMO 的工作从 `addons-mozilla-org` 环境的 `AMO_JWT_ISSUER` 与 `AMO_JWT_SECRET` 这两个 secret 读取 AMO 的 JWT issuer 与 JWT secret。两个环境都只允许从 `main` 与 `v*` 标签部署。
+- 从 `main` 手动运行商店工作流程会列出各商店的状态，借此检查两组凭证。商店信息、屏幕截图与隐私权问答在各商店的开发人员控制台中编辑。
 - 封存盘使用 zstd 层级 3，以 `zstd -dc archive.tar.zst | tar -xf - -C DIR` 解开。
 
 ## 授权 [#license]

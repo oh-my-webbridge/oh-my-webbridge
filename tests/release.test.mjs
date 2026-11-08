@@ -697,8 +697,8 @@ test("publication refuses several releases for one tag", async (t) => {
 
 // A release directory that passes the audit: four native archives, the Chrome
 // and Firefox MV3 extensions with their license and filter-source notices, the
-// unsigned Firefox add-on and the agent kit. Callers add provenance and,
-// optionally, benchmark data.
+// Chrome Web Store package, the unsigned Firefox add-on and the agent kit.
+// Callers add provenance and, optionally, benchmark data.
 async function auditFixture(t, prefix) {
   const { dir, write, run } = await scriptFixture(t, prefix, [
     "scripts/audit-release.mjs",
@@ -787,17 +787,23 @@ async function auditFixture(t, prefix) {
   };
   const pack = async (name, files) =>
     packTarZst(join(release, `omw-0.2.0-${name}.tar.zst`), await stage(name, files), ["."]);
-  // The Firefox archive and the unsigned add-on, which may hold other files.
-  const firefoxRelease = async (files, addon = files) => {
-    await pack("firefox-mv3", files);
-    await writeFile(
-      join(release, "omw-0.2.0-firefox-mv3-unsigned.xpi"),
+  const zip = (name, files) =>
+    writeFile(
+      join(release, name),
       zipSync(
-        Object.fromEntries(Object.entries(addon).map(([name, data]) => [name, Buffer.from(data)])),
+        Object.fromEntries(Object.entries(files).map(([path, data]) => [path, Buffer.from(data)])),
       ),
     );
+  // Each extension archive and its store package, which may hold other files.
+  const chromeRelease = async (files, store = files) => {
+    await pack("chrome-mv3", files);
+    await zip("omw-0.2.0-chrome-mv3.zip", store);
   };
-  await pack("chrome-mv3", extension);
+  const firefoxRelease = async (files, addon = files) => {
+    await pack("firefox-mv3", files);
+    await zip("omw-0.2.0-firefox-mv3-unsigned.xpi", addon);
+  };
+  await chromeRelease(extension);
   await firefoxRelease(firefoxFiles());
   await pack("agent-kit", kit);
   const audit = async () => {
@@ -814,6 +820,7 @@ async function auditFixture(t, prefix) {
     pack,
     audit,
     extension,
+    chromeRelease,
     firefoxManifest,
     firefoxFiles,
     firefoxRelease,
@@ -841,7 +848,10 @@ test("release audit opens published benchmark data and checks provenance", async
   );
   const passed = await audit();
   assert.equal(passed.code, 0, passed.stderr);
-  assert.match(passed.stdout, /Chrome and Firefox MV3, the unsigned Firefox add-on/u);
+  assert.match(
+    passed.stdout,
+    /Chrome and Firefox MV3, the Chrome Web Store package, the unsigned Firefox add-on/u,
+  );
   assert.match(passed.stdout, /provenance and benchmark data/u);
   await writeFile(join(release, "omw-0.2.0-benchmark-raw.tar.zst"), "not a zstd stream");
   assert.notEqual((await audit()).code, 0, "corrupt benchmark raw archive");
@@ -896,9 +906,45 @@ test("release audit requires the unsigned add-on to match the Firefox archive", 
   assert.equal((await audit()).code, 0);
 });
 
+test("release audit requires the Chrome Web Store package to match the Chrome archive", async (t) => {
+  const { release, commit, audit, extension, chromeRelease } = await auditFixture(
+    t,
+    "omw-audit-zip-",
+  );
+  await writeFile(
+    join(release, "provenance.json"),
+    JSON.stringify({ schema: 1, version: "0.2.0", commit, benchmarkIncluded: false }),
+  );
+  assert.equal((await audit()).code, 0);
+  await chromeRelease(extension, { ...extension, "worker.js": "export const changed = true;\n" });
+  assert.match(
+    (await audit()).stderr,
+    /omw-0\.2\.0-chrome-mv3\.zip worker\.js differs from the Chrome MV3 archive/u,
+  );
+  const { "worker.js": _, ...withoutWorker } = extension;
+  await chromeRelease(extension, withoutWorker);
+  assert.match(
+    (await audit()).stderr,
+    /chrome-mv3\.zip entries differ from the Chrome MV3 archive/u,
+  );
+  await rm(join(release, "omw-0.2.0-chrome-mv3.zip"));
+  assert.notEqual((await audit()).code, 0, "audit accepted a release without the store package");
+  await chromeRelease(extension);
+  assert.equal((await audit()).code, 0);
+});
+
 test("release audit requires extension notices and the exact agent kit file list", async (t) => {
-  const { release, commit, pack, audit, extension, firefoxFiles, firefoxRelease, kit } =
-    await auditFixture(t, "omw-audit-kit-");
+  const {
+    release,
+    commit,
+    pack,
+    audit,
+    extension,
+    chromeRelease,
+    firefoxFiles,
+    firefoxRelease,
+    kit,
+  } = await auditFixture(t, "omw-audit-kit-");
   await writeFile(
     join(release, "provenance.json"),
     JSON.stringify({ schema: 1, version: "0.2.0", commit, benchmarkIncluded: false }),
@@ -909,7 +955,7 @@ test("release audit requires extension notices and the exact agent kit file list
   // the filter lists keep the full license texts they require, and each source
   // in sources.lock.json keeps its original text and notice.
   for (const { label, publish, complete } of [
-    { label: "Chrome", publish: (files) => pack("chrome-mv3", files), complete: extension },
+    { label: "Chrome", publish: (files) => chromeRelease(files), complete: extension },
     { label: "Firefox", publish: (files) => firefoxRelease(files), complete: firefoxFiles() },
   ]) {
     for (const path of [
