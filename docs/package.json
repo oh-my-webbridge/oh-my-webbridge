@@ -18,7 +18,7 @@
     "@oh-my-webbridge/brand": "workspace:*",
     "@sankyu/react-circle-flags": "1.6.9",
     "fumadocs-core": "16.18.1",
-    "fumadocs-extras": "^0.2.0",
+    "fumadocs-extras": "^0.3.0",
     "fumadocs-mdx": "15.4.10",
     "fumadocs-page-history": "^0.4.2",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.18.1",

@@ -1,9 +1,10 @@
 import { llms, loader } from "fumadocs-core/source";
-import { renderMarkdownUrl } from "fumadocs-extras/llms";
+import { renderLanguageTips, renderLlmsIndex, renderMarkdownUrl } from "fumadocs-extras/llms";
 import { defineDocs } from "fumadocs-mdx/macro";
-import { i18n, isLocale } from "./i18n";
+import { i18n, isLocale, languageNames, type Locale } from "./i18n";
 import { resolveIcon } from "./icons";
 import { sentenceGap, siteText } from "./layout.shared";
+import { llmsIndexPath } from "./markdown-path";
 import { absoluteUrl, pageMarkdownPath, pagePath } from "./shared";
 
 export const docs = defineDocs({
@@ -56,6 +57,24 @@ ${previewNotice(page.locale ?? i18n.defaultLanguage)}
 
 ${await page.data.getText("processed")}`,
 });
+
+/**
+ * The `llms.txt` of a language: the title of its page tree, the site description, a `<tips>` block
+ * in English that links the index of every language, then the pages.
+ */
+export function llmsIndex(lang: Locale): string {
+  return renderLlmsIndex(publicSource, docsLlms, {
+    lang,
+    description: siteText[lang].description,
+    sections: [
+      renderLanguageTips({
+        language: lang,
+        languages: languageNames,
+        indexUrl: (language) => absoluteUrl(llmsIndexPath(language)),
+      }),
+    ],
+  });
+}
 
 /** The public-URL twin of a site page, for the Markdown routes. */
 export function publicPage(page: DocsPage): (typeof publicSource)["$inferPage"] {

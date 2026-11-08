@@ -7,6 +7,6 @@ packages:
 allowBuilds:
   esbuild: false
 minimumReleaseAgeExclude:
-  - fumadocs-extras@0.2.0
+  - fumadocs-extras@0.3.0
 # Scripts run against the installed tree; `pnpm install` is the explicit step.
 verifyDepsBeforeRun: false

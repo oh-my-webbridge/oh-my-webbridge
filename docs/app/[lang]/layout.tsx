@@ -10,6 +10,7 @@ import DocsSearchDialog from "@/components/search";
 import { SiteHeader } from "@/components/site-header";
 import { htmlLang, i18n, isLocale } from "@/lib/i18n";
 import { layoutOptions, siteText, translations } from "@/lib/layout.shared";
+import { llmsIndexPath } from "@/lib/markdown-path";
 import { absoluteUrl } from "@/lib/shared";
 import { source } from "@/lib/source";
 
@@ -40,7 +41,7 @@ export default async function Layout({ params, children }: LayoutProps) {
     <html lang={htmlLang[lang]} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col font-sans">
         {/* The llms.txt of the language covers its pages; React places the link in the head. */}
-        <link rel="describedby" href={absoluteUrl(`/${lang}/llms.txt`)} />
+        <link rel="describedby" href={absoluteUrl(llmsIndexPath(lang))} />
         <RootProvider
           i18n={i18nProvider(translations, lang)}
           search={{ SearchDialog: DocsSearchDialog }}
