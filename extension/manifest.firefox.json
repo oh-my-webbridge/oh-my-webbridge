@@ -21,6 +21,7 @@
   },
   "permissions": [
     "tabs",
+    "activeTab",
     "storage",
     "alarms",
     "tabGroups",

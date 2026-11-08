@@ -27,9 +27,11 @@ The amber pointer is set on the controlled tab only. Other tabs keep the connect
 
 While connected, the popup starts with a row labeled "This tab". It reads "Not controlled" for an ordinary tab, "Session research" for a controlled tab, and "Session research is working" while an action runs. The row follows the active tab.
 
+Below the row is a prompt for your agent with a copy button. It shows suggestions for the active tab in turn, a new one every six seconds, starting with the ones that fit the page best. The popup picks them from the address, the title and what the page holds, such as tables, form fields, code blocks, a video or selected text. The pointer or the focus on the prompt holds the current suggestion; once you edit the prompt, it keeps your text.
+
 <Demo
   name="popup"
-  alt="The popup over The Password Game, which an agent is playing: Connected, This tab reads Session demo, prompt examples in tabs, and Pause and Settings buttons."
+  alt="The popup over The Password Game, which an agent is playing: Connected, This tab reads Session demo, a suggested prompt with a copy button, and Pause and Settings buttons."
   still
 />
 
