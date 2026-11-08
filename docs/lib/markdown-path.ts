@@ -5,3 +5,8 @@ export const MARKDOWN_FILE = "content.md";
 export function markdownPath(segments: readonly string[]): string {
   return `/md/${[...segments, MARKDOWN_FILE].join("/")}`;
 }
+
+/** The `llms.txt` of a language without `basePath`, next to the Markdown copies of its pages. */
+export function llmsIndexPath(language: string): string {
+  return `/md/${language}/llms.txt`;
+}

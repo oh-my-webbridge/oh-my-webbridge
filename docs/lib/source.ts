@@ -1,9 +1,10 @@
 import { llms, loader } from "fumadocs-core/source";
 import { renderMarkdownUrl } from "fumadocs-extras/llms";
 import { defineDocs } from "fumadocs-mdx/macro";
-import { i18n, isLocale } from "./i18n";
+import { i18n, isLocale, languageNames, type Locale } from "./i18n";
 import { resolveIcon } from "./icons";
-import { sentenceGap, siteText } from "./layout.shared";
+import { fill, sentenceGap, siteText } from "./layout.shared";
+import { llmsIndexPath } from "./markdown-path";
 import { absoluteUrl, pageMarkdownPath, pagePath } from "./shared";
 
 export const docs = defineDocs({
@@ -56,6 +57,42 @@ ${previewNotice(page.locale ?? i18n.defaultLanguage)}
 
 ${await page.data.getText("processed")}`,
 });
+
+/** The `<tips>` block of an `llms.txt`: the index of every language, in the language of the index. */
+function languageTips(lang: Locale): string {
+  const text = siteText[lang];
+  const pattern = absoluteUrl(llmsIndexPath(`[${text.languageCode}]`));
+  return [
+    "<tips>",
+    fill(text.llmsIndex, { language: languageNames[lang], pattern: `\`${pattern}\`` }),
+    "",
+    ...i18n.languages.map(
+      (language) =>
+        `- ${language}: [${languageNames[language]}](${absoluteUrl(llmsIndexPath(language))})`,
+    ),
+    "",
+    text.llmsSamePath,
+    "</tips>",
+  ].join("\n");
+}
+
+/**
+ * The `llms.txt` of a language: the title of its page tree, the site description, the language
+ * guide, then the page tree as `index()` of `llms()` lists it.
+ */
+export function llmsIndex(lang: Locale): string {
+  const tree = publicSource.getPageTree(lang);
+  if (typeof tree.name !== "string") throw new Error(`The page tree of ${lang} has no text title`);
+  return [
+    `# ${tree.name}`,
+    "",
+    `> ${siteText[lang].description}`,
+    "",
+    languageTips(lang),
+    "",
+    ...tree.children.map((node) => docsLlms.indexNode(node, lang)),
+  ].join("\n");
+}
 
 /** The public-URL twin of a site page, for the Markdown routes. */
 export function publicPage(page: DocsPage): (typeof publicSource)["$inferPage"] {

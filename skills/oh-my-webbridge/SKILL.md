@@ -62,4 +62,4 @@ Zen is optional and meant for static or old Web 2 archives: `preset {preset:"zen
 
 ## Reference
 
-The full action list, arguments, limits and error codes are at https://oh-my-webbridge.github.io/en/reference/actions/ and, as plain text for agents, https://oh-my-webbridge.github.io/en/llms-full.txt.
+The full action list, arguments, limits and error codes are at https://oh-my-webbridge.github.io/en/reference/actions/ and, as plain text for agents, https://oh-my-webbridge.github.io/md/en/llms-full.txt.
