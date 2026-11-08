@@ -2,8 +2,6 @@ package bridge
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,13 +197,6 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{links: make(map[string]*link), pending: make(map[string]*pending), subs: make(map[*subscription]struct{}), bindings: make(map[string]string)}
-}
-func NewID() string {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(b[:])
 }
 
 // live returns the ready connection of a browser. The caller holds h.mu.
