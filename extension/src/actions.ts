@@ -24,6 +24,7 @@ import {
 import { actionTarget, releaseLayer } from "./activity.js";
 import { feature, forgetObservations } from "./features.js";
 import { forgetFrames, resetScope, runtimeDisabled } from "./frames.js";
+import { snowflake } from "./id.js";
 import { forget as forgetNetwork, network } from "./network.js";
 import { fail, stringArg, type Args, type Command, type JsonObject } from "./protocol.js";
 import { quadRect } from "./layer.js";
@@ -993,7 +994,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         paperHeight: size[1]!,
         preferCSSPageSize: true,
       });
-      const handle = crypto.randomUUID();
+      const handle = snowflake();
       streams.set(handle, { tabId, session: name, handle: result.stream });
       return {
         stream: handle,

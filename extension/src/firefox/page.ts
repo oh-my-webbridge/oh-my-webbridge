@@ -5,6 +5,7 @@
 // the last snapshot live in this world, keyed by a per-snapshot generation: a
 // replaced document takes them along, and a page restored from the
 // back-forward cache drops them.
+import { snowflake } from "../id.js";
 import { resolveElements } from "../locators.js";
 import { fail, fault, stringArg, type Json } from "../protocol.js";
 import type { PageArgs, PageFile, PageResult } from "./page-api.js";
@@ -724,9 +725,7 @@ function propsOf(element: Element, role: string): string {
 // Same line format, reference numbering and limits as extension/src/snapshot.ts.
 function snapshot(args: PageArgs): { tree: string; truncated: boolean } {
   clearRefs();
-  generation = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  generation = snowflake();
   const lines: string[] = [];
   let size = 0;
   let truncated = false;
