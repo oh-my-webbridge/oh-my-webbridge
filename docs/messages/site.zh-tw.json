@@ -1,5 +1,5 @@
 {
-  "byline": "文件",
+  "byline": "使用手冊",
   "previewTitle": "技術預覽",
   "previewBody": "omw 目前是技術預覽版，正在快速迭代。",
   "previewWarning": "之後的版本一定會有破壞相容性的變更。",
@@ -15,7 +15,7 @@
   "pages": "目錄",
   "notFoundTitle": "找不到頁面",
   "notFoundBody": "連結已經過時，或是頁面換了位置。",
-  "backToDocs": "前往文件首頁",
+  "backToDocs": "前往使用手冊首頁",
   "chooseLanguage": "選擇語言",
   "codeBlock": "程式碼 {index}",
   "codeBlockTitled": "程式碼 {index}：{title}"

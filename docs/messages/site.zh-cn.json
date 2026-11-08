@@ -1,5 +1,5 @@
 {
-  "byline": "文档",
+  "byline": "使用手册",
   "previewTitle": "技术预览",
   "previewBody": "omw 目前是技术预览版，正在快速迭代。",
   "previewWarning": "之后的版本一定会有破坏兼容性的变更。",
@@ -15,7 +15,7 @@
   "pages": "目录",
   "notFoundTitle": "找不到页面",
   "notFoundBody": "链接已经过时，或是页面换了位置。",
-  "backToDocs": "前往文档首页",
+  "backToDocs": "前往使用手册首页",
   "chooseLanguage": "选择语言",
   "codeBlock": "代码 {index}",
   "codeBlockTitled": "代码 {index}：{title}"
