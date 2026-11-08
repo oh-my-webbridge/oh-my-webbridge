@@ -27,11 +27,11 @@ The body is one JSON object of at most 2 MiB with no unknown fields. A session n
 }
 ```
 
-A successful call returns the daemon-assigned id and the action result:
+A successful call returns the daemon-assigned id, a [Snowflake ID](https://en.wikipedia.org/wiki/Snowflake_ID) in lowercase base 36, and the action result:
 
 ```json
 {
-  "id": "8f3c1a7d2b6e4c5a9f01d3b7e2c4a680",
+  "id": "uvwoyqsusjk",
   "result": { "success": true, "tabId": 412, "url": "https://example.com/" }
 }
 ```
@@ -40,7 +40,7 @@ A failed call returns the id and a fault instead of a result, with an HTTP statu
 
 ```json
 {
-  "id": "8f3c1a7d2b6e4c5a9f01d3b7e2c4a680",
+  "id": "uvwoyqsusjk",
   "error": { "code": "stale_ref", "message": "element reference expired; take a fresh snapshot" }
 }
 ```
@@ -191,7 +191,7 @@ Append ` >>nth=0` to take the first match or ` >>nth=-1` to take the last. Text,
 
 ## Reference lifetime
 
-`@e` references belong to one document generation. In Chrome, a new snapshot, a frame selection, a new main document (navigation or reload) or a change of the tab's URL invalidates them. A snapshot taken inside a selected frame also expires when that frame navigates, reloads, is removed, or the selection ends. Other iframes loading or navigating leave it valid. In Firefox, references live in the document that produced them; see [Firefox](../firefox.mdx).
+`@e` references belong to one document generation. Each snapshot numbers its references under a new generation, a Snowflake ID in base 36. In Chrome, a new snapshot, a frame selection, a new main document (navigation or reload) or a change of the tab's URL invalidates them. A snapshot taken inside a selected frame also expires when that frame navigates, reloads, is removed, or the selection ends. Other iframes loading or navigating leave it valid. In Firefox, references live in the document that produced them; see [Firefox](../firefox.mdx).
 
 ## Errors
 

@@ -764,7 +764,7 @@ func TestEachBrowserConnectionHasItsOwnCommandSlots(t *testing.T) {
 	// Chrome's reserve still takes recovery and the page CDP cleanup.
 	hold("", Command{Session: "hung-1", Action: "close_session"})
 	forwarded("close_session")
-	page := "cdp-" + NewID()
+	page := pageClientSession()
 	hold(Chrome, Command{Session: page, Action: "cdp_detach", Args: json.RawMessage(`{"tabId":7}`)})
 	forwarded("cdp_detach")
 	s.Hub.mu.Lock()

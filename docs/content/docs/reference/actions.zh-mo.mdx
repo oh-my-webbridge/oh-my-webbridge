@@ -29,11 +29,11 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 }
 ```
 
-成功的呼叫會回傳 daemon 指派的 id 與動作結果：
+成功的呼叫會回傳 daemon 指派的 id（以小寫 36 進位表示的 [Snowflake ID](https://en.wikipedia.org/wiki/Snowflake_ID)）與動作結果：
 
 ```json
 {
-  "id": "8f3c1a7d2b6e4c5a9f01d3b7e2c4a680",
+  "id": "uvwoyqsusjk",
   "result": { "success": true, "tabId": 412, "url": "https://example.com/" }
 }
 ```
@@ -42,7 +42,7 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ```json
 {
-  "id": "8f3c1a7d2b6e4c5a9f01d3b7e2c4a680",
+  "id": "uvwoyqsusjk",
   "error": { "code": "stale_ref", "message": "element reference expired; take a fresh snapshot" }
 }
 ```
@@ -193,7 +193,7 @@ daemon 在內部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 
 ## 參照的存續期間 [#reference-lifetime]
 
-`@e` 參照屬於單一文件世代。在 Chrome 中，新的快照、框架選擇、新的主文件（導覽或重新載入），或分頁 URL 的變更，都會使它們失效。在所選框架內取得的快照，也會在該框架導覽、重新載入、被移除，或選取結束時過期。其他 iframe 載入或導覽，不影響它的有效性。在 Firefox 中，參照存在於產生它們的文件內；請見 [Firefox](../firefox.mdx)。
+`@e` 參照屬於單一文件世代。每次快照都以新的世代為參照編號，世代是 36 進位的 Snowflake ID。在 Chrome 中，新的快照、框架選擇、新的主文件（導覽或重新載入），或分頁 URL 的變更，都會使它們失效。在所選框架內取得的快照，也會在該框架導覽、重新載入、被移除，或選取結束時過期。其他 iframe 載入或導覽，不影響它的有效性。在 Firefox 中，參照存在於產生它們的文件內；請見 [Firefox](../firefox.mdx)。
 
 ## 錯誤 [#errors]
 

@@ -1,6 +1,7 @@
 import { addRef, clearRefs, enablePageEvents, send } from "./cdp.js";
 import type { Args } from "./protocol.js";
 import { scopes } from "./frames.js";
+import { snowflake } from "./id.js";
 
 type AXNode = {
   nodeId: string;
@@ -25,7 +26,7 @@ export async function snapshot(
     scope ? { frameId: scope.frameId } : {},
   );
   clearRefs(tabId);
-  const generation = crypto.randomUUID().replaceAll("-", "");
+  const generation = snowflake();
   const byId = new Map(result.nodes.map((n) => [n.nodeId, n]));
   const lines: string[] = [];
   let count = 0;
