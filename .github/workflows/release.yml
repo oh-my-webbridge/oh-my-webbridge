@@ -41,3 +41,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/publish-release.mjs
+  stores:
+    needs: [package, publish]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/stores.yml
+    with:
+      artifact: ${{ needs.package.outputs.artifact }}

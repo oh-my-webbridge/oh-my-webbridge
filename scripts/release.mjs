@@ -151,6 +151,8 @@ export function renderNotes(plan, release) {
     "",
     "Choose the native archive for macOS or Linux and your CPU. All release archives use `.tar.zst` with zstd level 3. Install zstd and verify `SHA256SUMS`, then extract with `zstd -dc archive.tar.zst | tar -xf - -C destination`. Load the extracted Chrome MV3 directory in Chrome. The agent kit includes the SDK and guide.",
     "",
+    `The release workflow submits \`omw-${release.newVersion}-chrome-mv3.zip\` to the Chrome Web Store and the unsigned add-on to addons.mozilla.org; each store publishes the version after its review.`,
+    "",
     `Firefox release builds install \`omw-${release.newVersion}-firefox-mv3-unsigned.xpi\` permanently only after it is signed. For development, load the extracted Firefox MV3 directory as a temporary add-on in \`about:debugging\`. See [Firefox installation](${repository}/blob/v${release.newVersion}/docs/firefox.md#installation).`,
     "",
     "Browser benchmarks report interface costs on a deterministic fixture; they do not establish real-site reliability. Platform acceptance and remaining differences are recorded in the repository.",
