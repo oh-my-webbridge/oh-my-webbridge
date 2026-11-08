@@ -80,8 +80,8 @@ export default async function DocPage(props: PageProps) {
         <ViewOptionsPopover
           markdownUrl={markdownUrl}
           githubUrl={`${repositoryUrl}/blob/${repository.branch}/${repository.contentDir}/${page.path}`}
-          // The prompt sent to an AI chat links the published page, also in a local preview.
-          pageUrl={absoluteUrl(pagePath(page.url))}
+          // The prompt sent to an AI chat links the published Markdown copy, also in a local preview.
+          pageUrl={absoluteUrl(markdownUrl)}
           locale={pageActionLocale[locale]}
         />
       </div>
@@ -122,7 +122,11 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
         ? `${siteName} ${section}`
         : `${page.data.title} · ${siteName} ${section}`,
     description: page.data.description,
-    alternates: { canonical: url, languages },
+    alternates: {
+      canonical: url,
+      languages,
+      types: { "text/markdown": absoluteUrl(pageMarkdownPath(page)) },
+    },
     openGraph: {
       type: "article",
       siteName: `${siteName} ${section}`,
