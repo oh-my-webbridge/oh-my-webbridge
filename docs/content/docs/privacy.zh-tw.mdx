@@ -1,0 +1,34 @@
+---
+title: 隱私權
+icon: Lock
+description: 擴充功能與 daemon 讀取哪些資料、資料送往何處，以及在磁碟上保存哪些內容。
+---
+
+瀏覽器擴充功能與 omw daemon 都在你的電腦上執行。本專案不經營任何伺服器，也不從兩者接收任何資料。
+
+## 擴充功能讀取的資料 [#data-the-extension-reads]
+
+擴充功能只為了執行 daemon 送來的指令而讀取瀏覽器中的資料。依指令不同，它會讀取：
+
+- 工作階段所用分頁，或 [CDP](./reference/cdp.mdx) 用戶端所連線分頁中網頁的網址、標題與內容：文字、無障礙樹、元素的值、螢幕截圖與 PDF
+- Cookie 與網頁儲存空間，供 `cookies` 與 `storage` 動作使用
+- 工作階段記錄網路流量期間，分頁的請求與回應
+- 已開啟分頁的網址與標題，供 CDP 目標清單（`/json/list`）使用，以及工作階段尋找要借用的分頁時
+
+## 資料的去向 [#where-the-data-goes]
+
+配對後，擴充功能只連線到一個位址：同一台電腦上 `127.0.0.1:17373` 的 daemon。它把每個結果送到那裡，不送往其他位址。daemon 只接受來自同一台電腦的連線，並把結果交給送出指令的程式，例如 Agent 或指令碼。資料之後如何處理由該程式決定；Agent 可能把網頁內容傳給它使用的模型服務商。
+
+## 磁碟上的資料 [#data-on-disk]
+
+- 擴充功能把 daemon token 與設定保存在瀏覽器的擴充功能儲存空間。工作階段狀態保存在工作階段儲存空間，瀏覽器重新啟動時會清除。
+- daemon 把設定（包括 token）與工作階段綁定保存在設定目錄：macOS 為 `~/Library/Application Support/oh-my-webbridge`，Linux 為 `~/.config/oh-my-webbridge`，或 `OMW_HOME` 指定的目錄。螢幕截圖與 PDF 寫入指令指定的路徑，未指定時寫入該目錄下的 `artifacts`。
+- `download` 動作儲存的檔案位於瀏覽器的下載資料夾。
+
+## 分析 [#analytics]
+
+擴充功能與 daemon 都不含分析、遙測、當機報告或廣告。[頁面預設集](./presets.mdx)使用的過濾清單隨擴充功能一起提供，執行時不下載任何內容。
+
+## 問題 [#questions]
+
+隱私權相關問題請在 [GitHub Issues](https://github.com/oh-my-webbridge/oh-my-webbridge/issues) 提出。
