@@ -8,12 +8,14 @@ The browser extension and the omw daemon run on your computer. The project runs 
 
 ## Data the extension reads
 
-The extension reads data from the browser only to carry out a command from the daemon. Depending on the command, it reads:
+To carry out a command from the daemon, the extension reads data from the browser. Depending on the command, it reads:
 
 - the address, title and content of pages in the tabs a session uses, or in a tab that a [CDP](./reference/cdp.mdx) client connects to: text, the accessibility tree, element values, screenshots and PDFs
 - cookies and page storage, for the `cookies` and `storage` actions
 - the requests and responses of a tab while a session records its network traffic
 - the addresses and titles of open tabs, for the CDP target list (`/json/list`) and when a session looks for a tab to borrow
+
+When you open the popup, it reads the address and title of the active tab. On a page that the extension can access, it also reads the page language, the structured-data types, the length of the selected text, and how many tables, form fields, code blocks, videos, images and articles the page has. The popup uses these values to rank prompt suggestions and does not send them anywhere.
 
 ## Where the data goes
 
