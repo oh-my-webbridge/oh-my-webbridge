@@ -84,7 +84,6 @@
   "example_images": "保存图片",
   "example_images_prompt": "使用 Skills: oh-my-webbridge 把我目前标签页上的大图下载到我的下载文件夹。",
   "prompt": "提示词",
-  "suggestedForPage": "适合这个页面",
   "navSetup": "初始设置",
   "navSettings": "设置",
   "navMain": "页面",

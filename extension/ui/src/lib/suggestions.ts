@@ -1,5 +1,6 @@
-// Ranks the prompt suggestions of the popup for the active tab. Rules read the
-// domain and path, the title and the signals that the popup reads from the page.
+// Orders the prompt suggestions that the popup shows in turn for the active
+// tab. Rules read the domain and path, the title and the signals that the popup
+// reads from the page.
 import type { Language } from "@ext/i18n.ts";
 import type { PageSignals } from "@/lib/page-signals";
 
@@ -34,8 +35,6 @@ const pageOnly = [
 const ranked = [...pageOnly, ...everyPage];
 
 export type SuggestionName = (typeof ranked)[number];
-// fit marks a suggestion that a rule matched for this page.
-export type Suggestion = { name: SuggestionName; fit: boolean };
 export type Page = {
   url: string;
   title: string;
@@ -175,7 +174,7 @@ const rules: Record<SuggestionName, (page: Facts) => number> = {
 };
 
 // The suggestions that fit the page, best first, then the ones for every page.
-export function suggest(page: Page): Suggestion[] {
+export function suggest(page: Page): SuggestionName[] {
   const url = URL.parse(page.url);
   const facts: Facts = {
     host: url?.hostname.replace(/^www\./u, "") ?? "",
@@ -191,8 +190,5 @@ export function suggest(page: Page): Suggestion[] {
     .sort((a, b) => b.score - a.score || a.order - b.order)
     .slice(0, maxFits)
     .map(({ name }) => name);
-  return [
-    ...fits.map((name) => ({ name, fit: true })),
-    ...everyPage.filter((name) => !fits.includes(name)).map((name) => ({ name, fit: false })),
-  ];
+  return [...fits, ...everyPage.filter((name) => !fits.includes(name))];
 }

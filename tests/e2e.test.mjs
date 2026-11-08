@@ -10,6 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
 import { chromium } from "playwright-core";
 import { WebSocket } from "ws";
+import en from "../extension/locales/en.json" with { type: "json" };
 import { format, matchLanguage } from "../extension/src/i18n.ts";
 
 const chrome = process.env.CHROME_BIN;
@@ -887,11 +888,21 @@ test(
         .getByRole("status")
         .getByText(await message("state_connected"))
         .waitFor();
-      await page.getByRole("button", { name: await message("example_form") }).click();
-      assert.equal(
-        await page.getByRole("textbox", { name: await message("prompt") }).inputValue(),
-        await message("example_form_prompt"),
+      // The prompt holds a suggestion and moves on to the next one by itself.
+      const prompt = page.getByRole("textbox", { name: await message("prompt") });
+      const suggestions = await Promise.all(
+        Object.keys(en)
+          .filter((key) => /^example_\w+_prompt$/u.test(key))
+          .map((key) => message(key)),
       );
+      const first = await prompt.inputValue();
+      assert.ok(suggestions.includes(first), first);
+      await page.waitForFunction(
+        (shown) => document.querySelector("textarea")?.value !== shown,
+        first,
+        { timeout: 10_000 },
+      );
+      assert.ok(suggestions.includes(await prompt.inputValue()));
       await mkdir("dist/qa", { recursive: true });
       await page.screenshot({ path: "dist/qa/extension.png" });
       await page.close();

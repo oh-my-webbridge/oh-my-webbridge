@@ -244,18 +244,14 @@
   font-weight: 500;
 }
 
-/* A four-point star. Suggestions that fit the page carry one, and two flare
-   at the corners of the prompt when a suggestion fills it. */
-@utility spark-star {
-  background: currentColor;
-  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
-}
-
+/* Two four-point stars flare at the corners of the popup prompt whenever a
+   new suggestion appears in it. */
 @layer components {
   .prompt-spark::before,
   .prompt-spark::after {
-    @apply spark-star;
     content: "";
+    background: currentColor;
+    clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
     position: absolute;
     width: 14px;
     height: 14px;
@@ -275,10 +271,6 @@
     height: 9px;
     animation-delay: 120ms;
   }
-  .spark-in {
-    animation: spark-in 320ms var(--ease-spark) both;
-    animation-delay: calc(var(--spark-index, 0) * 50ms);
-  }
   @keyframes spark-flare {
     0% {
       opacity: 0;
@@ -291,17 +283,6 @@
     100% {
       opacity: 0;
       transform: scale(0.8) rotate(25deg);
-    }
-  }
-  @keyframes spark-in {
-    from {
-      opacity: 0;
-      transform: scale(0.6) rotate(-30deg);
-    }
-  }
-  @keyframes spark-appear {
-    from {
-      opacity: 0;
     }
   }
   @keyframes spark-fade {
@@ -317,9 +298,6 @@
     .prompt-spark::before,
     .prompt-spark::after {
       animation-name: spark-fade;
-    }
-    .spark-in {
-      animation-name: spark-appear;
     }
   }
 }

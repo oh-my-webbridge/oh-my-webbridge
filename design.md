@@ -117,7 +117,7 @@ Priority for conflicts: facts and user requirements; accessibility; the reader's
 - [SHOULD] Springs from `motion`: `{ type: "spring", bounce: 0, duration: 0.35 }`. Elements that follow a target (the focus frame) settle in 0.4 seconds.
 - [SHOULD] A step opens and closes with height and opacity together. Status labels cross-fade. The progress bar animates its width.
 - [SHOULD] The edge glow fades in over 180ms when an action starts and fades out over 600ms after it ends. It pulses at most once every 2 seconds.
-- [SHOULD] When a suggestion fills the prompt, the text fades in over 220ms and two four-point stars in `--omw-primary` flare once at its corners over 900ms. Suggestions that fit the page carry a small star, which appears with a 50ms stagger.
+- [SHOULD] The popup prompt shows a new suggestion every 6 seconds. The old text leaves upward over 150ms and the new text arrives from below over 250ms, both with opacity and a 4px blur, and two four-point stars in `--omw-primary` flare once at the corners over 900ms. The pointer or the focus on the prompt holds the current suggestion; editing ends the turns.
 - [MUST] With `prefers-reduced-motion: reduce`, replace movement with opacity changes and remove pulsing.
 
 ## 5. Available primitives
@@ -131,7 +131,7 @@ Pages use only the names below. Page-specific styles use Tailwind utilities with
 | Docs tokens                | Fumadocs tokens mapped to `--omw-*`                                   | `docs/app/tokens.css`                                                                | Documentation site                           | Implemented |
 | Buttons                    | `Button` with `variant` and `size`                                    | `extension/ui/src/components/ui/button.tsx`                                          | Actions                                      | Implemented |
 | Tabs                       | `Tabs`, `TabsList`, `TabsTab`, `TabsPanel`                            | `extension/ui/src/components/ui/tabs.tsx`                                            | Switching groups of examples                 | Implemented |
-| Prompt composer            | `PromptComposer`, `Textarea`                                          | `extension/ui/src/components/prompt-composer.tsx`, `ui/textarea.tsx`                 | A prompt with suggestions for the active tab | Implemented |
+| Prompt composer            | `PromptComposer`, `Textarea`                                          | `extension/ui/src/components/prompt-composer.tsx`, `ui/textarea.tsx`                 | A prompt that shows suggestions in turn      | Implemented |
 | Menu                       | `Menu`, `MenuTrigger`, `MenuPopup`, `MenuRadioGroup`, `MenuRadioItem` | `extension/ui/src/components/ui/menu.tsx`                                            | Language menu                                | Implemented |
 | Code input                 | `OTPField`                                                            | `extension/ui/src/components/ui/otp-field.tsx`                                       | Six-digit codes                              | Implemented |
 | Switch row                 | `Switch` in a settings row                                            | `extension/ui/src/components/ui/switch.tsx`                                          | Boolean preferences                          | Implemented |

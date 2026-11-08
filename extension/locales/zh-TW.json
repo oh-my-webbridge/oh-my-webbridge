@@ -84,7 +84,6 @@
   "example_images": "儲存圖片",
   "example_images_prompt": "使用 Skills: oh-my-webbridge 把我目前分頁上的大圖下載到我的下載資料夾。",
   "prompt": "提示詞",
-  "suggestedForPage": "適合這個頁面",
   "navSetup": "初始設定",
   "navSettings": "設定",
   "navMain": "頁面",
