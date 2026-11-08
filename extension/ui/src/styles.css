@@ -10,6 +10,7 @@
   --animate-toast-success-even: toast-success-even 0.32s cubic-bezier(0.5, 1, 0.89, 1);
   --animate-toast-error-odd: toast-error-odd 0.28s cubic-bezier(0.5, 1, 0.89, 1);
   --animate-toast-error-even: toast-error-even 0.28s cubic-bezier(0.5, 1, 0.89, 1);
+  --ease-spark: cubic-bezier(0.23, 1, 0.32, 1);
   --font-heading: var(--omw-font-sans);
   --font-mono: var(--omw-font-mono);
   --font-sans: var(--omw-font-sans);
@@ -241,6 +242,86 @@
   font-size: 13px;
   line-height: 20px;
   font-weight: 500;
+}
+
+/* A four-point star. Suggestions that fit the page carry one, and two flare
+   at the corners of the prompt when a suggestion fills it. */
+@utility spark-star {
+  background: currentColor;
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+}
+
+@layer components {
+  .prompt-spark::before,
+  .prompt-spark::after {
+    @apply spark-star;
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    color: var(--primary);
+    opacity: 0;
+    pointer-events: none;
+    animation: spark-flare 900ms var(--ease-spark) both;
+  }
+  .prompt-spark::before {
+    top: -6px;
+    right: -6px;
+  }
+  .prompt-spark::after {
+    bottom: -4px;
+    left: -5px;
+    width: 9px;
+    height: 9px;
+    animation-delay: 120ms;
+  }
+  .spark-in {
+    animation: spark-in 320ms var(--ease-spark) both;
+    animation-delay: calc(var(--spark-index, 0) * 50ms);
+  }
+  @keyframes spark-flare {
+    0% {
+      opacity: 0;
+      transform: scale(0.6) rotate(-30deg);
+    }
+    25% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.8) rotate(25deg);
+    }
+  }
+  @keyframes spark-in {
+    from {
+      opacity: 0;
+      transform: scale(0.6) rotate(-30deg);
+    }
+  }
+  @keyframes spark-appear {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes spark-fade {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    30% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .prompt-spark::before,
+    .prompt-spark::after {
+      animation-name: spark-fade;
+    }
+    .spark-in {
+      animation-name: spark-appear;
+    }
+  }
 }
 
 @layer base {

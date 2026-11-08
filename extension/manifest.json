@@ -11,7 +11,16 @@
     "48": "icons/mark-48.png",
     "128": "icons/mark-128.png"
   },
-  "permissions": ["tabs", "debugger", "storage", "alarms", "tabGroups", "downloads"],
+  "permissions": [
+    "tabs",
+    "debugger",
+    "storage",
+    "alarms",
+    "tabGroups",
+    "downloads",
+    "activeTab",
+    "scripting"
+  ],
   "host_permissions": ["http://127.0.0.1/*"],
   "background": {
     "service_worker": "worker.js",

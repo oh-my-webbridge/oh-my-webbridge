@@ -887,8 +887,11 @@ test(
         .getByRole("status")
         .getByText(await message("state_connected"))
         .waitFor();
-      await page.getByRole("tab", { name: await message("example_form") }).click();
-      await page.getByText(await message("example_form_prompt")).waitFor();
+      await page.getByRole("button", { name: await message("example_form") }).click();
+      assert.equal(
+        await page.getByRole("textbox", { name: await message("prompt") }).inputValue(),
+        await message("example_form_prompt"),
+      );
       await mkdir("dist/qa", { recursive: true });
       await page.screenshot({ path: "dist/qa/extension.png" });
       await page.close();

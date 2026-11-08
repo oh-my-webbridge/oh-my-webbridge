@@ -2,7 +2,7 @@ import type { ConnectionState } from "@ext/status.ts";
 import { BookOpenIcon, PauseIcon, PlayIcon, Settings2Icon } from "lucide-react";
 import type * as React from "react";
 import { BrandMark } from "@/components/brand-mark";
-import { PromptExamples } from "@/components/prompt-examples";
+import { PromptComposer } from "@/components/prompt-composer";
 import { ConnectionLabel, StatusLabel } from "@/components/status-label";
 import { Button } from "@/components/ui/button";
 import { openPage, useActiveTab, useConnection, useControls } from "@/lib/extension";
@@ -19,11 +19,10 @@ const setupHints = {
 const needsSetup = (state: ConnectionState): state is keyof typeof setupHints =>
   state in setupHints;
 
-function CurrentTab(): React.ReactElement | null {
+function CurrentTab({ tab }: { tab: chrome.tabs.Tab }): React.ReactElement | null {
   const { t } = useI18n();
-  const tab = useActiveTab();
   const controls = useControls();
-  if (!tab?.id || !controls) return null;
+  if (!tab.id || !controls) return null;
   const control = controls[tab.id];
   return (
     <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border bg-card px-3.5">
@@ -42,6 +41,7 @@ function CurrentTab(): React.ReactElement | null {
 export function Popup(): React.ReactElement {
   const { t } = useI18n();
   const connection = useConnection();
+  const tab = useActiveTab();
   if (!connection) return <div className="h-24 w-[360px]" />;
   const { state } = connection;
   return (
@@ -61,8 +61,12 @@ export function Popup(): React.ReactElement {
       ) : (
         <>
           <div className="flex flex-col gap-3 overflow-y-auto p-4">
-            <CurrentTab />
-            <PromptExamples />
+            {tab && (
+              <>
+                <CurrentTab tab={tab} />
+                <PromptComposer tab={tab} />
+              </>
+            )}
           </div>
           <footer className="flex items-center gap-1 border-t px-3 py-2">
             <Button
