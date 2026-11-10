@@ -14,7 +14,7 @@
     "@base-ui/react": "^1.9.0",
     "@fontsource-variable/noto-sans-sc": "^5.3.1",
     "@fontsource-variable/noto-sans-tc": "^5.3.1",
-    "@fumadocs/language": "^0.2.18",
+    "@fumadocs/language": "^0.2.19",
     "@oh-my-webbridge/brand": "workspace:*",
     "@sankyu/react-circle-flags": "1.6.9",
     "fumadocs-core": "16.18.1",
