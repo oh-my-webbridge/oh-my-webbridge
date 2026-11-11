@@ -1,0 +1,190 @@
+---
+title: 迁移到 oh-my-webbridge
+icon: ArrowRightLeft
+description: 把 Kimi 浏览器扩展程序、MCP 浏览器服务器、浏览器 CLI 与 Playwright 或 Puppeteer 脚本的命令对应到 oh-my-webbridge 的动作。
+---
+
+{/* Generated from migration.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+oh-my-webbridge 的每个命令都指定一个会话、一个动作，以及一个参数 JSON 对象。本页的表格把其他工具的常用命令对应到这些动作。搬移任务之前，请先在[与其他工具比较](./comparison.mdx)中确认 oh-my-webbridge 没有提供的功能。
+
+## 开始之前 [#before-you-start]
+
+1. 安装 daemon 与扩展程序，并配对浏览器。请见[快速开始](./getting-started.mdx)。
+2. 以 `omw install-skill ~/.agents/skills` 安装 Agent 技能。关闭原本工具的技能或 MCP 服务器，让 Agent 在一项任务中只使用一个工具。
+3. 运行 `omw status`。它为每个浏览器输出一行，例如 `chrome: connected (156.0.8078.80)`。
+
+## 所有工具共通的变更 [#changes-for-every-tool]
+
+- **会话。** 每项任务使用一个会话名称，例如 `checkout`。第一个命令会打开会话，它的标签页在背景打开，并放进同一个标签页分组。任务结束时发送 `close_session`。所有会话都使用你的浏览器个人资料与其中的 cookie。
+- **引用。** 引用的格式为 `@e<generation>.<index>`，来自该标签页最新一次的 `snapshot`。以 `@e` 开头、来自其他工具或较旧快照的引用会以 `stale_ref` 失败。不带 `@` 的引用（例如 `e12`）会被当成 CSS 选择器。导航之后请重新取得快照。
+- **定位器。** `selector` 参数接受 CSS 与文字定位器，Playwright 定位器可以对应到这些形式。`role=` 完全比对名称，而 `getByRole` 在未设置 `exact: true` 时比对子字符串。串接的定位器与 `.filter()` 没有对应形式。请见[选择器](./reference/actions.mdx#selectors)。
+
+| Playwright 定位器                                      | oh-my-webbridge 选择器       |
+| ------------------------------------------------------ | ---------------------------- |
+| `getByRole("button", { name: "Submit", exact: true })` | `role=button[name="Submit"]` |
+| `getByText("Sign in")`                                 | `text=Sign in`               |
+| `getByLabel("Email")`                                  | `label=Email`                |
+| `getByPlaceholder("Search")`                           | `placeholder=Search`         |
+| `getByTestId("search")`                                | `testid=search`              |
+| `.first()`、`.last()`                                  | ` >>nth=0`、` >>nth=-1`      |
+
+- **JavaScript。** `evaluate` 接受表达式，而不是函数。请发送 `document.title`，或把函数包成调用：`(() => document.title)()`。使用 `await` 的代码放进异步函数调用：`(async () => (await fetch("/api")).status)()`。
+- **文件。** `screenshot` 与 `save_as_pdf` 接受绝对路径 `path` 并传回它，不会覆写已存在的文件。
+- **期限。** 命令默认在 30 秒后失败。HTTP 请求本文的 `timeoutMs` 字段可设置 1 到 120000 毫秒。
+- **Firefox。** 部分动作在 Firefox 中响应 `unsupported`。请见 [Firefox](./firefox.mdx)。
+
+## 从 Kimi 浏览器扩展程序迁移 [#from-the-kimi-browser-extension]
+
+请求格式与大多数动作名称相同，地址、token 与部分参数不同。
+
+|            | Kimi 浏览器扩展程序               | oh-my-webbridge                                            |
+| ---------- | --------------------------------- | ---------------------------------------------------------- |
+| 地址       | `http://127.0.0.1:10086`          | `http://127.0.0.1:17373`                                   |
+| 命令       | `POST /command`                   | `POST /command`，带 `Authorization: Bearer <token>`        |
+| 请求本文   | `action`、`args`、`session`       | `session`、`action`、`args`；可选 `browser` 与 `timeoutMs` |
+| 状态       | `/status`                         | 带 token 的 `GET /status`，或 `omw status`                 |
+| 启动       | `kimi-webbridge start`            | `omw start`，或以 `omw service install` 安装用户服务       |
+| Agent 技能 | `kimi-webbridge install-skill -y` | `omw install-skill ~/.agents/skills`                       |
+| 命令行     | `curl`                            | `omw call SESSION ACTION JSON`，或 `curl`                  |
+
+同一个 `navigate` 请求送往两个 daemon 的写法：
+
+```sh
+# Kimi 浏览器扩展程序
+curl -s -X POST http://127.0.0.1:10086/command \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"navigate","args":{"url":"https://example.com","group_title":"Research"},"session":"research"}'
+
+# oh-my-webbridge
+TOKEN=$(omw connection | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -s -X POST http://127.0.0.1:17373/command \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"session":"research","action":"navigate","args":{"url":"https://example.com","group_title":"Research"}}'
+
+# oh-my-webbridge 命令行
+omw call research navigate '{"url":"https://example.com","group_title":"Research"}'
+```
+
+以下动作的名称与参数不变：`navigate`、`find_tab`、`list_tabs`、`close_tab`、`close_session`、`mouse_click`、`fill`、`key_type`、`hover`、`drag`、`find`、`cdp`、`screenshot`、`save_as_pdf`、`upload` 与 `network`。以下动作有变更：
+
+| Kimi 浏览器扩展程序                            | oh-my-webbridge                                                      |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| `click`，调用 `el.click()`                     | `click`。在 Chrome 中通过 CDP 发送受信任的鼠标输入。                 |
+| `code` 中使用 `await` 的 `evaluate`            | `evaluate`，代码放进异步函数调用                                     |
+| `snapshot` 带 `ref`、`interactive`             | `snapshot` 带 `interactive`、`maxDepth`。引用使用新的格式。          |
+| `read_page` 带 `cursor`                        | `read_page` 传回前 192000 个字符，不接受 cursor。                    |
+| `wait` 带 `text_gone`                          | `wait` 带 `text` 与 `"state": "hidden"`                              |
+| `wait` 带 `timeout_ms`                         | 请求本文中的 `timeoutMs`                                             |
+| `dialog` 带 `"action": "accept"`               | `dialog` 带 `"accept": true`；`text` 改为 `promptText`               |
+| `dialog` 带 `"action": "dismiss"`              | `dialog` 带 `"accept": false`                                        |
+| `dialog` 带 `"action": "status"`               | `dialog_status`                                                      |
+| `select_option` 带 `values`                    | `select_option` 带一个 `value`，依值或可见文字比对                   |
+| 不带 `values` 的 `select_option`，用来列出选项 | 读取元素 `options` 的 `evaluate`                                     |
+| `scroll` 带 `text`                             | `scroll` 带 `"selector": "text=..."`                                 |
+| `scroll` 带 `to`                               | `scroll` 带 `direction` 与 `amount`                                  |
+| `send_keys` 带 `repeat`                        | 每按一次键送一次 `send_keys`，或在 `batch` 中放多个步骤              |
+| `set_checked`                                  | `check` 或 `uncheck`                                                 |
+| `go_back`、`go_forward`、`reload`              | `history`，`cmd` 设为 `back`、`forward` 或 `reload`                  |
+| `highlight_region`、`clear_highlight`          | 没有对应动作。[活动层](./activity.mdx)会标示每个输入动作的目标元素。 |
+
+## 从 MCP 浏览器服务器迁移 [#from-mcp-browser-servers]
+
+oh-my-webbridge 没有 MCP 服务器。Agent 依技能说明，在 shell 中运行 `omw call`。一次工具调用对应一个命令：
+
+```sh
+omw call checkout click '{"selector":"role=button[name=\"Pay\"]"}'
+```
+
+Chrome DevTools MCP 的页面工具还需要 `pageId`，默认为必填。下表省略这个参数。
+
+| 任务            | Playwright MCP                                 | Browser MCP                         | Chrome DevTools MCP                | oh-my-webbridge                                                  |
+| --------------- | ---------------------------------------------- | ----------------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| 打开网址        | `browser_navigate {url}`                       | `goto <url>`                        | `navigate_page {type: "url", url}` | `navigate {"url"}`                                               |
+| 开新标签页      | `browser_tabs {action: "new", url}`            | `tab new <url>`                     | `new_page {url}`                   | `navigate {"url", "newTab": true}`                               |
+| 读取页面        | `browser_snapshot`                             | `snapshot -i`                       | `take_snapshot`                    | `snapshot`、`read_page`                                          |
+| 点击            | `browser_click {target}`                       | `click e12`                         | `click {uid}`                      | `click {"selector"}`                                             |
+| 连按两下        | `browser_click {target, doubleClick: true}`    | `click e12 --double`                | `click {uid, dblClick: true}`      | `dblclick {"selector"}`                                          |
+| 填写字段        | `browser_type {target, text}`                  | `fill e5 "text"`                    | `fill {uid, value}`                | `fill {"selector", "value"}`                                     |
+| 按键            | `browser_press_key {key}`                      | `press Enter`                       | `press_key {key}`                  | `send_keys {"keys"}`                                             |
+| 选取选项        | `browser_select_option {target, values}`       | `select e7 "value"`                 | `fill {uid, value}`                | `select_option {"selector", "value"}`                            |
+| 上传文件        | `browser_file_upload {paths}`                  | `upload <target> <path>`            | `upload_file`                      | `upload {"selector", "files"}`                                   |
+| 等待文字        | `browser_wait_for {text}`                      | `wait --text "<text>"`              | `wait_for`                         | `wait {"text"}`                                                  |
+| 响应对话框      | `browser_handle_dialog {accept, promptText}`   | `dialog`                            | `handle_dialog`                    | `dialog {"accept", "promptText"}`                                |
+| 屏幕截图        | `browser_take_screenshot {fullPage, filename}` | `screenshot --full --path <file>`   | `take_screenshot {filePath}`       | `screenshot {"fullPage", "path"}`                                |
+| 运行 JavaScript | `browser_evaluate {function}`                  | `eval "<function>"`                 | `evaluate_script {function}`       | `evaluate {"code"}`，参数为表达式                                |
+| 控制台消息      | `browser_console_messages`                     | `console`                           | `list_console_messages`            | `console {"cmd": "start"}`，再送 `{"cmd": "list"}`               |
+| 网络请求        | `browser_network_requests`                     | `requests`                          | `list_network_requests`            | `network {"cmd": "start"}`，再送 `{"cmd": "list"}`               |
+| 列出标签页      | `browser_tabs {action: "list"}`                | `tab list`                          | `list_pages`                       | `list_tabs`                                                      |
+| 使用你的标签页  | 在连接页面上选取                               | `tab select <id>`                   | `select_page {pageId}`             | `find_tab {"url": "example.com", "active": true}` 借用当前标签页 |
+| 关闭标签页      | `browser_tabs {action: "close", index}`        | `tab close <id>`                    | `close_page {pageId}`              | `close_tab {"tabId"}`                                            |
+| 结束任务        | `browser_close`                                | AI 应用程序关闭或闲置 10 分钟后释放 | CLI 中的 `chrome-devtools stop`    | `close_session`                                                  |
+
+- Browser MCP 的一次调用可以包含多行命令。`batch` 在一个请求中依序运行最多 64 个步骤，遇到第一个错误即停止：`omw call checkout batch '{"steps":[{"action":"fill","args":{"selector":"label=Email","value":"a@example.com"}},{"action":"send_keys","args":{"keys":"Enter"}}]}'`。`screenshot`、`save_as_pdf` 与 `close_session` 要分开发送。
+- 带 `submit: true` 的 `browser_type` 对应为 `fill`，接着发送 `keys` 为 `Enter` 的 `send_keys`。
+- `console` 在 Chrome 中使用，传回 `start` 之后记录的消息。请在会记录消息的步骤之前发送 `start`。
+- Chrome DevTools MCP 的性能追踪、Lighthouse 与堆积快照，以及 Playwright MCP 的响应模拟、追踪与代码产生，没有内置动作。这类任务请保留原本的服务器。[页面连接](./reference/cdp.mdx#page-connections)接受 `chrome.debugger` 允许的协议域名，例如以 `Fetch` 拦截请求。
+
+## 从 agent-browser 与 PinchTab 迁移 [#from-agent-browser-and-pinchtab]
+
+oh-my-webbridge 不启动浏览器，因此没有对应 `--headed`、`--profile`、`--state`、个人资料管理或运行个体的功能。命令在你使用的浏览器的背景标签页中运行，沿用其中的登录状态。`omw call` 的第一个参数是会话名称。PinchTab 的 Agent 会话设置身分与权限；最接近 oh-my-webbridge 会话的是 PinchTab 的运行个体或标签页。
+
+| 任务       | agent-browser            | PinchTab                    | `omw call SESSION ...`                                       |
+| ---------- | ------------------------ | --------------------------- | ------------------------------------------------------------ |
+| 选择任务   | `--session agent1`       | 运行个体，或 `--tab <id>`   | `omw call agent1 ...`                                        |
+| 打开网址   | `open <url>`             | `nav <url>`                 | `navigate '{"url":"<url>"}'`                                 |
+| 快照       | `snapshot -i`            | `snap -i -c`                | `snapshot '{"interactive":true}'`                            |
+| 点击       | `click @e1`              | `click e5`                  | `click '{"selector":"<引用>"}'`                              |
+| 填写       | `fill @e4 "text"`        | `fill "#search" "q"`        | `fill '{"selector":"#search","value":"q"}'`                  |
+| 输入文字   | `type <selector> <text>` | `type <selector> <text>`    | `key_type '{"selector":"...","text":"..."}'`                 |
+| 按键       | `press Enter`            | `press Enter`               | `send_keys '{"keys":"Enter"}'`                               |
+| 页面文字   | `get text <selector>`    | `text`                      | `read_page`，或 `get '{"selector":"...","property":"text"}'` |
+| 屏幕截图   | `screenshot <path>`      | `screenshot -o <path>`      | `screenshot '{"path":"/absolute/shot.png"}'`                 |
+| PDF        | `pdf <path>`             | `pdf -o <path>`             | `save_as_pdf '{"path":"/absolute/page.pdf"}'`                |
+| JavaScript | `eval "document.title"`  | `eval "document.title"`     | `evaluate '{"code":"document.title"}'`                       |
+| 列出标签页 | `tab list`               | `tab`                       | `list_tabs`                                                  |
+| 切换标签页 | `tab t2`                 | `tab <tab-id>`              | `switch_tab '{"tabId":412}'`                                 |
+| 关闭标签页 | `tab close`              | `tab close <tab-id>`        | `close_tab`                                                  |
+| 多个步骤   | `batch`                  | `POST /actions`             | `batch '{"steps":[...]}'`                                    |
+| 结束任务   | `close`                  | `POST /instances/{id}/stop` | `close_session`                                              |
+
+## 从 Playwright 或 Puppeteer 脚本迁移 [#from-playwright-or-puppeteer-scripts]
+
+在扩展程序模式下，daemon 在 `/json/list` 列出页面目标，并在 `/devtools/page/{tabId}` 提供单一标签页。它的 `/json/version` 没有 `webSocketDebuggerUrl`。Playwright 的 `chromium.connectOverCDP` 与 Puppeteer 带 `browserURL` 的 `puppeteer.connect` 会读取这个字段来找到浏览器端点（[Playwright 源代码](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromium.ts)、[Puppeteer 源代码](https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/common/BrowserConnector.ts)）。这类脚本有两种搬移方式。
+
+### 让脚本使用原生模式 [#keep-the-script-on-native-mode]
+
+原生模式通过 daemon 转送浏览器端点。以 `--remote-debugging-port=9222` 与另一个 `--user-data-dir` 启动 Chrome，再以 `http://127.0.0.1:9222/json/version` 中的浏览器 URL 启动 daemon：
+
+```sh
+omw serve --cdp ws://127.0.0.1:9222/devtools/browser/8b0d3f7c-...
+```
+
+Playwright 在 `headers` 中带上 token 连接，写法请见 [CDP](./reference/cdp.mdx#native-mode)。Puppeteer 则传入 `browserURL: "http://127.0.0.1:17373"`，并在 `wsOptions.headers` 中带上同一个标头。这样脚本操作的是那个另外启动的 Chrome，而不是你平常使用的个人资料。
+
+### 把脚本改用 SDK [#move-the-script-to-the-sdk]
+
+SDK 通过扩展程序操作你使用的浏览器中的标签页。
+
+| Playwright                                                             | oh-my-webbridge SDK                                             |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `await page.goto(url)`                                                 | `await task.navigate(url)`                                      |
+| `await page.getByRole("button", { name: "Pay", exact: true }).click()` | `await task.click('role=button[name="Pay"]')`                   |
+| `await page.getByLabel("Email").fill("a@example.com")`                 | `await task.fill("label=Email", "a@example.com")`               |
+| `await page.keyboard.press("Enter")`                                   | `await task.call("send_keys", { keys: "Enter" })`               |
+| `await page.waitForSelector("#done")`                                  | `await task.call("wait", { selector: "#done" })`                |
+| `await page.evaluate(() => document.title)`                            | `await task.evaluate("document.title")`                         |
+| `await page.screenshot({ path: "shot.png" })`                          | `await task.call("screenshot", { path: "/absolute/shot.png" })` |
+| `await browser.close()`                                                | `await task.close()`                                            |
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("checkout");
+await task.navigate("https://example.com/cart");
+await task.click('role=button[name="Pay"]');
+await task.close();
+```
+
+在扩展程序模式下需要原始协议时，请用 `cdp` 动作发送命令，或以带 Bearer 标头的 WebSocket 客户端打开 `/devtools/page/{tabId}`。请见 [CDP](./reference/cdp.mdx)。

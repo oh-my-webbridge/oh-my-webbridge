@@ -1,0 +1,188 @@
+---
+title: Migrate to oh-my-webbridge
+icon: ArrowRightLeft
+description: Map the commands of the Kimi browser extension, MCP browser servers, browser CLIs and Playwright or Puppeteer scripts to oh-my-webbridge actions.
+---
+
+Every oh-my-webbridge command names a session, an action and a JSON object of arguments. The tables on this page map common commands of other tools to these actions. Before you move a task, check [Comparison with other tools](./comparison.mdx) for capabilities that oh-my-webbridge does not have.
+
+## Before you start
+
+1. Install the daemon and the extension, and pair your browser. See [Getting started](./getting-started.mdx).
+2. Install the agent skill with `omw install-skill ~/.agents/skills`. Turn off the skill or MCP server of the previous tool, so that the agent uses one tool for a task.
+3. Run `omw status`. It prints one line for each browser, for example `chrome: connected (156.0.8078.80)`.
+
+## Changes for every tool
+
+- **Sessions.** Use one session name for each task, for example `checkout`. The first command opens the session. Its tabs open in the background, in one tab group. End the task with `close_session`. All sessions use your browser profile and its cookies.
+- **References.** A reference has the form `@e<generation>.<index>` and comes from the latest `snapshot` of the tab. A reference that starts with `@e` and comes from another tool or an older snapshot fails with `stale_ref`. A reference without `@`, such as `e12`, is read as a CSS selector. Take a new snapshot after a navigation.
+- **Locators.** The `selector` argument accepts CSS and text locators. Playwright locators map to these forms. `role=` matches the name exactly, while `getByRole` matches a substring unless `exact: true` is set. Chained locators and `.filter()` have no counterpart. See [Selectors](./reference/actions.mdx#selectors).
+
+| Playwright locator                                     | oh-my-webbridge selector     |
+| ------------------------------------------------------ | ---------------------------- |
+| `getByRole("button", { name: "Submit", exact: true })` | `role=button[name="Submit"]` |
+| `getByText("Sign in")`                                 | `text=Sign in`               |
+| `getByLabel("Email")`                                  | `label=Email`                |
+| `getByPlaceholder("Search")`                           | `placeholder=Search`         |
+| `getByTestId("search")`                                | `testid=search`              |
+| `.first()`, `.last()`                                  | ` >>nth=0`, ` >>nth=-1`      |
+
+- **JavaScript.** `evaluate` takes an expression, not a function. Send `document.title`, or wrap the function in a call: `(() => document.title)()`. Code that uses `await` goes in an async function call: `(async () => (await fetch("/api")).status)()`.
+- **Files.** `screenshot` and `save_as_pdf` take an absolute `path` and return it. They do not overwrite an existing file.
+- **Deadlines.** A command fails after 30 seconds by default. The HTTP body field `timeoutMs` sets 1 to 120000 milliseconds.
+- **Firefox.** Some actions answer `unsupported` in Firefox. See [Firefox](./firefox.mdx).
+
+## From the Kimi browser extension
+
+The request format and most action names are the same. The address, the token and some arguments change.
+
+|              | Kimi browser extension            | oh-my-webbridge                                                 |
+| ------------ | --------------------------------- | --------------------------------------------------------------- |
+| Address      | `http://127.0.0.1:10086`          | `http://127.0.0.1:17373`                                        |
+| Command      | `POST /command`                   | `POST /command` with `Authorization: Bearer <token>`            |
+| Body         | `action`, `args`, `session`       | `session`, `action`, `args`; optional `browser` and `timeoutMs` |
+| Status       | `/status`                         | `GET /status` with the token, or `omw status`                   |
+| Start        | `kimi-webbridge start`            | `omw start`, or `omw service install` for a user service        |
+| Agent skill  | `kimi-webbridge install-skill -y` | `omw install-skill ~/.agents/skills`                            |
+| Command line | `curl`                            | `omw call SESSION ACTION JSON`, or `curl`                       |
+
+The same `navigate` request to each daemon:
+
+```sh
+# Kimi browser extension
+curl -s -X POST http://127.0.0.1:10086/command \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"navigate","args":{"url":"https://example.com","group_title":"Research"},"session":"research"}'
+
+# oh-my-webbridge
+TOKEN=$(omw connection | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -s -X POST http://127.0.0.1:17373/command \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"session":"research","action":"navigate","args":{"url":"https://example.com","group_title":"Research"}}'
+
+# oh-my-webbridge command line
+omw call research navigate '{"url":"https://example.com","group_title":"Research"}'
+```
+
+These actions keep their names and arguments: `navigate`, `find_tab`, `list_tabs`, `close_tab`, `close_session`, `mouse_click`, `fill`, `key_type`, `hover`, `drag`, `find`, `cdp`, `screenshot`, `save_as_pdf`, `upload` and `network`. These change:
+
+| Kimi browser extension                                | oh-my-webbridge                                                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `click`, which calls `el.click()`                     | `click`. In Chrome it sends trusted mouse input through CDP.                                      |
+| `evaluate` with `await` in `code`                     | `evaluate` with the code in an async function call                                                |
+| `snapshot` with `ref`, `interactive`                  | `snapshot` with `interactive`, `maxDepth`. References use a new format.                           |
+| `read_page` with `cursor`                             | `read_page` returns the first 192000 characters and takes no cursor.                              |
+| `wait` with `text_gone`                               | `wait` with `text` and `"state": "hidden"`                                                        |
+| `wait` with `timeout_ms`                              | `timeoutMs` in the request body                                                                   |
+| `dialog` with `"action": "accept"`                    | `dialog` with `"accept": true`; `text` becomes `promptText`                                       |
+| `dialog` with `"action": "dismiss"`                   | `dialog` with `"accept": false`                                                                   |
+| `dialog` with `"action": "status"`                    | `dialog_status`                                                                                   |
+| `select_option` with `values`                         | `select_option` with one `value`, matched by value or visible text                                |
+| `select_option` without `values`, to list the options | `evaluate` that reads the `options` of the element                                                |
+| `scroll` with `text`                                  | `scroll` with `"selector": "text=..."`                                                            |
+| `scroll` with `to`                                    | `scroll` with `direction` and `amount`                                                            |
+| `send_keys` with `repeat`                             | `send_keys` once for each key press, or several steps in `batch`                                  |
+| `set_checked`                                         | `check` or `uncheck`                                                                              |
+| `go_back`, `go_forward`, `reload`                     | `history` with `cmd` set to `back`, `forward` or `reload`                                         |
+| `highlight_region`, `clear_highlight`                 | No action. The [activity layer](./activity.mdx) marks the element that each input action targets. |
+
+## From MCP browser servers
+
+oh-my-webbridge has no MCP server. The agent runs `omw call` in a shell, as the skill describes. One tool call becomes one command:
+
+```sh
+omw call checkout click '{"selector":"role=button[name=\"Pay\"]"}'
+```
+
+In Chrome DevTools MCP, the page tools also take `pageId`, which is required by default. The table leaves it out.
+
+| Task                 | Playwright MCP                                 | Browser MCP                                                      | Chrome DevTools MCP                | oh-my-webbridge                                                          |
+| -------------------- | ---------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| Open a URL           | `browser_navigate {url}`                       | `goto <url>`                                                     | `navigate_page {type: "url", url}` | `navigate {"url"}`                                                       |
+| Open a new tab       | `browser_tabs {action: "new", url}`            | `tab new <url>`                                                  | `new_page {url}`                   | `navigate {"url", "newTab": true}`                                       |
+| Read the page        | `browser_snapshot`                             | `snapshot -i`                                                    | `take_snapshot`                    | `snapshot`, `read_page`                                                  |
+| Click                | `browser_click {target}`                       | `click e12`                                                      | `click {uid}`                      | `click {"selector"}`                                                     |
+| Double-click         | `browser_click {target, doubleClick: true}`    | `click e12 --double`                                             | `click {uid, dblClick: true}`      | `dblclick {"selector"}`                                                  |
+| Fill a field         | `browser_type {target, text}`                  | `fill e5 "text"`                                                 | `fill {uid, value}`                | `fill {"selector", "value"}`                                             |
+| Press a key          | `browser_press_key {key}`                      | `press Enter`                                                    | `press_key {key}`                  | `send_keys {"keys"}`                                                     |
+| Select an option     | `browser_select_option {target, values}`       | `select e7 "value"`                                              | `fill {uid, value}`                | `select_option {"selector", "value"}`                                    |
+| Upload files         | `browser_file_upload {paths}`                  | `upload <target> <path>`                                         | `upload_file`                      | `upload {"selector", "files"}`                                           |
+| Wait for text        | `browser_wait_for {text}`                      | `wait --text "<text>"`                                           | `wait_for`                         | `wait {"text"}`                                                          |
+| Answer a dialog      | `browser_handle_dialog {accept, promptText}`   | `dialog`                                                         | `handle_dialog`                    | `dialog {"accept", "promptText"}`                                        |
+| Screenshot           | `browser_take_screenshot {fullPage, filename}` | `screenshot --full --path <file>`                                | `take_screenshot {filePath}`       | `screenshot {"fullPage", "path"}`                                        |
+| Run JavaScript       | `browser_evaluate {function}`                  | `eval "<function>"`                                              | `evaluate_script {function}`       | `evaluate {"code"}` with an expression                                   |
+| Console messages     | `browser_console_messages`                     | `console`                                                        | `list_console_messages`            | `console {"cmd": "start"}`, then `{"cmd": "list"}`                       |
+| Network requests     | `browser_network_requests`                     | `requests`                                                       | `list_network_requests`            | `network {"cmd": "start"}`, then `{"cmd": "list"}`                       |
+| List tabs            | `browser_tabs {action: "list"}`                | `tab list`                                                       | `list_pages`                       | `list_tabs`                                                              |
+| Use one of your tabs | Pick it on the connect page                    | `tab select <id>`                                                | `select_page {pageId}`             | `find_tab {"url": "example.com", "active": true}` borrows the active tab |
+| Close a tab          | `browser_tabs {action: "close", index}`        | `tab close <id>`                                                 | `close_page {pageId}`              | `close_tab {"tabId"}`                                                    |
+| End the task         | `browser_close`                                | Released when the AI application closes or after 10 idle minutes | `chrome-devtools stop` in the CLI  | `close_session`                                                          |
+
+- A Browser MCP call can hold several command lines. `batch` runs up to 64 steps in one request and stops at the first error: `omw call checkout batch '{"steps":[{"action":"fill","args":{"selector":"label=Email","value":"a@example.com"}},{"action":"send_keys","args":{"keys":"Enter"}}]}'`. `screenshot`, `save_as_pdf` and `close_session` run as separate commands.
+- `browser_type` with `submit: true` becomes `fill` followed by `send_keys` with `Enter`.
+- `console` works in Chrome and returns the messages logged after `start`. Send `start` before the step that logs.
+- Performance traces, Lighthouse and heap snapshots in Chrome DevTools MCP, and response mocking, tracing and code generation in Playwright MCP, have no built-in action. Keep that server for those tasks. A [page connection](./reference/cdp.mdx#page-connections) accepts the protocol domains that `chrome.debugger` allows, for example `Fetch` to intercept requests.
+
+## From agent-browser and PinchTab
+
+oh-my-webbridge does not start a browser, so it has no counterpart to `--headed`, `--profile`, `--state`, profile management or instances. Commands run in background tabs of the browser you use, with its logins. The first argument of `omw call` names the session. A PinchTab agent session sets identity and permissions; the closest match to an oh-my-webbridge session is a PinchTab instance or tab.
+
+| Task          | agent-browser            | PinchTab                     | `omw call SESSION ...`                                       |
+| ------------- | ------------------------ | ---------------------------- | ------------------------------------------------------------ |
+| Choose a task | `--session agent1`       | An instance, or `--tab <id>` | `omw call agent1 ...`                                        |
+| Open a URL    | `open <url>`             | `nav <url>`                  | `navigate '{"url":"<url>"}'`                                 |
+| Snapshot      | `snapshot -i`            | `snap -i -c`                 | `snapshot '{"interactive":true}'`                            |
+| Click         | `click @e1`              | `click e5`                   | `click '{"selector":"<reference>"}'`                         |
+| Fill          | `fill @e4 "text"`        | `fill "#search" "q"`         | `fill '{"selector":"#search","value":"q"}'`                  |
+| Type          | `type <selector> <text>` | `type <selector> <text>`     | `key_type '{"selector":"...","text":"..."}'`                 |
+| Press a key   | `press Enter`            | `press Enter`                | `send_keys '{"keys":"Enter"}'`                               |
+| Page text     | `get text <selector>`    | `text`                       | `read_page`, or `get '{"selector":"...","property":"text"}'` |
+| Screenshot    | `screenshot <path>`      | `screenshot -o <path>`       | `screenshot '{"path":"/absolute/shot.png"}'`                 |
+| PDF           | `pdf <path>`             | `pdf -o <path>`              | `save_as_pdf '{"path":"/absolute/page.pdf"}'`                |
+| JavaScript    | `eval "document.title"`  | `eval "document.title"`      | `evaluate '{"code":"document.title"}'`                       |
+| List tabs     | `tab list`               | `tab`                        | `list_tabs`                                                  |
+| Switch tabs   | `tab t2`                 | `tab <tab-id>`               | `switch_tab '{"tabId":412}'`                                 |
+| Close a tab   | `tab close`              | `tab close <tab-id>`         | `close_tab`                                                  |
+| Several steps | `batch`                  | `POST /actions`              | `batch '{"steps":[...]}'`                                    |
+| End the task  | `close`                  | `POST /instances/{id}/stop`  | `close_session`                                              |
+
+## From Playwright or Puppeteer scripts
+
+In extension mode, the daemon lists page targets at `/json/list` and serves one tab at `/devtools/page/{tabId}`. Its `/json/version` has no `webSocketDebuggerUrl`. Playwright's `chromium.connectOverCDP` and Puppeteer's `puppeteer.connect` with `browserURL` read that field to find the browser endpoint ([Playwright source](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromium.ts), [Puppeteer source](https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/common/BrowserConnector.ts)). There are two ways to move such a script.
+
+### Keep the script on native mode
+
+Native mode passes a browser endpoint through the daemon. Start Chrome with `--remote-debugging-port=9222` and a separate `--user-data-dir`, then start the daemon with the browser URL from `http://127.0.0.1:9222/json/version`:
+
+```sh
+omw serve --cdp ws://127.0.0.1:9222/devtools/browser/8b0d3f7c-...
+```
+
+Connect Playwright with the token in `headers`, as shown in [CDP](./reference/cdp.mdx#native-mode). In Puppeteer, pass `browserURL: "http://127.0.0.1:17373"` and the same header in `wsOptions.headers`. The script then drives that separate Chrome, not the profile you use every day.
+
+### Move the script to the SDK
+
+The SDK drives tabs in the browser you use, through the extension.
+
+| Playwright                                                             | oh-my-webbridge SDK                                             |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `await page.goto(url)`                                                 | `await task.navigate(url)`                                      |
+| `await page.getByRole("button", { name: "Pay", exact: true }).click()` | `await task.click('role=button[name="Pay"]')`                   |
+| `await page.getByLabel("Email").fill("a@example.com")`                 | `await task.fill("label=Email", "a@example.com")`               |
+| `await page.keyboard.press("Enter")`                                   | `await task.call("send_keys", { keys: "Enter" })`               |
+| `await page.waitForSelector("#done")`                                  | `await task.call("wait", { selector: "#done" })`                |
+| `await page.evaluate(() => document.title)`                            | `await task.evaluate("document.title")`                         |
+| `await page.screenshot({ path: "shot.png" })`                          | `await task.call("screenshot", { path: "/absolute/shot.png" })` |
+| `await browser.close()`                                                | `await task.close()`                                            |
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("checkout");
+await task.navigate("https://example.com/cart");
+await task.click('role=button[name="Pay"]');
+await task.close();
+```
+
+For raw protocol access in extension mode, send commands with the `cdp` action, or open `/devtools/page/{tabId}` with a WebSocket client that sends the Bearer header. See [CDP](./reference/cdp.mdx).

@@ -1,0 +1,109 @@
+---
+title: 与其他工具比较
+icon: Scale
+description: oh-my-webbridge 与其他让 Agent 使用浏览器的工具有哪些差异，以及哪些任务更适合用其他工具。
+---
+
+{/* Generated from comparison.zh-tw.mdx by scripts/i18n.mjs. Edit the zh-TW page instead. */}
+
+本页比较 oh-my-webbridge 0.2.0 与其他让 Agent 使用浏览器的工具。内容取自各项目的文档、发布页面与源代码，读取日期为 2026 年 11 月 12 日，版本以第一张表为准。“文档未说明”表示该项目的文档没有提到。发现错误或新版本时，请开一个 [GitHub issue](https://github.com/oh-my-webbridge/oh-my-webbridge/issues)。要搬移现有设置，请见[迁移到 oh-my-webbridge](./migration.mdx)。
+
+## 工具与版本 [#tools-and-versions]
+
+| 工具                                                                         | 查核版本                                                                 | 组成                                                                                                  | 操作的浏览器                                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| oh-my-webbridge                                                              | 0.2.0                                                                    | 监听 `127.0.0.1:17373` 的 Go daemon、Chrome 与 Firefox 扩展程序、CLI、Node SDK、Agent 技能            | 你使用的 Chrome 或 Firefox 个人资料                                                         |
+| [Kimi 浏览器扩展程序](https://www.kimi.com/products/kimi-webbridge)          | daemon 2.0.34、扩展程序 2.0.33                                           | 监听 `127.0.0.1:10086` 的 daemon、Chrome 与 Edge 扩展程序、Agent 技能、供 Kimi 账号使用的侧边栏 Agent | 你使用的 Chrome 或 Edge 个人资料                                                            |
+| [Browser MCP](https://github.com/BrowserMCP/mcp)                             | [2.4.0](https://www.npmjs.com/package/@browsermcp/mcp)                   | MCP 服务器、每位用户一个 Node.js daemon、Chrome 扩展程序                                              | 你在 Chromium 系浏览器中使用的个人资料                                                      |
+| [Playwright MCP](https://github.com/microsoft/playwright-mcp)                | [0.0.85](https://github.com/microsoft/playwright-mcp/releases)           | MCP 服务器；加上 `--extension` 时，经中继连到 Playwright Extension                                    | 自己的个人资料；加上 `--extension` 时为你使用的 Chrome 或 Edge 个人资料                     |
+| [Playwriter](https://github.com/remorses/playwriter)                         | [0.10.0](https://github.com/remorses/playwriter/releases)                | 运行 Playwright 代码的 CLI、MCP 服务器与 Node 程序库、Chrome 扩展程序、`localhost:19988` 上的中继     | 你在 Chrome 中打开扩展程序的标签页                                                          |
+| [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) | [1.13.0](https://github.com/ChromeDevTools/chrome-devtools-mcp/releases) | 以 Puppeteer 建构的 MCP 服务器与 CLI                                                                  | 自己的个人资料；加上 `--autoConnect` 时为你使用的 Chrome                                    |
+| [agent-browser](https://github.com/vercel-labs/agent-browser)                | [0.42.0](https://github.com/vercel-labs/agent-browser/releases)          | Rust CLI、每个会话一个 daemon、MCP 服务器、Agent 技能                                                 | 它安装的 Chrome for Testing、现有 Chrome 个人资料的副本，或打开远程调试的 Chrome            |
+| [PinchTab](https://github.com/pinchtab/pinchtab)                             | [0.15.2](https://github.com/pinchtab/pinchtab/releases)                  | 监听 `127.0.0.1:9867` 的 Go HTTP 服务器、CLI、MCP 服务器                                              | 它启动的 Chrome 运行个体，各有自己的个人资料                                                |
+| [OpenCLI](https://github.com/jackwener/OpenCLI)                              | [2.0.3](https://github.com/jackwener/OpenCLI/releases)                   | Node.js CLI、`localhost:19825` 上的 daemon、Chrome 扩展程序、100 多个网站的转接器                     | 你使用的 Chrome 个人资料                                                                    |
+| [Claude in Chrome](https://code.claude.com/docs/en/chrome)                   | 未公开；Claude Code 需要 1.0.36 以上                                     | 以 Claude 为模型的 Chrome 扩展程序、侧边栏、与 Claude Code 及 Claude Desktop 的连接                   | 你使用的 Chrome                                                                             |
+| [browser-use](https://github.com/browser-use/browser-use)                    | [1.0.2](https://pypi.org/project/browser-use/1.0.2/)                     | Python Agent 程序库、CLI、Browser Use Cloud                                                           | 默认为 Browser Use Cloud 浏览器，也可以是它启动的本机 Chromium，或打开远程调试的本机 Chrome |
+| [Stagehand](https://github.com/browserbase/stagehand)                        | [4.4.0](https://www.npmjs.com/package/@browserbasehq/stagehand)          | 带 AI 方法的 TypeScript、Python 与 Go SDK、`browse` CLI、托管的 MCP 服务器                            | 它启动的 Chrome，或 Browserbase 云端浏览器                                                  |
+
+## 取用已登录的浏览器 [#access-to-a-signed-in-browser]
+
+工具以两种方式之一取用你使用的浏览器。扩展程序通过浏览器 API 操作标签页，不需要浏览器旗标。远程调试则把整个浏览器交给客户端。Chrome 144 以上可在运行中的浏览器里从 `chrome://inspect/#remote-debugging` 打开远程调试，并请你允许连接。`--remote-debugging-port` 参数要求使用默认以外的个人资料目录（[远程调试的变更](https://developer.chrome.com/blog/remote-debugging-port)）。
+
+| 工具                            | 机制                                                                           | 设置                                                            | Agent 能取用的范围                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| oh-my-webbridge                 | 扩展程序：Chrome 用 `chrome.debugger`，Firefox 用 WebExtension API             | 安装扩展程序，并输入一次 `omw pair` 的配对码                    | 会话打开的标签页，以及 `find_tab` 借用的当前标签页                                     |
+| Kimi 浏览器扩展程序             | 使用 `chrome.debugger` 的扩展程序                                              | 安装 daemon 与扩展程序                                          | 会话打开的标签页，以及 `find_tab` 借用的当前标签页                                     |
+| Browser MCP                     | 使用 `chrome.debugger` 的扩展程序，只附加到 Agent 使用的标签页                 | 安装扩展程序与 MCP 服务器，核对一次六位数配对码并允许           | Agent 打开的标签页、它用 `tab select` 选取的你的标签页，以及你拖进其标签页分组的标签页 |
+| Playwright MCP 加 `--extension` | 扩展程序中继                                                                   | 在连接页面核准每次连接，或设置 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` | MCP 客户端标签页分组内的标签页                                                         |
+| Playwriter                      | 扩展程序中继                                                                   | 在每个要控制的标签页上点一下扩展程序图标                        | 每个打开扩展程序的标签页，所有会话都可取用                                             |
+| OpenCLI                         | 具 `debugger` 权限的扩展程序                                                   | 安装扩展程序                                                    | 它自己标签页分组内的标签页，以及会话绑定的标签页                                       |
+| Claude in Chrome                | 具 `debugger` 权限的扩展程序                                                   | 安装扩展程序，并以付费 Claude 方案登录                          | 对话标签页分组内的标签页，以及你加入分组的标签页                                       |
+| Chrome DevTools MCP             | 远程调试：`--autoConnect`（Chrome 144 以上）、`--browserUrl` 或 `--wsEndpoint` | 打开远程调试并允许连接                                          | 该个人资料的所有窗口                                                                   |
+| agent-browser                   | 远程调试：`--auto-connect` 或 `--cdp`                                          | 打开远程调试并允许连接                                          | 整个浏览器；`--pin-tab` 把会话绑定到一个标签页                                         |
+| PinchTab                        | 通过 `POST /instances/attach` 使用远程调试，默认关闭                           | 在设置中打开 attach，并以远程调试启动 Chrome                    | 整个浏览器                                                                             |
+| browser-use                     | 远程调试                                                                       | 在 `chrome://inspect/#remote-debugging` 打开远程调试            | 整个浏览器                                                                             |
+
+## 任务、可见性与本机访问 [#tasks-visibility-and-local-access]
+
+| 工具                | 任务单位                                                 | 可见的标示                                                     | 本机访问控制                                                                                           |
+| ------------------- | -------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| oh-my-webbridge     | 具名会话，有自己的标签页与标签页分组，共用同一个个人资料 | 页面上的会话标签、Agent 指针与焦点框；工具栏图标上的琥珀色指针 | `omw connection` 输出的 Bearer token，扩展程序以配对取得。带网页 `Origin` 或其他 `Host` 的请求会被拒绝 |
+| Kimi 浏览器扩展程序 | 具名会话，有自己的标签页分组，共用同一个个人资料         | 文档未说明                                                     | 其 Agent 指南中的请求不带凭证                                                                          |
+| Browser MCP         | 每个 AI 应用程序一个标签页分组                           | Chrome 的调试信息列；工具栏图标上的标签页数                    | `~/.browsermcp/daemon.json` 中的 token；与扩展程序签章配对                                             |
+| Playwright MCP      | 每个 MCP 客户端一个标签页分组                            | 以客户端命名的标签页分组；状态页列出已连接的客户端             | 连接页面的核准，或扩展程序 token                                                                       |
+| Playwriter          | 编号会话，各自保有变量；所有会话共用标签页               | Chrome 的自动化信息列；绿色扩展程序图标                        | 检查扩展程序的来源；token 只用于远程访问                                                               |
+| OpenCLI             | 持有标签页租约的 `--session` 名称                        | 文档未说明                                                     | 文档写明不使用 token                                                                                   |
+| Claude in Chrome    | 每个 Claude Code 会话一个标签页分组                      | 在可见的窗口中操作，遇到登录与 CAPTCHA 时暂停                  | 扩展程序与 Claude Code 都要登录 claude.ai                                                              |
+| Chrome DevTools MCP | 每个对话一个服务器；`isolatedContext` 分开 cookie        | 文档未说明                                                     | Chrome 的远程调试核准                                                                                  |
+| agent-browser       | 会话有自己的 daemon、浏览器与 cookie                     | 文档未说明                                                     | 每个会话一个 socket；其设置文件必须只有拥有者可读                                                      |
+| PinchTab            | 运行个体：一个 Chrome 进程搭配一个个人资料               | 文档未说明                                                     | Bearer token                                                                                           |
+
+## 最接近的工具的功能 [#capabilities-of-the-closest-tools]
+
+“是”与“否”以各项目文档列出的命令或工具为准。只能通过任意代码达成的功能算作“否”。
+
+| 功能                  | oh-my-webbridge               | Kimi       | Browser MCP                     | Playwright MCP                              | Chrome DevTools MCP                      | agent-browser                 |
+| --------------------- | ----------------------------- | ---------- | ------------------------------- | ------------------------------------------- | ---------------------------------------- | ----------------------------- |
+| 快照引用              | `@e<generation>.<index>`      | `@e123`    | `e12`；框架内为 `f1e3`          | 文档未说明                                  | `uid`                                    | `@e1`                         |
+| 屏幕截图              | 是                            | 是         | 是                              | 是                                          | 是                                       | 是                            |
+| PDF                   | Chrome                        | 是         | 否                              | 加 `--caps pdf`                             | 否                                       | 是                            |
+| 网络请求              | 是                            | 是         | 是                              | 是                                          | 是                                       | 是                            |
+| 模拟网络响应          | 否                            | 否         | 否                              | 加 `--caps network`                         | 加 `--categoryNetworkMocks`              | 是                            |
+| 控制台消息            | Chrome                        | 否         | 是                              | 是                                          | 是                                       | 是                            |
+| Cookie 与网页保存空间 | 是                            | 否         | 否                              | 加 `--caps storage`                         | 否                                       | 是                            |
+| 下载                  | 是                            | 否         | 否                              | 否                                          | 否                                       | 是                            |
+| 模拟                  | Chrome                        | 否         | 否                              | 媒体与窗口大小；加 `--caps network` 可脱机  | 是                                       | 是                            |
+| 原始 CDP              | Chrome：`cdp`、页面 WebSocket | `cdp`      | 加 `--caps cdp`                 | 否                                          | 否                                       | 输出 CDP URL                  |
+| 追踪与性能分析        | 否                            | 否         | 否                              | 加 `--caps devtools`：Playwright 追踪、视频 | 性能追踪、Lighthouse、堆积快照           | `trace`、`profiler`、`record` |
+| 广告与追踪器拦截      | 内置预设                      | 文档未说明 | 文档未说明                      | 文档未说明                                  | 文档未说明                               | 文档未说明                    |
+| Firefox               | 是                            | 否         | 否                              | 不加 `--extension` 时                       | 否                                       | 文档未说明                    |
+| Windows               | 否                            | 是         | 文档未说明                      | 是                                          | 是                                       | 是                            |
+| MCP 服务器            | 否                            | 文档未说明 | 是                              | 是                                          | 是                                       | 是                            |
+| 默认发送的使用数据    | 无                            | 文档未说明 | Chrome 在线应用程序商店版有分析 | 文档未说明                                  | 使用统计；`--no-usage-statistics` 可关闭 | 文档未说明                    |
+
+## 更适合用其他工具的情况 [#when-another-tool-fits-better]
+
+- **Agent 只通过 MCP 调用工具。** Playwright MCP、Browser MCP、Chrome DevTools MCP、agent-browser、PinchTab 与 Playwriter 可作为 MCP 服务器运行。oh-my-webbridge 没有 MCP 服务器；Agent 依技能说明运行 `omw call`。
+- **Windows。** Kimi 浏览器扩展程序、Playwright MCP、Chrome DevTools MCP、agent-browser、Claude in Chrome 与 OpenCLI 桌面应用程序支持 Windows。Playwriter 支持 WSL，PinchTab 发布有限支持的 Windows 可执行文件。oh-my-webbridge 在 macOS 与 Linux 上运行。
+- **Microsoft Edge。** Kimi 浏览器扩展程序、Browser MCP 与加上 `--extension` 的 Playwright MCP 可在 Edge 中使用。oh-my-webbridge 支持 Chrome 与 Firefox。
+- **从扩展程序商店安装。** Kimi、Browser MCP、Playwright MCP、OpenCLI 与 Claude in Chrome 的扩展程序从 Chrome 在线应用程序商店安装并自动更新。oh-my-webbridge 的扩展程序在 Chrome 中以未封装文件夹加载，在 Firefox 中要经过签署才会在重新启动后保留。
+- **同时连接多个浏览器个人资料。** 一个 Browser MCP daemon 最多连接 8 个浏览器或 Chrome 个人资料。oh-my-webbridge 的 daemon 接受一个 Chrome 连接与一个 Firefox 连接。
+- **每个任务使用独立的 cookie。** agent-browser 的会话、PinchTab 的个人资料、Playwright MCP 的 `--isolated` 与 `isolatedContext`，以及 Chrome DevTools MCP 的 `isolatedContext` 会分开 cookie。oh-my-webbridge 的所有会话共用浏览器个人资料。
+- **没有桌面浏览器**，例如在 CI 中。agent-browser、Playwright MCP、Chrome DevTools MCP 与 PinchTab 会启动自己的浏览器，需要时以无头模式运行。oh-my-webbridge 需要一个已安装扩展程序且正在运行的 Chrome 或 Firefox。
+- **性能、内存与网络调试。** Chrome DevTools MCP 记录性能追踪、运行 Lighthouse 并读取堆积快照。Playwright MCP、Chrome DevTools MCP 与 agent-browser 可以模拟网络响应。
+- **在已登录的标签页上使用完整的 Playwright API。** Playwriter 在你打开其扩展程序的标签页上运行 Playwright 代码。
+- **常用网站的现成命令。** OpenCLI 附带转接器，可从 100 多个网站取回结构化数据。
+- **工具内含模型。** Claude in Chrome 与 Kimi 侧边栏以自己的模型运行任务。browser-use 以你设置的模型运行任务，Stagehand 则在脚本中加入 AI 步骤（`act`、`observe`、`extract`）。oh-my-webbridge 运行你所使用的 Agent 送来的命令，本身不含模型。
+
+## 来源 [#sources]
+
+- Kimi 浏览器扩展程序：[产品页面](https://www.kimi.com/products/kimi-webbridge)、[安装脚本](https://cdn.kimi.com/webbridge/install.sh)、[版本清单](https://cdn.kimi.com/webbridge/latest/version.json)、`kimi-webbridge install-skill` 写入的 Agent 指南，以及 Chrome 在线应用程序商店中扩展程序 2.0.33 的 manifest。
+- Browser MCP：[服务器 README](https://github.com/BrowserMCP/mcp/blob/main/packages/mcp/README.md)、[工具定义](https://github.com/BrowserMCP/mcp/blob/main/packages/mcp/src/tools/browser.ts)、[命令](https://github.com/BrowserMCP/mcp/blob/main/packages/mcp/src/commands/commands.ts)、[贡献指南](https://github.com/BrowserMCP/mcp/blob/main/CONTRIBUTING.md)、[使用方式](https://browsermcp.io/docs/usage)、[运行方式](https://browsermcp.io/docs/how-it-works)。
+- Playwright MCP：[README](https://github.com/microsoft/playwright-mcp/blob/main/README.md)、[扩展程序 README](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)。
+- Playwriter：[README](https://github.com/remorses/playwriter/blob/main/README.md)、[会话](https://playwriter.dev/docs/sessions)。
+- Chrome DevTools MCP：[README](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/README.md)、[设置](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/configuration.md)、[高级用法](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md)、[工具参考](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/tool-reference.md)。
+- agent-browser：[README](https://github.com/vercel-labs/agent-browser/blob/main/README.md)、[命令](https://github.com/vercel-labs/agent-browser/blob/main/docs/content/docs/commands.mdx)、[CDP 模式](https://github.com/vercel-labs/agent-browser/blob/main/docs/content/docs/cdp-mode.mdx)、[会话](https://github.com/vercel-labs/agent-browser/blob/main/docs/content/docs/sessions.mdx)。
+- PinchTab：[README](https://github.com/pinchtab/pinchtab/blob/main/README.md)、[附加 Chrome](https://github.com/pinchtab/pinchtab/blob/main/docs/guides/attach-chrome.md)、[安全性](https://github.com/pinchtab/pinchtab/blob/main/docs/guides/security.md)。
+- OpenCLI：[README](https://github.com/jackwener/OpenCLI/blob/main/README.md)、[Browser Bridge](https://github.com/jackwener/OpenCLI/blob/main/docs/guide/browser-bridge.md)。
+- Claude in Chrome：[Claude Code 文档](https://code.claude.com/docs/en/chrome)、[入门](https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome)。
+- browser-use：[README](https://github.com/browser-use/browser-use/blob/main/README.md)。Stagehand：[README](https://github.com/browserbase/stagehand/blob/main/README.md)。
