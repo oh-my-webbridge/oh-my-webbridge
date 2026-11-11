@@ -67,7 +67,9 @@ export function firefoxApi(options = {}) {
     cookieRemovals: [],
     page: options.page ?? (async (op) => ({ ok: true, value: { op } })),
   };
-  for (const tab of options.tabs ?? []) state.tabs.set(tab.id, { status: "complete", ...tab });
+  // Firefox reports the cookie store of every tab; a container tab has its own.
+  for (const tab of options.tabs ?? [])
+    state.tabs.set(tab.id, { status: "complete", cookieStoreId: "firefox-default", ...tab });
   const api = Promise.withResolvers();
   const unattached = [];
   let loading = false;
@@ -229,7 +231,13 @@ export function firefoxApi(options = {}) {
       },
       query: async () => [...state.tabs.values()].map((tab) => ({ ...tab })),
       create: async ({ url }) => {
-        const tab = { id: state.nextTab++, url, status: "complete", active: false };
+        const tab = {
+          id: state.nextTab++,
+          url,
+          status: "complete",
+          active: false,
+          cookieStoreId: "firefox-default",
+        };
         createTab(tab);
         return { ...tab };
       },
@@ -263,7 +271,12 @@ export function firefoxApi(options = {}) {
     tabGroups: { update: async () => {}, onRemoved: event() },
     windows: {
       create: async () => {
-        const tab = { id: state.nextTab++, url: "about:blank", status: "complete" };
+        const tab = {
+          id: state.nextTab++,
+          url: "about:blank",
+          status: "complete",
+          cookieStoreId: "firefox-default",
+        };
         createTab(tab);
         return { id: 3, focused: true, tabs: [{ ...tab }] };
       },

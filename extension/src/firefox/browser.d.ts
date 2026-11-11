@@ -5,6 +5,9 @@ declare namespace chrome.tabs {
   interface Tab {
     // True while the tab shows a modal dialog (Firefox 63).
     attention?: boolean;
+    // Cookie store of the tab: "firefox-default", "firefox-private" or the
+    // store of the tab's container.
+    cookieStoreId?: string;
   }
   type CaptureTabOptions = {
     format?: "png" | "jpeg";
@@ -38,6 +41,14 @@ declare namespace chrome.webRequest {
   function filterResponseData(requestId: string): StreamFilter;
   // TLS details of an active request; undefined for an unknown requestId.
   function getSecurityInfo(requestId: string): Promise<object | undefined>;
+}
+
+declare namespace chrome.downloads {
+  interface DownloadOptions {
+    // Cookie store whose cookies the download sends; the default store when
+    // omitted. Requires the cookies permission.
+    cookieStoreId?: string;
+  }
 }
 
 declare namespace chrome.runtime {

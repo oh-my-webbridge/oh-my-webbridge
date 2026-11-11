@@ -82,7 +82,8 @@ daemon 同一時間各保持一個 Chrome 連線與一個 Firefox 連線。同�
 | `dialog`、`console`                                      | `unsupported`                                                                                     |
 | `dialog_status`                                          | 只回傳 URL，不含對話框類型或訊息                                                                  |
 | `emulate`                                                | 只有 `data`（額外的請求標頭）可用                                                                 |
-| `cookies`                                                | 涵蓋所有 cookie 分區；`set` 寫入未分區的 cookie                                                   |
+| `cookies`                                                | 使用分頁的 cookie 存放區，可能是容器；涵蓋所有 cookie 分區；`set` 寫入未分區的 cookie             |
+| `download`                                               | 以分頁的 cookie 存放區傳送 cookie，該存放區可能是容器                                             |
 | `upload`                                                 | 由 daemon 讀取檔案：每個指令 16 MiB，傳輸中共 64 MiB                                              |
 | `screenshot`                                             | 擷取分頁但不啓用它；`selector` 與 `fullPage` 需要主框架                                           |
 | `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 會開啓儲存對話框，且不回傳 PDF 位元組                             |

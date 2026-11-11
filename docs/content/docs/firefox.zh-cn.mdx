@@ -82,7 +82,8 @@ daemon 同一时间各保持一个 Chrome 连接与一个 Firefox 连接。同�
 | `dialog`、`console`                                      | `unsupported`                                                                                       |
 | `dialog_status`                                          | 只返回 URL，不含对话框类型或消息                                                                    |
 | `emulate`                                                | 只有 `data`（额外的请求标头）可用                                                                   |
-| `cookies`                                                | 涵盖所有 cookie 分区；`set` 写入未分区的 cookie                                                     |
+| `cookies`                                                | 使用标签页的 cookie 存放区，可能是容器；涵盖所有 cookie 分区；`set` 写入未分区的 cookie             |
+| `download`                                               | 以标签页的 cookie 存放区发送 cookie，该存放区可能是容器                                             |
 | `upload`                                                 | 由 daemon 读取文件：每个命令 16 MiB，传输中共 64 MiB                                                |
 | `screenshot`                                             | 提取标签页但不激活它；`selector` 与 `fullPage` 需要主框架                                           |
 | `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 会打开保存对话框，且不返回 PDF 字节                                 |

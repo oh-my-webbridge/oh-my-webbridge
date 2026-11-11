@@ -166,7 +166,9 @@ test("cookies use the selected document and stop once another site replaces it",
   f.state.documents.set("doc-frame", { frameId });
   await f.run("frame", { selector: "iframe#pay" });
   await f.run("cookies", {});
-  assert.deepEqual(f.state.cookieQueries, [{ url: urls["doc-frame"], partitionKey: {} }]);
+  assert.deepEqual(f.state.cookieQueries, [
+    { url: urls["doc-frame"], storeId: "firefox-default", partitionKey: {} },
+  ]);
   // The iframe navigates to another site: its frameId stays, its document changes.
   f.state.documents.delete("doc-frame");
   f.state.documents.set("doc-moved", { frameId });
@@ -176,7 +178,11 @@ test("cookies use the selected document and stop once another site replaces it",
   assert.equal(f.state.cookieQueries.length, 1);
   // The selection has ended; the next command uses the tab's URL.
   await f.run("cookies", {});
-  assert.deepEqual(f.state.cookieQueries.at(-1), { url: urls["doc-main"], partitionKey: {} });
+  assert.deepEqual(f.state.cookieQueries.at(-1), {
+    url: urls["doc-main"],
+    storeId: "firefox-default",
+    partitionKey: {},
+  });
 });
 
 test("evaluate runs code in the main world only with the userScripts permission", async (t) => {
@@ -605,7 +611,9 @@ test("a download that disappears keeps download_missing when the cancel fails", 
   const warnings = t.mock.method(console, "warn", () => {});
   const f = await fixture(t, { ...owned, downloadItems: () => [], cancel: refuseCancel });
   await assert.rejects(f.run("download", { url: "/file.txt" }), { code: "download_missing" });
-  assert.deepEqual(f.state.downloads, [{ url: "https://example.test/file.txt", saveAs: false }]);
+  assert.deepEqual(f.state.downloads, [
+    { url: "https://example.test/file.txt", saveAs: false, cookieStoreId: "firefox-default" },
+  ]);
   assert.deepEqual(f.state.cancelled, [41]);
   assert.deepEqual(warnings.mock.calls[0].arguments, [
     "cancel download 41",
@@ -698,10 +706,18 @@ test("cookies cover every partition of the page URL and map Chrome's cookie fiel
       },
     ],
   });
-  assert.deepEqual(f.state.cookieQueries, [{ url: "https://example.test/", partitionKey: {} }]);
+  assert.deepEqual(f.state.cookieQueries, [
+    { url: "https://example.test/", storeId: "firefox-default", partitionKey: {} },
+  ]);
   await f.run("cookies", { cmd: "set", data: { name: "a", value: "b", sameSite: "Lax" } });
   assert.deepEqual(f.state.cookieWrites, [
-    { url: "https://example.test/", name: "a", value: "b", sameSite: "lax" },
+    {
+      url: "https://example.test/",
+      storeId: "firefox-default",
+      name: "a",
+      value: "b",
+      sameSite: "lax",
+    },
   ]);
   await assert.rejects(f.run("cookies", { cmd: "set", data: { name: "a", sameSite: "Loose" } }), {
     code: "invalid_args",
@@ -713,6 +729,29 @@ test("cookies cover every partition of the page URL and map Chrome's cookie fiel
       name: "sid",
       storeId: "firefox-default",
       partitionKey: { topLevelSite: "https://news.test" },
+    },
+  ]);
+});
+
+test("cookies and downloads use the cookie store of the tab's container", async (t) => {
+  const f = await fixture(t, {
+    sessions: { task: { tabs: [], borrowed: [5], current: 5, title: "task" } },
+    tabs: [{ id: 5, url: "https://example.test/", cookieStoreId: "firefox-container-2" }],
+  });
+  await f.run("cookies", {});
+  await f.run("cookies", { cmd: "set", data: { name: "a", value: "b" } });
+  await f.run("download", { url: "/file.txt" });
+  assert.deepEqual(f.state.cookieQueries, [
+    { url: "https://example.test/", storeId: "firefox-container-2", partitionKey: {} },
+  ]);
+  assert.deepEqual(f.state.cookieWrites, [
+    { url: "https://example.test/", storeId: "firefox-container-2", name: "a", value: "b" },
+  ]);
+  assert.deepEqual(f.state.downloads, [
+    {
+      url: "https://example.test/file.txt",
+      saveAs: false,
+      cookieStoreId: "firefox-container-2",
     },
   ]);
 });

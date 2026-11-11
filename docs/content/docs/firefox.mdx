@@ -80,7 +80,8 @@ Actions behave as in Chrome unless the table lists a difference. An action or pa
 | `dialog`, `console`                                      | `unsupported`                                                                                                                       |
 | `dialog_status`                                          | Returns the URL only, without the dialog type or message                                                                            |
 | `emulate`                                                | Only `data` (extra request headers) works                                                                                           |
-| `cookies`                                                | Covers all cookie partitions; `set` writes an unpartitioned cookie                                                                  |
+| `cookies`                                                | Uses the tab's cookie store, which can be a container; covers all cookie partitions; `set` writes an unpartitioned cookie           |
+| `download`                                               | Sends the cookies of the tab's cookie store, which can be a container                                                               |
 | `upload`                                                 | The daemon reads the files: 16 MiB per command, 64 MiB in flight                                                                    |
 | `screenshot`                                             | Captures the tab without activating it; `selector` and `fullPage` need the main frame                                               |
 | `save_as_pdf`                                            | `unsupported`; `tabs.saveAsPDF` opens a save dialog and returns no PDF bytes                                                        |
