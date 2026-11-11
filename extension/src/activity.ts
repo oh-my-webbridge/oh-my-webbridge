@@ -36,6 +36,10 @@ const lease = 75_000;
 // actions read as one activity.
 const settleMs = 600;
 const tabs = new Map<number, Tab>();
+// Screenshots and PDFs in progress for each tab. Every paint keeps the layer
+// hidden on the tab until its last capture ends, so a settle timer, the alarm
+// or a finished navigation during the capture cannot show it again.
+const capturing = new Map<number, number>();
 let painter: Painter | undefined;
 let enabled = true;
 
@@ -73,7 +77,9 @@ async function paint(tabId: number, value: Drawn): Promise<void> {
   if (!painter) return;
   try {
     favicon ??= loadFavicon();
-    await painter(tabId, { ...value, favicon: await favicon });
+    const icon = await favicon;
+    const hidden = capturing.has(tabId) ? { hidden: true } : {};
+    await painter(tabId, { ...value, ...hidden, favicon: icon });
   } catch (error) {
     // The layer is decoration, so a closed, restricted or detached tab loses
     // nothing but the layer.
@@ -185,13 +191,16 @@ export function actionFinished(tabId: number): void {
 
 // Runs a capture with the layer hidden, so screenshots and PDFs show the page only.
 export async function withoutLayer<T>(tabId: number, capture: () => Promise<T>): Promise<T> {
-  const tab = tabs.get(tabId);
-  if (!tab?.painted) return capture();
-  await paint(tabId, state(tab, { hidden: true }));
+  capturing.set(tabId, (capturing.get(tabId) ?? 0) + 1);
   try {
+    const tab = tabs.get(tabId);
+    if (tab?.painted) await paint(tabId, state(tab));
     return await capture();
   } finally {
-    refresh(tabId);
+    const count = capturing.get(tabId)! - 1;
+    if (count) capturing.set(tabId, count);
+    else capturing.delete(tabId);
+    if (tabs.get(tabId)?.painted) refresh(tabId);
   }
 }
 

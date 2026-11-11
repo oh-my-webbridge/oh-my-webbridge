@@ -18,7 +18,7 @@
     "format:check": "oxfmt --check",
     "i18n": "node scripts/i18n.mjs",
     "i18n:check": "node scripts/i18n.mjs --check",
-    "test": "node --test tests/sdk.test.mjs tests/benchmark.test.mjs tests/id.test.mjs tests/state.test.mjs tests/suggestions.test.mjs tests/worker.test.mjs tests/release.test.mjs tests/stores.test.mjs tests/presets.test.mjs tests/preset-lifecycle.test.mjs tests/actions.test.mjs tests/firefox-worker.test.mjs tests/firefox-actions.test.mjs tests/firefox-presets.test.mjs tests/firefox-bidi.test.mjs",
+    "test": "node --test tests/sdk.test.mjs tests/benchmark.test.mjs tests/id.test.mjs tests/state.test.mjs tests/suggestions.test.mjs tests/worker.test.mjs tests/activity.test.mjs tests/release.test.mjs tests/stores.test.mjs tests/presets.test.mjs tests/preset-lifecycle.test.mjs tests/actions.test.mjs tests/firefox-worker.test.mjs tests/firefox-actions.test.mjs tests/firefox-presets.test.mjs tests/firefox-bidi.test.mjs",
     "test:e2e": "node --test tests/e2e.test.mjs",
     "test:e2e:firefox": "node --test tests/e2e-firefox.test.mjs",
     "test:e2e:firefox-page": "node --test tests/firefox-page.test.mjs",
