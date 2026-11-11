@@ -596,6 +596,38 @@ test("upload sends the file contents the daemon read", async (t) => {
   assert.deepEqual(received, [{ op: "upload", args: { selector: "input", files: [file] } }]);
 });
 
+// Firefox rejects downloads.cancel for an erased or a completed download.
+async function refuseCancel(id) {
+  throw new Error(`Download ${id} is already complete`);
+}
+
+test("a download that disappears keeps download_missing when the cancel fails", async (t) => {
+  const warnings = t.mock.method(console, "warn", () => {});
+  const f = await fixture(t, { ...owned, downloadItems: () => [], cancel: refuseCancel });
+  await assert.rejects(f.run("download", { url: "/file.txt" }), { code: "download_missing" });
+  assert.deepEqual(f.state.downloads, [{ url: "https://example.test/file.txt", saveAs: false }]);
+  assert.deepEqual(f.state.cancelled, [41]);
+  assert.deepEqual(warnings.mock.calls[0].arguments, [
+    "cancel download 41",
+    "Download 41 is already complete",
+  ]);
+});
+
+test("a download cancelled at the deadline keeps outcome_unknown when it completed", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const f = await fixture(t, {
+    ...owned,
+    downloadItems: (id) => [{ id, state: "in_progress" }],
+    cancel: refuseCancel,
+  });
+  const abort = new AbortController();
+  const pending = f.run("download", { url: "/file.txt" }, abort.signal);
+  for (let i = 0; i < 20 && !f.state.downloads.length; i++) await setImmediate();
+  abort.abort();
+  await assert.rejects(pending, { code: "outcome_unknown" });
+  assert.deepEqual(f.state.cancelled, [41]);
+});
+
 test("network records webRequest events and returns a captured body", async (t) => {
   const f = await fixture(t);
   assert.deepEqual(await f.run("network", { cmd: "start" }), { recording: true, capacity: 500 });

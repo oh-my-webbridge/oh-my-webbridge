@@ -60,6 +60,7 @@ export function firefoxApi(options = {}) {
     removed: [],
     navigations: [],
     downloads: [],
+    cancelled: [],
     cookies: options.cookies ?? [],
     cookieQueries: [],
     cookieWrites: [],
@@ -333,21 +334,27 @@ export function firefoxApi(options = {}) {
         state.cookieRemovals.push(details);
       },
     },
+    // options.downloadItems answers search, a completed download by default;
+    // options.cancel runs for each cancel and may reject like Firefox.
     downloads: {
       download: async (details) => {
         state.downloads.push(details);
         return 41;
       },
-      search: async ({ id }) => [
-        {
-          id,
-          state: "complete",
-          filename: "/Users/test/Downloads/file.txt",
-          fileSize: 4,
-          mime: "text/plain",
-        },
-      ],
-      cancel: async () => {},
+      search: async ({ id }) =>
+        options.downloadItems?.(id) ?? [
+          {
+            id,
+            state: "complete",
+            filename: "/Users/test/Downloads/file.txt",
+            fileSize: 4,
+            mime: "text/plain",
+          },
+        ],
+      cancel: async (id) => {
+        state.cancelled.push(id);
+        await options.cancel?.(id);
+      },
     },
   };
   return { chrome, state };

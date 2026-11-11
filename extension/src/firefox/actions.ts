@@ -514,7 +514,13 @@ export async function execute(command: Command, budget: Budget): Promise<object>
           await pause(50, budget.signal);
         }
       } catch (error) {
-        await chrome.downloads.cancel(id);
+        // Firefox refuses to cancel a completed or erased download; the
+        // original failure still describes the outcome.
+        try {
+          await chrome.downloads.cancel(id);
+        } catch (cause) {
+          console.warn(`cancel download ${id}`, fault(cause as Error).message);
+        }
         throw error;
       }
     }
