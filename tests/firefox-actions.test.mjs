@@ -756,13 +756,28 @@ test("cookies and downloads use the cookie store of the tab's container", async 
   ]);
 });
 
-test("screenshot and cookies need access to all websites", async (t) => {
+// Without site access Firefox dispatches no webRequest events, so network
+// capture and extra headers would report success and do nothing.
+test("screenshot, cookies, network start and emulate data need access to all websites", async (t) => {
   const f = await fixture(t, { ...owned, permissions: [] });
-  for (const action of ["screenshot", "cookies"])
-    await assert.rejects(f.run(action, {}), {
+  const listeners = () =>
+    Object.values(f.chrome.webRequest)
+      .filter((target) => Array.isArray(target?.listeners))
+      .reduce((count, target) => count + target.listeners.length, 0);
+  const before = listeners();
+  for (const { action, args } of [
+    { action: "screenshot", args: {} },
+    { action: "cookies", args: {} },
+    { action: "network", args: { cmd: "start" } },
+    { action: "emulate", args: { data: { "X-Test": "1" } } },
+  ])
+    await assert.rejects(f.run(action, args), {
       code: "restricted_tab",
       message: new RegExp(`^${action}: .*access all websites in about:addons$`),
     });
   assert.deepEqual(f.state.captures, []);
   assert.deepEqual(f.state.cookieQueries, []);
+  assert.equal(listeners(), before);
+  assert.equal(f.state.sessions.task.settings, undefined);
+  assert.deepEqual(await f.run("network", { cmd: "list" }), { requests: [] });
 });

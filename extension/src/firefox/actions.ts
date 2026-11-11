@@ -453,6 +453,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
           "Firefox extensions can only add request headers (data)",
         );
       if (args.data) {
+        await requireSiteAccess(action);
         setExtraHeaders(tabId, args.data);
         const previous = s.settings;
         s.settings = { ...previous, data: args.data };
@@ -534,6 +535,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       }
     }
     case "network":
+      if (args.cmd === "start") await requireSiteAccess(action);
       return network(tabId, args.cmd, args.filter, args.requestId);
     case "upload":
       return record(
