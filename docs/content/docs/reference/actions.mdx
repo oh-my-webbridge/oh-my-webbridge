@@ -149,7 +149,7 @@ A screenshot whose encoded result exceeds 32 MiB fails with `result_too_large`.
 | `offline`                     | Takes the page offline or back online.                                                   |
 | `data`                        | Extra HTTP headers: at most 128 string values and 32 KiB, without CR or LF.              |
 
-Settings persist for the session and apply to new tabs before they navigate.
+Settings persist for the session and apply to new tabs before they navigate. Chrome drops them when it ends a tab's debugger session, for example after the extension's worker restarts; the next command on a task tab of the session applies them again. Borrowed tabs are excluded.
 
 ## Batch
 

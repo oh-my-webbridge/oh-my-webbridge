@@ -223,7 +223,7 @@ async function sessionFixture(
   t.after(() => Object.assign(globalThis, original));
   const m = await load(
     t,
-    'export { execute } from "./extension/src/actions.ts"; export { removed } from "./extension/src/state.ts"; export { forgetPreset, presetEvent } from "./extension/src/presets.ts"; export { addRef, node, refEvent } from "./extension/src/cdp.ts";',
+    'export { debuggerDetached, execute } from "./extension/src/actions.ts"; export { removed } from "./extension/src/state.ts"; export { forgetPreset, presetEvent } from "./extension/src/presets.ts"; export { addRef, detached, node, refEvent } from "./extension/src/cdp.ts";',
   );
   const run = (action, args) =>
     m.execute(
@@ -344,6 +344,45 @@ test("navigation after a worker restart detaches the inherited session and reapp
   const status = await f.run("preset", { cmd: "status" });
   assert.equal(status.name, "anti-ad");
   assert.equal(status.network, true);
+});
+
+test("a task tab gets the session's emulation settings again in a new debugger session", async (t) => {
+  const f = await sessionFixture(
+    t,
+    {
+      task: {
+        tabs: [1],
+        borrowed: [],
+        current: 1,
+        title: "task",
+        settings: { width: 900, height: 700, colorScheme: "dark" },
+      },
+    },
+    { hold: false, inherited: [1] },
+  );
+  const applied = ["Emulation.setDeviceMetricsOverride", "Emulation.setEmulatedMedia"];
+  const emulation = (tabId) =>
+    f.calls.filter((c) => c.tabId === tabId && applied.includes(c.method)).map((c) => c.method);
+  // The restarted worker detached the session that carried the overrides.
+  await f.run("network", { cmd: "list" });
+  assert.deepEqual(emulation(1), applied);
+  assert.deepEqual(f.calls.find((c) => c.method === "Emulation.setDeviceMetricsOverride").params, {
+    width: 900,
+    height: 700,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await f.run("network", { cmd: "list" });
+  assert.deepEqual(emulation(1), applied, "the same session keeps them");
+  // chrome.debugger.onDetach, as worker.ts handles it.
+  f.m.detached(1);
+  f.m.debuggerDetached(1);
+  await f.run("network", { cmd: "list" });
+  assert.deepEqual(emulation(1), [...applied, ...applied]);
+  // A new task tab gets them once, before it navigates.
+  const { tabId } = await f.run("navigate", { url: "https://example.test/", newTab: true });
+  await f.run("network", { cmd: "list", tabId });
+  assert.deepEqual(emulation(tabId), applied);
 });
 
 // Commands that reconfiguring a preset sends to the current document.

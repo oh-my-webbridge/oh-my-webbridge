@@ -42,6 +42,11 @@ import {
 
 type Budget = { signal: AbortSignal; check: () => void };
 const streams = new Map<string, { tabId: number; session: string; handle: string }>();
+// Task tabs whose current debugger session carries the session's emulation
+// settings. Chrome drops the overrides with the debugger session, so forgetTab
+// removes the tab, a restarted worker starts without any, and tabFor applies
+// the settings again before the tab's next command.
+const emulated = new Set<number>();
 function forgetStreams(tabId: number): void {
   for (const [key, stream] of streams) if (stream.tabId === tabId) streams.delete(key);
 }
@@ -58,6 +63,7 @@ export function forgetTab(tabId: number): void {
   clearRefs(tabId);
   forgetNetwork(tabId);
   rawEventTabs.delete(tabId);
+  emulated.delete(tabId);
 }
 // Chrome ended the tab's debugger session: the user cancelled the debugging
 // bar, DevTools took the tab, or the tab closed. The worker forgets the tab's
@@ -100,12 +106,16 @@ export async function releasePageClients(): Promise<void> {
   }
 }
 
-async function tabFor(name: string, s: Session, args: Args): Promise<number> {
+async function tabFor(name: string, s: Session, args: Args, budget: Budget): Promise<number> {
   const tabId = args.tabId ?? args.tab ?? s.current;
   if (!tabId) fail("no_tab", "navigate or find_tab before using a page action");
   assertOwner(name, tabId);
   const tab = await chrome.tabs.get(tabId);
   if (!webTab(tab)) fail("restricted_tab", "only non-incognito HTTP(S) pages are supported");
+  if (s.tabs.includes(tabId) && !emulated.has(tabId)) {
+    if (s.settings) await feature("emulate", tabId, s.settings, budget);
+    emulated.add(tabId);
+  }
   return tabId;
 }
 function validURL(value: string | undefined): string {
@@ -419,6 +429,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       await attach(tabId);
       await configurePreset(tabId, config, url);
       if (s.settings) await feature("emulate", tabId, s.settings, budget);
+      emulated.add(tabId);
       budget.check();
       const navigation = await navigateTo(tabId, url);
       try {
@@ -461,6 +472,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         await attach(tabId);
         await configurePreset(tabId, config, url);
         if (s.settings) await feature("emulate", tabId, s.settings, budget);
+        emulated.add(tabId);
         budget.check();
         const opened = await navigateTo(tabId, url);
         try {
@@ -484,7 +496,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         throw error;
       }
     } else {
-      tabId = await tabFor(name, s, args);
+      tabId = await tabFor(name, s, args, budget);
       const owned = s.tabs.includes(tabId);
       if (owned) {
         await attach(tabId);
@@ -637,7 +649,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     }
     return sendRoot(stream.tabId, "IO.read", { handle: stream.handle, size: 65536 });
   }
-  const tabId = await tabFor(name, s, args);
+  const tabId = await tabFor(name, s, args, budget);
   const extra = await feature(action, tabId, args, budget);
   if (extra !== undefined) {
     if (action === "emulate") {
