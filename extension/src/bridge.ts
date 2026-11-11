@@ -200,7 +200,9 @@ function enqueue(request: Request, connection: WebSocket, execute: Bridge["execu
     if (abort.signal.aborted || Date.now() >= request.deadline)
       fail("outcome_unknown", "request deadline reached; observe before retrying");
   };
-  queue.tail = queue.tail.then(async () => {
+  const previous = queue.tail;
+  queue.tail = (async () => {
+    await previous;
     try {
       check();
       const result = await execute(request.command, { signal: abort.signal, check });
@@ -213,7 +215,17 @@ function enqueue(request: Request, connection: WebSocket, execute: Bridge["execu
       queue.count--;
       if (!queue.count) queues.delete(queueName);
     }
-  });
+  })();
+}
+// Sends hello on a new connection. Without the session state that hello
+// reports, the connection closes and the next attempt starts over.
+async function greet(connection: WebSocket, hello: Bridge["hello"]): Promise<void> {
+  try {
+    emit(await hello(), connection);
+  } catch (error) {
+    console.error("prepare hello", fault(error as Error).message);
+    connection.close(closeInternal, "session state unavailable");
+  }
 }
 function schedule(): void {
   clearTimeout(retry);
@@ -247,12 +259,7 @@ async function connect(): Promise<void> {
     connection.onopen = (): void => {
       clearTimeout(opening);
       lastTraffic = Date.now();
-      void hello()
-        .then((packet) => emit(packet, connection))
-        .catch((error: Error) => {
-          console.error("prepare hello", fault(error).message);
-          connection.close(closeInternal, "session state unavailable");
-        });
+      void greet(connection, hello);
     };
     connection.onmessage = (event: MessageEvent<string>): void => {
       lastTraffic = Date.now();

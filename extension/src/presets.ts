@@ -24,18 +24,28 @@ type State = {
 const states = new Map<number, State>();
 const transitions = new Map<number, Promise<void>>();
 function transition(tabId: number, operation: () => Promise<void>): Promise<void> {
-  const next = (transitions.get(tabId) ?? Promise.resolve()).then(operation);
+  const previous = transitions.get(tabId);
+  const next = (async () => {
+    await previous;
+    await operation();
+  })();
   // Keep serialization independent of the previous caller's error handling.
   // The caller still receives the original rejection through next.
-  const settled = next.then(
-    () => {},
-    () => {},
-  );
+  const settled = (async () => {
+    try {
+      await next;
+    } catch {
+      // The caller handles the rejection; the next transition still runs.
+    }
+  })();
   transitions.set(tabId, settled);
-  void settled.then(() => {
-    if (transitions.get(tabId) === settled) transitions.delete(tabId);
-  });
+  void forgetTransition(tabId, settled);
   return next;
+}
+// Drops the tab's queue once its last transition has settled.
+async function forgetTransition(tabId: number, settled: Promise<void>): Promise<void> {
+  await settled;
+  if (transitions.get(tabId) === settled) transitions.delete(tabId);
 }
 function updateNetwork(s: State): void {
   s.network = [...s.sessions.values()].some((target) => target.ready);

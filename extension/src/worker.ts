@@ -18,6 +18,7 @@ import { currentTab, initSessions, removed, removedGroup, sessionNames } from ".
 import { topDocument } from "./frames.js";
 import { frameEvent, resetScope } from "./frames.js";
 import { observe } from "./features.js";
+import type { Rect } from "./overlay.js";
 
 // User-Agent Client Hints are not part of TypeScript's DOM library.
 type UserAgentData = {
@@ -122,12 +123,16 @@ async function tracked(command: Command, budget: Budget): Promise<object> {
     !pointer.has(command.action) &&
     selector !== undefined &&
     topDocument(tabId);
-  const target = (): Promise<void> =>
-    onNode<{ x: number; y: number; width: number; height: number }>(tabId, selector!, measure).then(
-      (rect) => actionTarget(tabId, rect),
+  const target = async (): Promise<void> => {
+    let rect: Rect;
+    try {
+      rect = await onNode<Rect>(tabId, selector!, measure);
+    } catch {
       // The action reports a missing or detached element itself.
-      () => undefined,
-    );
+      return;
+    }
+    actionTarget(tabId, rect);
+  };
   try {
     if (follow && command.action !== "scroll") await target();
     const result = await execute(command, budget);

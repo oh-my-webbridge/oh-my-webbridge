@@ -120,14 +120,18 @@ function sync(): void {
   publish();
 }
 
+async function loadEnabled(): Promise<void> {
+  try {
+    enabled = (await readPreferences()).activityLayer;
+  } catch (error) {
+    console.error("read preferences", (error as Error).message);
+  }
+}
+
 export function startActivity(paintWith: Painter): void {
   painter = paintWith;
   onSessionsChanged(sync);
-  void readPreferences()
-    .then((preferences) => {
-      enabled = preferences.activityLayer;
-    })
-    .catch((error: Error) => console.error("read preferences", error.message));
+  void loadEnabled();
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !changes.preferences) return;
     const preferences = changes.preferences.newValue as Settings["preferences"];

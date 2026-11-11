@@ -15,9 +15,11 @@ function usePageSignals(tabId: number | undefined): PageSignals | undefined | "u
   useEffect(() => {
     if (tabId === undefined) return;
     let live = true;
-    void readPage(tabId).then((read) => {
+    const load = async (): Promise<void> => {
+      const read = await readPage(tabId);
       if (live) setSignals(read);
-    });
+    };
+    void load();
     return () => {
       live = false;
     };
@@ -65,9 +67,13 @@ export function PromptComposer({ tab }: { tab: chrome.tabs.Tab }): React.ReactEl
 
   useEffect(() => {
     if (!turning) return;
+    const leave = async (element: HTMLElement): Promise<void> => {
+      await swap(element, "out").finished;
+      setTurn((current) => current + 1);
+    };
     const timer = setTimeout(() => {
       const element = field.current;
-      if (element) void swap(element, "out").finished.then(() => setTurn((current) => current + 1));
+      if (element) void leave(element);
     }, holdMs);
     return () => clearTimeout(timer);
   }, [turning, turn]);
