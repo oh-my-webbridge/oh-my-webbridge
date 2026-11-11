@@ -142,9 +142,12 @@ export async function removedGroup(groupId: number): Promise<void> {
   for (const s of sessions.values()) if (s.group === groupId) s.group = undefined;
   await persist();
 }
+// The committed URL, or the pending one while the tab has not committed a
+// document: Chrome then reports url as an empty string.
+export function tabURL(tab: chrome.tabs.Tab): string {
+  return tab.url || tab.pendingUrl || "";
+}
 export function webTab(tab: chrome.tabs.Tab): boolean {
-  return (
-    !tab.incognito &&
-    (/^https?:\/\//u.test(tab.url ?? tab.pendingUrl ?? "") || tab.url === "about:blank")
-  );
+  const url = tabURL(tab);
+  return !tab.incognito && (/^https?:\/\//u.test(url) || url === "about:blank");
 }

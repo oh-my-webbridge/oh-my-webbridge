@@ -35,6 +35,7 @@ import {
   getSession,
   persist,
   release,
+  tabURL,
   takePageClients,
   webTab,
   type Session,
@@ -371,7 +372,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
   if (action === "list_targets")
     return (await chrome.tabs.query({}))
       .filter(webTab)
-      .map((tab) => ({ tabId: tab.id, url: tab.url, title: tab.title }));
+      .map((tab) => ({ tabId: tab.id, url: tabURL(tab), title: tab.title }));
   const s = await getSession(name);
   budget.check();
   if (action === "preset") {
@@ -533,7 +534,8 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         (!args.active && !s.tabs.includes(tab.id) && !s.borrowed.includes(tab.id))
       )
         return false;
-      return tab.url === query || new URL(tab.url!).hostname === query;
+      const url = tabURL(tab);
+      return url === query || new URL(url).hostname === query;
     });
     if (!match?.id)
       fail(
@@ -545,7 +547,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     return {
       success: true,
       tabId: match.id,
-      url: match.url,
+      url: tabURL(match),
       borrowed: s.borrowed.includes(match.id),
     };
   }

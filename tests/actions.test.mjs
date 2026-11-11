@@ -751,7 +751,7 @@ async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
     m.detached(tabId);
     m.debuggerDetached(tabId);
   };
-  return { m, run, borrow, calls, saved, access, debuggerDetached };
+  return { m, run, borrow, calls, saved, access, debuggerDetached, tab };
 }
 
 test("a released borrowed tab keeps no frame selection for the next session", async (t) => {
@@ -1147,6 +1147,23 @@ test("a network recording stays in the session of the frame selected at start", 
   assert.equal(sessionOf("Network.getResponseBody"), "oopif-session");
   await f.run("task", "network", { cmd: "stop" });
   assert.equal(sessionOf("Network.disable"), "oopif-session");
+});
+
+test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {
+  const f = await borrowFixture(t);
+  // Chrome reports an empty url until the tab commits its first document.
+  Object.assign(f.tab, { url: "", pendingUrl: "https://example.test/" });
+  assert.deepEqual(await f.run("task", "list_targets"), [
+    { tabId: 5, url: "https://example.test/", title: "user tab" },
+  ]);
+  assert.deepEqual(await f.run("task", "find_tab", { url: "example.test", active: true }), {
+    success: true,
+    tabId: 5,
+    url: "https://example.test/",
+    borrowed: true,
+  });
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
 });
 
 test("upload fails with file_access_required until file URL access is on", async (t) => {
