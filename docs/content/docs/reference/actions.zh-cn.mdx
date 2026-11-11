@@ -133,12 +133,12 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 ## 网络、控制台、保存空间与 cookie [#network-console-storage-and-cookies]
 
-| 动作      | 参数                                                                                          | 备注                                                                             |
-| --------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `network` | `cmd`：`start`、`stop`、`list`、`detail`；`filter`、`requestId`                               | 每个标签页保留最近 500 个请求。`filter` 是 URL 子字符串。`detail` 返回响应本文。 |
-| `console` | `cmd`：`start`、`list`、`clear`、`stop`                                                       | 每个标签页最多保存 200 笔项目，每笔截断为 8192 个字符。                          |
-| `storage` | `cmd`：`list`、`get`、`set`、`remove`、`clear`；`kind`（`local`、`session`）、`name`、`value` | 只读写目前的来源。返回 `origin`、`kind`，以及 `value` 或整个保存空间。           |
-| `cookies` | `cmd`：`list`、`set`、`delete`、`clear`；`data`、`name`                                       | 范围限于目前的 URL。`set` 把 `data` 直接传给 cookie 字段。                       |
+| 动作      | 参数                                                                                          | 备注                                                                                                                                                                                                          |
+| --------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `network` | `cmd`：`start`、`stop`、`list`、`detail`；`filter`、`requestId`                               | 每个标签页保留最近 500 个请求。`filter` 是 URL 子字符串。`detail` 返回响应本文。在 Chrome 中，记录范围是 `start` 时所选的框架：主框架及其同进程的 iframe，或一个跨进程的 iframe。之后选取其他框架不会改变它。 |
+| `console` | `cmd`：`start`、`list`、`clear`、`stop`                                                       | 每个标签页最多保存 200 笔项目，每笔截断为 8192 个字符。                                                                                                                                                       |
+| `storage` | `cmd`：`list`、`get`、`set`、`remove`、`clear`；`kind`（`local`、`session`）、`name`、`value` | 只读写目前的来源。返回 `origin`、`kind`，以及 `value` 或整个保存空间。                                                                                                                                        |
+| `cookies` | `cmd`：`list`、`set`、`delete`、`clear`；`data`、`name`                                       | 范围限于目前的 URL。`set` 把 `data` 直接传给 cookie 字段。                                                                                                                                                    |
 
 ## 模拟 [#emulation]
 

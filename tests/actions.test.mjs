@@ -705,6 +705,7 @@ async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
     }),
     "DOM.resolveNode": () => ({ object: { type: "object", objectId: "button" } }),
     "Runtime.callFunctionOn": () => ({ result: { type: "string", value: "Send" } }),
+    "Network.getResponseBody": () => ({ body: '{"ok":true}', base64Encoded: false }),
   };
   globalThis.chrome = {
     storage: {
@@ -1110,6 +1111,42 @@ test("a released borrowed tab keeps no network recording for the next session", 
 
   await f.borrow("second");
   assert.deepEqual((await f.run("second", "network", { cmd: "list" })).requests, []);
+});
+
+test("a network recording stays in the session of the frame selected at start", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const finished = (requestId, sessionId) => {
+    const request = { url: `https://example.test/${requestId}`, method: "GET" };
+    f.m.networkEvent(5, "Network.requestWillBeSent", { requestId, request }, sessionId);
+    f.m.networkEvent(5, "Network.loadingFinished", { requestId }, sessionId);
+  };
+  const recorded = async () =>
+    (await f.run("task", "network", { cmd: "list" })).requests.map((r) => r.requestId);
+  const sessionOf = (method) => f.calls.findLast((c) => c.method === method).sessionId;
+  // Started in the main frame, then a cross-process frame is selected.
+  await f.run("task", "network", { cmd: "start" });
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  finished("main-1");
+  finished("frame-1", "oopif-session");
+  assert.deepEqual(await recorded(), ["main-1"]);
+  const detail = await f.run("task", "network", { cmd: "detail", requestId: "main-1" });
+  assert.equal(detail.body, '{"ok":true}');
+  assert.equal(sessionOf("Network.getResponseBody"), undefined);
+  await f.run("task", "network", { cmd: "stop" });
+  assert.equal(sessionOf("Network.disable"), undefined);
+  // Started in the cross-process frame, then the main frame is selected.
+  await f.run("task", "network", { cmd: "start" });
+  assert.equal(sessionOf("Network.enable"), "oopif-session");
+  await f.run("task", "frame", { cmd: "main" });
+  finished("main-2");
+  finished("frame-2", "oopif-session");
+  assert.deepEqual(await recorded(), ["frame-2"]);
+  await f.run("task", "network", { cmd: "detail", requestId: "frame-2" });
+  assert.equal(sessionOf("Network.getResponseBody"), "oopif-session");
+  await f.run("task", "network", { cmd: "stop" });
+  assert.equal(sessionOf("Network.disable"), "oopif-session");
 });
 
 test("upload fails with file_access_required until file URL access is on", async (t) => {

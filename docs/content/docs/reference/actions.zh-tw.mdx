@@ -131,12 +131,12 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 網路、主控台、儲存空間與 cookie [#network-console-storage-and-cookies]
 
-| 動作      | 引數                                                                                          | 備註                                                                         |
-| --------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `network` | `cmd`：`start`、`stop`、`list`、`detail`；`filter`、`requestId`                               | 每個分頁保留最近 500 個請求。`filter` 是 URL 子字串。`detail` 回傳回應本文。 |
-| `console` | `cmd`：`start`、`list`、`clear`、`stop`                                                       | 每個分頁最多儲存 200 筆項目，每筆截斷為 8192 個字元。                        |
-| `storage` | `cmd`：`list`、`get`、`set`、`remove`、`clear`；`kind`（`local`、`session`）、`name`、`value` | 只讀寫目前的來源。回傳 `origin`、`kind`，以及 `value` 或整個儲存空間。       |
-| `cookies` | `cmd`：`list`、`set`、`delete`、`clear`；`data`、`name`                                       | 範圍限於目前的 URL。`set` 把 `data` 直接傳給 cookie 欄位。                   |
+| 動作      | 引數                                                                                          | 備註                                                                                                                                                                                                      |
+| --------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `network` | `cmd`：`start`、`stop`、`list`、`detail`；`filter`、`requestId`                               | 每個分頁保留最近 500 個請求。`filter` 是 URL 子字串。`detail` 回傳回應本文。在 Chrome 中，記錄範圍是 `start` 時所選的框架：主框架及其同行程的 iframe，或一個跨行程的 iframe。之後選取其他框架不會改變它。 |
+| `console` | `cmd`：`start`、`list`、`clear`、`stop`                                                       | 每個分頁最多儲存 200 筆項目，每筆截斷為 8192 個字元。                                                                                                                                                     |
+| `storage` | `cmd`：`list`、`get`、`set`、`remove`、`clear`；`kind`（`local`、`session`）、`name`、`value` | 只讀寫目前的來源。回傳 `origin`、`kind`，以及 `value` 或整個儲存空間。                                                                                                                                    |
+| `cookies` | `cmd`：`list`、`set`、`delete`、`clear`；`data`、`name`                                       | 範圍限於目前的 URL。`set` 把 `data` 直接傳給 cookie 欄位。                                                                                                                                                |
 
 ## 模擬 [#emulation]
 

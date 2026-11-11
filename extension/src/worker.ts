@@ -48,7 +48,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
   void presetEvent(source.tabId, method, (params ?? {}) as JsonObject, source.sessionId).catch(
     (error: Error) => console.error("preset event", error.message),
   );
-  networkEvent(source.tabId, method, (params ?? {}) as JsonObject);
+  networkEvent(source.tabId, method, (params ?? {}) as JsonObject, source.sessionId);
   frameEvent(source.tabId, method, (params ?? {}) as JsonObject, source.sessionId);
   observe(source.tabId, method, (params ?? {}) as JsonObject);
   if (method === "Target.attachedToTarget") {
