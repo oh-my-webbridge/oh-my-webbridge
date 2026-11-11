@@ -912,6 +912,14 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         args.files.some((file) => typeof file !== "string" || !file.startsWith("/"))
       )
         fail("invalid_args", "files must be non-empty absolute paths on Chrome's host");
+      // Chrome answers DOM.setFileInputFiles with "Not allowed" unless the
+      // extension's "Allow access to file URLs" switch is on, which it is not
+      // by default for a store installation.
+      if (!(await chrome.extension.isAllowedFileSchemeAccess()))
+        fail(
+          "file_access_required",
+          'turn on "Allow access to file URLs" for oh-my-webbridge in chrome://extensions to upload local files',
+        );
       await send(tabId, "DOM.setFileInputFiles", {
         files: args.files,
         ...(await node(tabId, stringArg(args.selector, "selector"))),

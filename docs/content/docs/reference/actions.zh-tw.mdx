@@ -118,12 +118,12 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 檔案與擷取 [#files-and-capture]
 
-| 動作          | 引數                                                                                                                               | 備註                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `screenshot`  | `format`（`png`、`jpeg`）、`quality`（0 到 100）、`selector`、`fullPage`、`path`                                                   | 回傳 `path`、`sizeBytes` 與 `mimeType`。沒有 `path` 時，檔案會放在 daemon 的成品目錄下。既有的路徑會被拒絕。 |
-| `save_as_pdf` | `paper_format`（預設 `letter`；另有 `legal`、`a4`、`a3`、`tabloid`）、`landscape`、`scale`（0.1 到 2）、`print_background`、`path` | 以分塊方式把 PDF 串流寫到磁碟，並回傳 `path`、`sizeBytes`、`mimeType` 與 `pageTitle`。僅限 Chrome。          |
-| `upload`      | `selector`、`files`                                                                                                                | 執行瀏覽器之機器上的絕對路徑。對 Firefox，daemon 會內嵌檔案內容：每個指令 16 MiB，進行中的合計 64 MiB。      |
-| `download`    | `url`（HTTP(S)）、`filename`                                                                                                       | 在瀏覽器所在的主機上回傳 `path`、`sizeBytes`、`mimeType` 與 `id`。取消或逾時會中斷下載。                     |
+| 動作          | 引數                                                                                                                               | 備註                                                                                                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `screenshot`  | `format`（`png`、`jpeg`）、`quality`（0 到 100）、`selector`、`fullPage`、`path`                                                   | 回傳 `path`、`sizeBytes` 與 `mimeType`。沒有 `path` 時，檔案會放在 daemon 的成品目錄下。既有的路徑會被拒絕。                                                                    |
+| `save_as_pdf` | `paper_format`（預設 `letter`；另有 `legal`、`a4`、`a3`、`tabloid`）、`landscape`、`scale`（0.1 到 2）、`print_background`、`path` | 以分塊方式把 PDF 串流寫到磁碟，並回傳 `path`、`sizeBytes`、`mimeType` 與 `pageTitle`。僅限 Chrome。                                                                             |
+| `upload`      | `selector`、`files`                                                                                                                | 執行瀏覽器之機器上的絕對路徑。Chrome 需要在 `chrome://extensions` 為擴充功能開啟「允許存取檔案網址」。對 Firefox，daemon 會內嵌檔案內容：每個指令 16 MiB，進行中的合計 64 MiB。 |
+| `download`    | `url`（HTTP(S)）、`filename`                                                                                                       | 在瀏覽器所在的主機上回傳 `path`、`sizeBytes`、`mimeType` 與 `id`。取消或逾時會中斷下載。                                                                                        |
 
 編碼後的結果超過 32 MiB 的螢幕截圖，會以 `result_too_large` 失敗。
 
@@ -197,36 +197,37 @@ daemon 在內部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 
 每個錯誤都帶有 `code` 與 `message`。HTTP 狀態碼列於下方；這裡未列出的錯誤碼回傳 502。
 
-| 錯誤碼                  | HTTP | 意義                                                                                                                            | 處理方式                                                                     |
-| ----------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `invalid_request`       | 400  | 本文被拒絕：有未知欄位、缺少 action 或 session、工作階段名稱含有不允許的字元、`browser` 無效，或 `timeoutMs` 超出 1 到 120000。 | 修正 JSON。訊息會指出欄位。                                                  |
-| `invalid_args`          | 400  | 引數缺少、型別錯誤，或超出範圍。                                                                                                | 閱讀訊息；它會指出動作與引數。                                               |
-| `unsupported`           | 501  | 目標瀏覽器沒有這個動作，或沒有它的某個引數。                                                                                    | 不要重試。改用其他動作，或使用 Chrome 工作階段。                             |
-| `busy`                  | 429  | 容量限制已滿：指令名額、每個工作階段 32 個分頁、每個瀏覽器 128 個工作階段、Firefox 上傳額度，或兩個同時進行的成品工作。         | 降低並行數量，並在先前的指令完成後重試。                                     |
-| `browser_offline`       | 503  | 目標瀏覽器沒有擴充功能連線，包括綁定到未連線瀏覽器的工作階段。                                                                  | 檢查 `omw doctor` 與擴充功能，或在新的工作階段中繼續。                       |
-| `session_browser`       | 409  | 工作階段綁定到另一個瀏覽器，而請求指定了這個瀏覽器。                                                                            | 移除 `browser`，或關閉該工作階段並開始新的工作階段。                         |
-| `outcome_unknown`       | 504  | 指令可能已經執行：期限、傳輸寫入或斷線切斷了回覆。                                                                              | 重複之前，先觀察頁面或網路狀態。切勿盲目重送提交、付款或發布操作。           |
-| `tab_busy`              | 409  | 該分頁屬於另一個工作階段。                                                                                                      | 使用這個工作階段持有的分頁，或使用另一個工作階段。                           |
-| `stale_ref`             | 409  | `@e` 參照比它所屬的文件存活得更久。                                                                                             | 重新取得 `snapshot`。                                                        |
-| `no_tab`                | 502  | 頁面動作在工作階段還沒有分頁時執行。                                                                                            | 先執行 `navigate` 或 `find_tab`。                                            |
-| `tab_missing`           | 502  | `find_tab` 沒有符合的分頁。                                                                                                     | 先在這個工作階段中開啟該頁面，或傳入 `active: true` 借用瀏覽器的使用中分頁。 |
-| `restricted_tab`        | 502  | 該分頁不是一般的、非無痕的 HTTP(S) 頁面。                                                                                       | 導覽到 HTTP(S) 頁面。瀏覽器內部頁面無法用指令碼操作。                        |
-| `borrowed_tab`          | 502  | 動作需要工作階段建立的分頁：關閉它，或對借用的分頁套用預設集。                                                                  | 用 `navigate` 開啟任務分頁。                                                 |
-| `element_missing`       | 502  | 選擇器沒有符合任何元素。                                                                                                        | 檢查選擇器，或重新取得快照。                                                 |
-| `element_hidden`        | 502  | 元素沒有邊界框，因此沒有可點擊的中心。                                                                                          | 把它捲動到可見範圍，或等待它轉譯完成。                                       |
-| `element_action_failed` | 502  | 頁面拒絕了這個操作，例如填寫不可編輯的元素，或選取不存在的選項。                                                                | 用 `get` 或 `is` 檢查，並調整動作。                                          |
-| `state_mismatch`        | 502  | `check` 或 `uncheck` 讓控制項停在錯誤的狀態。                                                                                   | 用 `is` 重新讀取，然後重試，或改為點擊它。                                   |
-| `evaluation_failed`     | 502  | `evaluate` 擲出例外，或內部頁面指令碼擲出例外。                                                                                 | 修正運算式。訊息帶有頁面例外。                                               |
-| `frame_missing`         | 502  | `frame` 找不到符合所給選擇器、id、名稱或 URL 的框架。                                                                           | 用 `frame {"cmd":"list"}` 列出框架，並選取其中一個。                         |
-| `frame_unavailable`     | 502  | 所選的框架已被取代、移除，或失去其執行環境。                                                                                    | 之後的指令使用主框架；如果工作要在該框架繼續，請重新選取它。                 |
-| `history_missing`       | 502  | `history back` 或 `forward` 在該方向上沒有項目。                                                                                | 先讀取 `history {"cmd":"list"}`。                                            |
-| `request_missing`       | 502  | 該請求沒有網路紀錄，或紀錄已被逐出。                                                                                            | 開始記錄，重現問題，然後讀取 `list`。                                        |
-| `request_pending`       | 502  | 回應本文尚未完整。                                                                                                              | 等 `list` 中出現 `complete: true`，再重試 `detail`。                         |
-| `request_failed`        | 502  | 請求本身失敗。                                                                                                                  | 讀取該項目上的錯誤文字。                                                     |
-| `download_missing`      | 502  | 瀏覽器沒有列出該下載。                                                                                                          | 重試 `download`。                                                            |
-| `download_failed`       | 502  | 瀏覽器中斷了下載。                                                                                                              | 閱讀訊息並重試。                                                             |
-| `window_failed`         | 502  | 新視窗沒有分頁。                                                                                                                | 重試 `window_new`。                                                          |
-| `result_too_large`      | 502  | 結果在傳輸時超過 32 MiB，或網路本文在 Chrome 中超過 2 Mi 個字元、在 Firefox 中超過 1 MiB。                                      | 縮小結果：螢幕截圖使用 `selector` 或 `jpeg`，並讀取較小的片段。              |
-| `debugger_unavailable`  | 502  | Chrome 拒絕附加偵錯工具，例如因為 DevTools 已開啟，或原則封鎖了它。                                                             | 關閉該分頁的 DevTools 並重試。                                               |
-| `browser_error`         | 502  | 擴充功能回報了沒有錯誤碼的錯誤。                                                                                                | 閱讀訊息，重試一次，然後回報。                                               |
-| `internal`              | 502  | daemon 端的失敗，例如編碼請求時出錯。                                                                                           | 重試。如果持續發生，重新啟動 daemon。                                        |
+| 錯誤碼                  | HTTP | 意義                                                                                                                            | 處理方式                                                                        |
+| ----------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `invalid_request`       | 400  | 本文被拒絕：有未知欄位、缺少 action 或 session、工作階段名稱含有不允許的字元、`browser` 無效，或 `timeoutMs` 超出 1 到 120000。 | 修正 JSON。訊息會指出欄位。                                                     |
+| `invalid_args`          | 400  | 引數缺少、型別錯誤，或超出範圍。                                                                                                | 閱讀訊息；它會指出動作與引數。                                                  |
+| `unsupported`           | 501  | 目標瀏覽器沒有這個動作，或沒有它的某個引數。                                                                                    | 不要重試。改用其他動作，或使用 Chrome 工作階段。                                |
+| `busy`                  | 429  | 容量限制已滿：指令名額、每個工作階段 32 個分頁、每個瀏覽器 128 個工作階段、Firefox 上傳額度，或兩個同時進行的成品工作。         | 降低並行數量，並在先前的指令完成後重試。                                        |
+| `browser_offline`       | 503  | 目標瀏覽器沒有擴充功能連線，包括綁定到未連線瀏覽器的工作階段。                                                                  | 檢查 `omw doctor` 與擴充功能，或在新的工作階段中繼續。                          |
+| `session_browser`       | 409  | 工作階段綁定到另一個瀏覽器，而請求指定了這個瀏覽器。                                                                            | 移除 `browser`，或關閉該工作階段並開始新的工作階段。                            |
+| `outcome_unknown`       | 504  | 指令可能已經執行：期限、傳輸寫入或斷線切斷了回覆。                                                                              | 重複之前，先觀察頁面或網路狀態。切勿盲目重送提交、付款或發布操作。              |
+| `tab_busy`              | 409  | 該分頁屬於另一個工作階段。                                                                                                      | 使用這個工作階段持有的分頁，或使用另一個工作階段。                              |
+| `stale_ref`             | 409  | `@e` 參照比它所屬的文件存活得更久。                                                                                             | 重新取得 `snapshot`。                                                           |
+| `no_tab`                | 502  | 頁面動作在工作階段還沒有分頁時執行。                                                                                            | 先執行 `navigate` 或 `find_tab`。                                               |
+| `tab_missing`           | 502  | `find_tab` 沒有符合的分頁。                                                                                                     | 先在這個工作階段中開啟該頁面，或傳入 `active: true` 借用瀏覽器的使用中分頁。    |
+| `restricted_tab`        | 502  | 該分頁不是一般的、非無痕的 HTTP(S) 頁面。                                                                                       | 導覽到 HTTP(S) 頁面。瀏覽器內部頁面無法用指令碼操作。                           |
+| `borrowed_tab`          | 502  | 動作需要工作階段建立的分頁：關閉它，或對借用的分頁套用預設集。                                                                  | 用 `navigate` 開啟任務分頁。                                                    |
+| `element_missing`       | 502  | 選擇器沒有符合任何元素。                                                                                                        | 檢查選擇器，或重新取得快照。                                                    |
+| `element_hidden`        | 502  | 元素沒有邊界框，因此沒有可點擊的中心。                                                                                          | 把它捲動到可見範圍，或等待它轉譯完成。                                          |
+| `element_action_failed` | 502  | 頁面拒絕了這個操作，例如填寫不可編輯的元素，或選取不存在的選項。                                                                | 用 `get` 或 `is` 檢查，並調整動作。                                             |
+| `state_mismatch`        | 502  | `check` 或 `uncheck` 讓控制項停在錯誤的狀態。                                                                                   | 用 `is` 重新讀取，然後重試，或改為點擊它。                                      |
+| `evaluation_failed`     | 502  | `evaluate` 擲出例外，或內部頁面指令碼擲出例外。                                                                                 | 修正運算式。訊息帶有頁面例外。                                                  |
+| `frame_missing`         | 502  | `frame` 找不到符合所給選擇器、id、名稱或 URL 的框架。                                                                           | 用 `frame {"cmd":"list"}` 列出框架，並選取其中一個。                            |
+| `frame_unavailable`     | 502  | 所選的框架已被取代、移除，或失去其執行環境。                                                                                    | 之後的指令使用主框架；如果工作要在該框架繼續，請重新選取它。                    |
+| `history_missing`       | 502  | `history back` 或 `forward` 在該方向上沒有項目。                                                                                | 先讀取 `history {"cmd":"list"}`。                                               |
+| `request_missing`       | 502  | 該請求沒有網路紀錄，或紀錄已被逐出。                                                                                            | 開始記錄，重現問題，然後讀取 `list`。                                           |
+| `request_pending`       | 502  | 回應本文尚未完整。                                                                                                              | 等 `list` 中出現 `complete: true`，再重試 `detail`。                            |
+| `request_failed`        | 502  | 請求本身失敗。                                                                                                                  | 讀取該項目上的錯誤文字。                                                        |
+| `download_missing`      | 502  | 瀏覽器沒有列出該下載。                                                                                                          | 重試 `download`。                                                               |
+| `download_failed`       | 502  | 瀏覽器中斷了下載。                                                                                                              | 閱讀訊息並重試。                                                                |
+| `file_access_required`  | 502  | Chrome 的 `upload` 需要擴充功能的「允許存取檔案網址」開關，而它預設為關閉。                                                     | 在 `chrome://extensions` 找到 oh-my-webbridge，開啟「允許存取檔案網址」後重試。 |
+| `window_failed`         | 502  | 新視窗沒有分頁。                                                                                                                | 重試 `window_new`。                                                             |
+| `result_too_large`      | 502  | 結果在傳輸時超過 32 MiB，或網路本文在 Chrome 中超過 2 Mi 個字元、在 Firefox 中超過 1 MiB。                                      | 縮小結果：螢幕截圖使用 `selector` 或 `jpeg`，並讀取較小的片段。                 |
+| `debugger_unavailable`  | 502  | Chrome 拒絕附加偵錯工具，例如因為 DevTools 已開啟，或原則封鎖了它。                                                             | 關閉該分頁的 DevTools 並重試。                                                  |
+| `browser_error`         | 502  | 擴充功能回報了沒有錯誤碼的錯誤。                                                                                                | 閱讀訊息，重試一次，然後回報。                                                  |
+| `internal`              | 502  | daemon 端的失敗，例如編碼請求時出錯。                                                                                           | 重試。如果持續發生，重新啟動 daemon。                                           |

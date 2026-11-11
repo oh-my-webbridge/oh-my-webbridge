@@ -635,10 +635,12 @@ test("navigate {preset:none} releases root requests while an iframe installation
 
 // A user tab that task sessions borrow one after another. The worker's frame,
 // network and preset events are fed in directly. The page has one button,
-// which snapshot reports with backend node id 11.
+// which snapshot reports with backend node id 11. access.files answers
+// chrome.extension.isAllowedFileSchemeAccess.
 async function borrowFixture(t) {
   const original = { chrome: globalThis.chrome };
   const calls = [];
+  const access = { files: true };
   const tab = { id: 5, url: "https://example.test/", title: "user tab", status: "complete" };
   const listeners = { addListener: () => {}, removeListener: () => {} };
   const replies = {
@@ -664,6 +666,7 @@ async function borrowFixture(t) {
   };
   globalThis.chrome = {
     storage: { session: { get: async () => ({}), set: async () => {} } },
+    extension: { isAllowedFileSchemeAccess: async () => access.files },
     tabs: {
       get: async (id) => ({ ...tab, id }),
       query: async () => [tab],
@@ -695,7 +698,7 @@ async function borrowFixture(t) {
   const run = (session, action, args = {}, check = () => {}) =>
     m.execute({ session, action, args }, { signal: new AbortController().signal, check });
   const borrow = (session) => run(session, "find_tab", { url: tab.url, active: true });
-  return { m, run, borrow, calls };
+  return { m, run, borrow, calls, access };
 }
 
 test("a released borrowed tab keeps no frame selection for the next session", async (t) => {
@@ -986,6 +989,28 @@ test("a released borrowed tab keeps no network recording for the next session", 
 
   await f.borrow("second");
   assert.deepEqual((await f.run("second", "network", { cmd: "list" })).requests, []);
+});
+
+test("upload fails with file_access_required until file URL access is on", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const upload = {
+    selector: firstRef(await f.run("task", "snapshot")),
+    files: ["/srv/report.pdf"],
+  };
+  f.access.files = false;
+  await assert.rejects(f.run("task", "upload", upload), {
+    code: "file_access_required",
+    message:
+      'turn on "Allow access to file URLs" for oh-my-webbridge in chrome://extensions to upload local files',
+  });
+  assert.ok(!f.calls.some((c) => c.method === "DOM.setFileInputFiles"), "Chrome reads no file");
+  f.access.files = true;
+  assert.deepEqual(await f.run("task", "upload", upload), { success: true, fileCount: 1 });
+  assert.deepEqual(f.calls.findLast((c) => c.method === "DOM.setFileInputFiles").params, {
+    files: ["/srv/report.pdf"],
+    backendNodeId: 11,
+  });
 });
 
 test("a page CDP attach that outlives its request releases the tab", async (t) => {
