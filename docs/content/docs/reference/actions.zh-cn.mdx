@@ -118,6 +118,8 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 选取框架后，页面动作在该框架中运行。选取框架会丢弃先前的引用，并需要重新取得快照。
 
+框架导航或被移除时，选取就会结束；在 Chrome 中，标签页的调试会话结束时也会结束，例如用户在 Chrome 的调试提示上按了取消，或扩展程序的 worker 重新启动。之后第一个要在该框架运行的动作会以 `frame_unavailable` 失败一次，再之后的动作使用主框架。
+
 ## 文件与提取 [#files-and-capture]
 
 | 动作          | 参数                                                                                                                               | 备注                                                                                                                                                                          |
@@ -220,7 +222,7 @@ daemon 在内部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 | `state_mismatch`        | 502  | `check` 或 `uncheck` 让控制项停在错误的状态。                                                                               | 用 `is` 重新读取，然后重试，或改为点击它。                                    |
 | `evaluation_failed`     | 502  | `evaluate` 掷出例外，或内部页面脚本掷出例外。                                                                               | 修正表达式。消息带有页面例外。                                                |
 | `frame_missing`         | 502  | `frame` 找不到符合所给选择器、id、名称或 URL 的框架。                                                                       | 用 `frame {"cmd":"list"}` 列出框架，并选取其中一个。                          |
-| `frame_unavailable`     | 502  | 所选的框架已被取代、移除，或失去其运行环境。                                                                                | 之后的命令使用主框架；如果工作要在该框架继续，请重新选取它。                  |
+| `frame_unavailable`     | 502  | 所选的框架已被取代、移除或失去其运行环境，或标签页的调试会话已结束。                                                        | 之后的命令使用主框架；如果工作要在该框架继续，请重新选取它。                  |
 | `history_missing`       | 502  | `history back` 或 `forward` 在该方向上没有项目。                                                                            | 先读取 `history {"cmd":"list"}`。                                             |
 | `request_missing`       | 502  | 该请求没有网络纪录，或纪录已被逐出。                                                                                        | 开始记录，重现问题，然后读取 `list`。                                         |
 | `request_pending`       | 502  | 响应本文尚未完整。                                                                                                          | 等 `list` 中出现 `complete: true`，再重试 `detail`。                          |

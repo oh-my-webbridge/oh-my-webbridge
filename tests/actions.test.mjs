@@ -636,10 +636,13 @@ test("navigate {preset:none} releases root requests while an iframe installation
 // A user tab that task sessions borrow one after another. The worker's frame,
 // network and preset events are fed in directly. The page has one button,
 // which snapshot reports with backend node id 11. access.files answers
-// chrome.extension.isAllowedFileSchemeAccess.
-async function borrowFixture(t) {
+// chrome.extension.isAllowedFileSchemeAccess. stored is the session storage a
+// restarted worker reads, and inherited tabs start with a debugger session of
+// the previous worker instance; saved receives every session storage write.
+async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
   const original = { chrome: globalThis.chrome };
   const calls = [];
+  const saved = [];
   const access = { files: true };
   const tab = { id: 5, url: "https://example.test/", title: "user tab", status: "complete" };
   const listeners = { addListener: () => {}, removeListener: () => {} };
@@ -665,7 +668,12 @@ async function borrowFixture(t) {
     "Runtime.callFunctionOn": () => ({ result: { type: "string", value: "Send" } }),
   };
   globalThis.chrome = {
-    storage: { session: { get: async () => ({}), set: async () => {} } },
+    storage: {
+      session: {
+        get: async () => stored,
+        set: async (value) => saved.push(structuredClone(value)),
+      },
+    },
     extension: { isAllowedFileSchemeAccess: async () => access.files },
     tabs: {
       get: async (id) => ({ ...tab, id }),
@@ -675,7 +683,7 @@ async function borrowFixture(t) {
     },
     debugger: {
       onEvent: listeners,
-      getTargets: async () => [],
+      getTargets: async () => inherited.map((tabId) => ({ type: "page", tabId, attached: true })),
       attach: async ({ tabId }) => calls.push({ tabId, method: "attach" }),
       detach: async ({ tabId }) => calls.push({ tabId, method: "detach" }),
       sendCommand: async (source, method, params) => {
@@ -688,8 +696,8 @@ async function borrowFixture(t) {
   const m = await load(
     t,
     [
-      'export { execute } from "./extension/src/actions.ts";',
-      'export { refEvent } from "./extension/src/cdp.ts";',
+      'export { debuggerDetached, execute } from "./extension/src/actions.ts";',
+      'export { detached, refEvent } from "./extension/src/cdp.ts";',
       'export { frameEvent, resetScope } from "./extension/src/frames.ts";',
       'export { event as networkEvent } from "./extension/src/network.ts";',
       'export { owner, removed } from "./extension/src/state.ts";',
@@ -698,7 +706,12 @@ async function borrowFixture(t) {
   const run = (session, action, args = {}, check = () => {}) =>
     m.execute({ session, action, args }, { signal: new AbortController().signal, check });
   const borrow = (session) => run(session, "find_tab", { url: tab.url, active: true });
-  return { m, run, borrow, calls, access };
+  // chrome.debugger.onDetach as worker.ts handles it.
+  const debuggerDetached = (tabId) => {
+    m.detached(tabId);
+    m.debuggerDetached(tabId);
+  };
+  return { m, run, borrow, calls, saved, access, debuggerDetached };
 }
 
 test("a released borrowed tab keeps no frame selection for the next session", async (t) => {
@@ -812,6 +825,75 @@ test("a cross-process frame is lost when its contexts are cleared or its target 
     await f.run("task", "evaluate", { code: "document.title" });
     assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined }, name);
   }
+});
+
+const sessionEnded = {
+  code: "frame_unavailable",
+  message:
+    "the debugger session ended; commands now use the main frame; select it again with frame",
+};
+
+test("a frame selection ends as lost when Chrome ends the tab's debugger session", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  // The user cancelled the debugging bar: the next command attaches anew.
+  f.debuggerDetached(5);
+  const sent = f.calls.length;
+  await assert.rejects(f.run("task", "click", { selector: "#submit" }), sessionEnded);
+  assert.deepEqual(
+    f.calls
+      .slice(sent)
+      .filter((c) => c.method === "Runtime.evaluate" || c.method.startsWith("Input.")),
+    [],
+    "the click reaches no document",
+  );
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
+  // A pending report outlives another detach.
+  sameProcessFrame(f, 7);
+  await f.run("task", "frame", { frameId: "child" });
+  f.m.frameEvent(5, "Runtime.executionContextDestroyed", { executionContextId: 7 });
+  f.debuggerDetached(5);
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), sessionEnded);
+});
+
+test("frame selections are kept in session storage while they last", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const records = async () => {
+    await setImmediate();
+    return f.saved.filter((value) => "frames" in value).map((value) => value.frames);
+  };
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  assert.deepEqual(await records(), [[5]]);
+  await f.run("task", "frame", { cmd: "main" });
+  assert.deepEqual(await records(), [[5], []]);
+  await f.run("task", "frame", { frameId: "oopif" });
+  // A lost selection stays recorded until its report is delivered.
+  f.m.frameEvent(5, "Target.detachedFromTarget", { sessionId: "oopif-session" });
+  assert.deepEqual(await records(), [[5], [], [5]]);
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), lostFrame);
+  assert.deepEqual(await records(), [[5], [], [5], []]);
+});
+
+test("a restarted worker reports the frame selection of a persisted tab as lost", async (t) => {
+  const f = await borrowFixture(t, {
+    stored: {
+      sessions: { task: { tabs: [], borrowed: [5], current: 5, title: "task" } },
+      // Tab 9 was closed while the previous worker was gone.
+      frames: [5, 9],
+    },
+    inherited: [5],
+  });
+  assert.deepEqual(f.calls.slice(0, 1), [{ tabId: 5, method: "detach" }]);
+  await setImmediate();
+  assert.deepEqual(f.saved.at(-1), { frames: [5] });
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), sessionEnded);
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
 });
 
 test("ending a frame selection also ends the report of a lost frame", async (t) => {

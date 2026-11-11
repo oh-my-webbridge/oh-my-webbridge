@@ -1,5 +1,5 @@
 import { presetEvent } from "./presets.js";
-import { execute, forgetTab, releasePageClients } from "./actions.js";
+import { debuggerDetached, execute, forgetTab, releasePageClients } from "./actions.js";
 import {
   actionFinished,
   actionStarted,
@@ -78,7 +78,7 @@ chrome.debugger.onDetach.addListener((source, reason) => {
   detached(source.tabId);
   if (rawEventTabs.has(source.tabId))
     emit({ type: "event", tabId: source.tabId, method: "Inspector.detached", params: { reason } });
-  forgetTab(source.tabId);
+  debuggerDetached(source.tabId);
 });
 chrome.tabs.onRemoved.addListener((tabId) => {
   forgetTab(tabId);

@@ -23,7 +23,7 @@ import {
 } from "./cdp.js";
 import { actionTarget, releaseLayer } from "./activity.js";
 import { feature, forgetObservations } from "./features.js";
-import { forgetFrames, resetScope, runtimeDisabled } from "./frames.js";
+import { forgetFrames, resetScope, runtimeDisabled, sessionEnded, topDocument } from "./frames.js";
 import { snowflake } from "./id.js";
 import { forget as forgetNetwork, network } from "./network.js";
 import { fail, stringArg, type Args, type Command, type JsonObject } from "./protocol.js";
@@ -58,6 +58,15 @@ export function forgetTab(tabId: number): void {
   clearRefs(tabId);
   forgetNetwork(tabId);
   rawEventTabs.delete(tabId);
+}
+// Chrome ended the tab's debugger session: the user cancelled the debugging
+// bar, DevTools took the tab, or the tab closed. The worker forgets the tab's
+// state, and a frame selection, or the pending report of a lost one, is
+// reported to the next command, which attaches a new session.
+export function debuggerDetached(tabId: number): void {
+  const selected = !topDocument(tabId);
+  forgetTab(tabId);
+  if (selected) sessionEnded(tabId);
 }
 // Chrome rejects a detach once the tab is gone ("No tab with given id 5.") or
 // the debugger is no longer attached ("Debugger is not attached to the tab

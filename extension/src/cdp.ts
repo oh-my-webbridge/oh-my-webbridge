@@ -1,6 +1,6 @@
 import { fail, type JsonObject } from "./protocol.js";
 import { locatorExpression } from "./locators.js";
-import { forgetFrames, scopes, selectedScope, type Scope } from "./frames.js";
+import { forgetFrames, restoreLost, scopes, selectedScope, type Scope } from "./frames.js";
 
 const attachments = new Map<number, Promise<void>>();
 export const rawEventTabs = new Set<number>();
@@ -78,7 +78,8 @@ export function detached(tabId: number): void {
 // A restarted worker inherits the extension's tab debugger sessions, including
 // Fetch interception, but none of the state that answers paused requests.
 // Detaching ends the root and flat child sessions and releases those requests;
-// the next command attaches again.
+// the next command attaches again, and a frame selection that the previous
+// instance recorded for one of these tabs ends as lost.
 export async function releaseInherited(tabIds: number[]): Promise<void> {
   if (!tabIds.length) return;
   const persisted = new Set(tabIds);
@@ -94,6 +95,7 @@ export async function releaseInherited(tabIds: number[]): Promise<void> {
       console.error(`release inherited debugger session for tab ${tabId}`, String(error));
     }
   }
+  await restoreLost(tabIds);
 }
 
 export type Remote = {
