@@ -14,3 +14,5 @@
 - In Firefox, `cookies` and `download` use the cookie store of the tab, including the store of a container.
 - In Firefox, `network` with `cmd: "start"` and `emulate` with `data` return `restricted_tab` without access to all websites, as `cookies` and `screenshot` do.
 - In Firefox, a failed `download` keeps its own error when Firefox refuses to cancel the download.
+
+[PR #29](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/29)
