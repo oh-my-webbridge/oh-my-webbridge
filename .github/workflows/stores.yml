@@ -2,7 +2,8 @@ name: stores
 # Release runs call this workflow after the GitHub Release is published; it
 # submits the release assets to the Chrome Web Store and addons.mozilla.org. A
 # manual run reads each store's status, which checks the credentials of both
-# environments.
+# environments. A manual run with a release tag submits that published release
+# from the tagged commit, the commit that its provenance names.
 on:
   workflow_call:
     inputs:
@@ -10,11 +11,21 @@ on:
         description: Submit the assets of the published GitHub Release for the checked-out version.
         type: boolean
         required: true
+    secrets:
+      AMO_JWT_ISSUER:
+        required: true
+      AMO_JWT_SECRET:
+        required: true
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to submit, such as v0.2.1. Leave empty to read the status of each store.
+        type: string
+        default: ""
 permissions:
   contents: read
 env:
-  COMMAND: ${{ inputs.submit && 'submit' || 'status' }}
+  COMMAND: ${{ (inputs.submit || inputs.tag) && 'submit' || 'status' }}
 jobs:
   chrome-web-store:
     runs-on: ubuntu-latest
@@ -23,7 +34,7 @@ jobs:
     # One submission at a time: a second upload would replace the item's
     # draft. Status runs only read and use their own group.
     concurrency:
-      group: chrome-web-store-${{ inputs.submit && 'submit' || 'status' }}
+      group: chrome-web-store-${{ (inputs.submit || inputs.tag) && 'submit' || 'status' }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -33,6 +44,8 @@ jobs:
       CWS_ITEM: gfhmonnkmdapbocacedanaplhgkofebi
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}
       - uses: ./.github/actions/setup
         with:
           package: oh-my-webbridge
@@ -57,10 +70,12 @@ jobs:
     timeout-minutes: 20
     environment: addons-mozilla-org
     concurrency:
-      group: addons-mozilla-org-${{ inputs.submit && 'submit' || 'status' }}
+      group: addons-mozilla-org-${{ (inputs.submit || inputs.tag) && 'submit' || 'status' }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}
       - uses: ./.github/actions/setup
         with:
           package: oh-my-webbridge

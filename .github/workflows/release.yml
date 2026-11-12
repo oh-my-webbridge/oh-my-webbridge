@@ -49,3 +49,8 @@ jobs:
     uses: ./.github/workflows/stores.yml
     with:
       submit: true
+    # A called workflow receives environment secrets only when its caller
+    # passes them by name; the AMO job reads them from its environment.
+    secrets:
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}

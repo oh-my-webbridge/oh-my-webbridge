@@ -134,8 +134,8 @@ zh-CN 的轉換先套用 OpenCC 的詞彙表（`twp` 轉 `cn`），再套用 `sc
 - 推送到 `main` 會維護一個草稿 `release/next` 版本 PR。它的工作流程執行 `scripts/release-pr.mjs`，以 `scripts/release.mjs version` 消耗變更片段，同步套件、鎖定檔、daemon 與 manifest 的版本，並寫出 `CHANGELOG.md` 與 `docs/releases/<version>.md`。
 - 版本 PR 合併後，版本工作流程會為 `chore(release): prepare <version>` 這個 commit 建立標籤。該標籤觸發發行工作流程：它重新建置、稽核每個封存檔、上傳資產、驗證其 SHA-256 摘要，之後才發布 GitHub Release。
 - GitHub Release 發布後，商店工作流程（`.github/workflows/stores.yml`）把 `omw-<version>-chrome-mv3.zip` 提交到 Chrome Web Store，並把未簽章的附加元件連同標籤 commit 的 `git archive` 與給審查人員的建置説明提交到 addons.mozilla.org。兩個套件都從已發布的 GitHub Release 下載，並以其摘要與 `SHA256SUMS` 驗證。各商店審查通過後才發布該版本。商店已有的版本保持不變，因此發行可以重新執行。Chrome 若有另一個版本仍在審查或等待發布，Chrome 的提交會停止。
-- Chrome 的工作在 `chrome-web-store` 環境中執行。Google Workload Identity Federation 把工作的 GitHub OIDC token 換成發布者服務帳户的短期 access token。Workload Identity 提供者只接受本儲存庫在該環境中執行的 `stores.yml`，因此不保存任何 Google 金鑰。AMO 的工作從 `addons-mozilla-org` 環境的 `AMO_JWT_ISSUER` 與 `AMO_JWT_SECRET` 這兩個 secret 讀取 AMO 的 JWT issuer 與 JWT secret。兩個環境都只允許從 `main` 與 `v*` 標籤部署。
-- 從 `main` 手動執行商店工作流程會列出各商店的狀態，藉此檢查兩組憑證。商店資訊、螢幕截圖與隱私權問答在各商店的開發人員主控台中編輯。
+- Chrome 的工作在 `chrome-web-store` 環境中執行。Google Workload Identity Federation 把工作的 GitHub OIDC token 換成發布者服務帳户的短期 access token。Workload Identity 提供者只接受本儲存庫在該環境中執行的 `stores.yml`，因此不保存任何 Google 金鑰。AMO 的工作從 `addons-mozilla-org` 環境的 `AMO_JWT_ISSUER` 與 `AMO_JWT_SECRET` 這兩個 secret 讀取 AMO 的 JWT issuer 與 JWT secret。被呼叫的工作流程只會收到呼叫端傳入的環境 secret，因此發行工作流程以名稱把這兩個 secret 傳給商店工作流程。兩個環境都只允許從 `main` 與 `v*` 標籤部署。
+- 從 `main` 手動執行商店工作流程會列出各商店的狀態，藉此檢查兩組憑證。在 `tag` 輸入填入發行標籤時，這次執行會簽出該標籤，並像發行工作流程一樣提交該標籤已發布的 GitHub Release：`gh workflow run stores.yml --ref main -f tag=v0.2.1`。商店資訊、螢幕截圖與隱私權問答在各商店的開發人員主控台中編輯。
 - 封存檔使用 zstd 層級 3，以 `zstd -dc archive.tar.zst | tar -xf - -C DIR` 解開。
 
 ## 授權 [#license]
