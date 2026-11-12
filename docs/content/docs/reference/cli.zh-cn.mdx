@@ -113,7 +113,7 @@ token 是以十六进制表示的 32 个随机字节，与 `config.json` 保存�
 ## call [#call]
 
 ```sh
-omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]
+omw call [--browser chrome|firefox] [--timeout-ms N] SESSION ACTION [JSON|-]
 ```
 
 对 daemon 发送一个动作，并输出它的 JSON 回复。会话名称由 1 到 96 个字符组成，可用字母（包括 CJK）、数字、`_`、`.` 或 `-`。`ACTION` 是[动作参考](./actions.mdx)中的其中一个动作。
@@ -127,7 +127,15 @@ echo '{"selector":"#submit"}' | omw call --browser firefox form click -
 
 `--browser` 把动作送往指定的浏览器。省略时，daemon 依序依据会话绑定、唯一已连接的浏览器、Chrome 来路由。
 
-客户端最多等待 125 秒。daemon 套用命令自己的期限，默认为 30 秒。回复照 daemon 发送的内容输出。HTTP 状态码为 400 或以上时，命令在输出回复后以状态码 1 结束。
+`--timeout-ms` 设置命令的期限，范围 1 到 120000 毫秒，与请求本文中的 `timeoutMs` 相同。省略时期限为 30 秒。
+
+```sh
+omw call --timeout-ms 5000 research wait '{"selector":"#done"}'
+```
+
+旗标放在会话名称之前。会话名称以 `-` 开头时，在它前面加上 `--`。
+
+客户端最多等待 125 秒。回复照 daemon 发送的内容输出。HTTP 状态码为 400 或以上时，命令在输出回复后以状态码 1 结束。
 
 ## service install [#service-install]
 

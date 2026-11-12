@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -44,7 +45,7 @@ omw stop                        stop this daemon gracefully; leaves tabs open
 omw status | doctor             authenticated diagnostics, one line per browser on stderr
 omw pair                        show a one-time code that pairs a browser extension
 omw connection                  print the private token for the extension
-omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]
+omw call [--browser chrome|firefox] [--timeout-ms N] SESSION ACTION [JSON|-]
                                 run one action (read JSON from stdin with -)
 omw service install             install a launchd/systemd user service
 omw skill                       print the bundled agent guide
@@ -105,31 +106,11 @@ fixed at 127.0.0.1:17373; no network-facing bind is supported.`)
 	case "start":
 		return start(c)
 	case "call":
-		rest, browser := args[1:], ""
-		if len(rest) > 0 && rest[0] == "--browser" {
-			if len(rest) < 2 || (rest[1] != bridge.Chrome && rest[1] != bridge.Firefox) {
-				return errors.New("--browser must be chrome or firefox")
-			}
-			browser, rest = rest[1], rest[2:]
+		cmd, err := callCommand(args[1:], os.Stdin)
+		if err != nil {
+			return err
 		}
-		if len(rest) < 2 || len(rest) > 3 {
-			return errors.New("usage: omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]")
-		}
-		raw := []byte(`{}`)
-		if len(rest) == 3 {
-			if rest[2] == "-" {
-				raw, err = io.ReadAll(io.LimitReader(os.Stdin, 2<<20))
-				if err != nil {
-					return err
-				}
-			} else {
-				raw = []byte(rest[2])
-			}
-		}
-		if !json.Valid(raw) || len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
-			return errors.New("args must be a JSON object")
-		}
-		body, err := json.Marshal(bridge.Command{Session: rest[0], Action: rest[1], Browser: browser, Args: raw})
+		body, err := json.Marshal(cmd)
 		if err != nil {
 			return err
 		}
@@ -143,6 +124,49 @@ fixed at 127.0.0.1:17373; no network-facing bind is supported.`)
 		return fmt.Errorf("unknown command %q; run omw help", args[0])
 	}
 }
+
+const callUsage = "usage: omw call [--browser chrome|firefox] [--timeout-ms N] SESSION ACTION [JSON|-]"
+
+// callCommand builds the command that omw call sends. Flags come before the
+// session; "--" ends them, for a session name that starts with "-". Without
+// --timeout-ms the daemon applies its default deadline.
+func callCommand(args []string, stdin io.Reader) (bridge.Command, error) {
+	flags := flag.NewFlagSet("call", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	browser := flags.String("browser", "", "")
+	timeout := flags.Int("timeout-ms", 0, "")
+	if err := flags.Parse(args); err != nil {
+		return bridge.Command{}, fmt.Errorf("%w; %s", err, callUsage)
+	}
+	set := map[string]bool{}
+	flags.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if set["browser"] && *browser != bridge.Chrome && *browser != bridge.Firefox {
+		return bridge.Command{}, errors.New("--browser must be chrome or firefox")
+	}
+	if set["timeout-ms"] && (*timeout < 1 || *timeout > 120000) {
+		return bridge.Command{}, errors.New("--timeout-ms must be 1 to 120000")
+	}
+	rest := flags.Args()
+	if len(rest) < 2 || len(rest) > 3 {
+		return bridge.Command{}, errors.New(callUsage)
+	}
+	raw := []byte(`{}`)
+	if len(rest) == 3 {
+		if rest[2] == "-" {
+			var err error
+			if raw, err = io.ReadAll(io.LimitReader(stdin, 2<<20)); err != nil {
+				return bridge.Command{}, err
+			}
+		} else {
+			raw = []byte(rest[2])
+		}
+	}
+	if !json.Valid(raw) || len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
+		return bridge.Command{}, errors.New("args must be a JSON object")
+	}
+	return bridge.Command{Session: rest[0], Action: rest[1], Browser: *browser, Args: raw, TimeoutMS: *timeout}, nil
+}
+
 func clientRequest(c config.Config, method, path string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequest(method, "http://"+c.Address+path, bytes.NewReader(body))
 	if err != nil {
