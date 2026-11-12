@@ -21,7 +21,7 @@ daemon 以两种模式在 `127.0.0.1:17373` 提供 Chrome DevTools Protocol，�
 | `/json/version`          | GET       | 不含浏览器 WebSocket URL 的版本对象。 |
 | `/devtools/page/{tabId}` | WebSocket | 一个标签页的一个 CDP 会话。           |
 
-只有 Firefox 扩展程序已连接时，这些端点以 HTTP 501 响应，错误码为 `unsupported`。没有任何浏览器连接时，`/json` 与 `/json/list` 以 HTTP 503 响应，而 `/json/version` 仍返回它的对象。
+只有 Firefox 扩展程序已连接时，这些端点以 HTTP 501 响应，错误码为 `unsupported`。没有任何浏览器连接时，`/json` 与 `/json/list` 以 HTTP 503 响应，错误码为 `browser_offline`，而 `/json/version` 仍返回它的对象。其他失败会带有错误码，以及 `/command` 对该错误码使用的 HTTP 状态码，列在[错误](./actions.mdx#errors)中。
 
 ### /json/list [#jsonlist]
 
@@ -61,7 +61,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:17373/json/list
 
 连接到 `ws://127.0.0.1:17373/devtools/page/{tabId}`，并在升级请求上带 Bearer 标头。在接受 WebSocket 之前，daemon 会要求扩展程序附加到该标签页。
 
-- 另一个会话正在使用的标签页，会以 HTTP 409 响应，而且不会被接管。
+- 另一个会话正在使用的标签页，会以 HTTP 409 与 `tab_busy` 响应，而且不会被接管。附加失败时，响应带有错误码，以及 `/command` 对该错误码使用的 HTTP 状态码：没有 Chrome 连接时为 503，附加在 5 秒内没有完成时为 504，受限的标签页或被拒绝的调试器为 502。
 - 客户端中断连接、标签页关闭、调试工具分离，以及 daemon 停止或扩展程序暂停或中断连接时，该标签页都会被释放。之后客户端可以重新连接。
 - 该标签页的事件在附加开始之前就已订阅，因此在附加回复之前抵达的事件仍会被转送。
 

@@ -8,13 +8,15 @@ import {
 } from "./presets.js";
 import {
   attach,
+  cause,
   clearRefs,
+  closedTabId,
   countNodes,
   detach,
   detached,
   enablePageEvents,
   evaluate,
-  node,
+  nodeCommand,
   onNode,
   pageEventsDisabled,
   send,
@@ -28,8 +30,10 @@ import { snowflake } from "./id.js";
 import { forget as forgetNetwork, network } from "./network.js";
 import {
   fail,
+  fault,
   nextPoll,
   stringArg,
+  waitCheck,
   type Args,
   type Budget,
   type Command,
@@ -40,7 +44,9 @@ import { snapshot } from "./snapshot.js";
 import {
   assertOwner,
   claim,
+  closedTab,
   getSession,
+  leaveTab,
   persist,
   release,
   tabURL,
@@ -90,14 +96,15 @@ async function detachIfAttached(tabId: number, label: string): Promise<void> {
   try {
     await detach(tabId);
   } catch (error) {
-    const { message } = error as Error;
-    if (
-      !/^(No tab with given id|Debugger is not attached to the tab with id:) \d+\.$/u.test(message)
-    )
-      throw error;
+    const reason = cause(error as Error);
+    if (reason !== "tab" && reason !== "detached") throw error;
     detached(tabId);
-    console.warn(`${label} tab ${tabId}: ${message}`);
+    console.warn(`${label} tab ${tabId}: ${(error as Error).message}`);
   }
+}
+// Lets a step on a tab that has closed count as done; other failures propagate.
+function unlessClosed(error: Error): void {
+  if (closedTabId(error) === undefined && fault(error).code !== "tab_missing") throw error;
 }
 // Releases the tabs of page CDP clients after the daemon connection that serves
 // them has closed, since the daemon can no longer send their cdp_detach. The
@@ -114,11 +121,53 @@ export async function releasePageClients(): Promise<void> {
   }
 }
 
+// Whether the condition of a wait holds now. An element that goes away between
+// the lookup and the visibility check is not visible, and a document that has
+// no body yet does not contain the text.
+async function waitCondition(tabId: number, args: Args): Promise<boolean> {
+  if (args.selector) {
+    try {
+      if (!(await countNodes(tabId, args.selector))) return false;
+      return await onNode<boolean>(
+        tabId,
+        args.selector,
+        "function(){return !!this.getClientRects().length&&getComputedStyle(this).visibility!=='hidden'}",
+      );
+    } catch (error) {
+      // A removed element whose @e reference has expired is hidden too; a wait
+      // for it to show needs a new snapshot.
+      const code = fault(error as Error).code;
+      if (code === "element_missing" || (code === "stale_ref" && args.state === "hidden"))
+        return false;
+      throw error;
+    }
+  }
+  if (args.expression) return !!(await evaluate(tabId, args.expression));
+  if (args.load)
+    return evaluate<boolean>(
+      tabId,
+      args.load === "load" ? "document.readyState==='complete'" : "document.readyState!=='loading'",
+    );
+  if (args.text)
+    return evaluate<boolean>(
+      tabId,
+      `(document.body?.innerText??"").includes(${JSON.stringify(args.text)})`,
+    );
+  const pattern =
+    "^" +
+    (args.url ?? "")
+      .split("*")
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+      .join(".*") +
+    "$";
+  return new RegExp(pattern, "u").test(await evaluate<string>(tabId, "location.href"));
+}
 async function tabFor(name: string, s: Session, args: Args, budget: Budget): Promise<number> {
   const tabId = args.tabId ?? args.tab ?? s.current;
   if (!tabId) fail("no_tab", "navigate or find_tab before using a page action");
-  assertOwner(name, tabId);
+  // A closed tab has left its session already; its read fails with tab_missing.
   const tab = await chrome.tabs.get(tabId);
+  assertOwner(name, tabId);
   if (!webTab(tab)) fail("restricted_tab", "only non-incognito HTTP(S) pages are supported");
   if (s.tabs.includes(tabId) && !emulated.has(tabId)) {
     if (s.settings) await feature("emulate", tabId, s.settings, budget);
@@ -246,7 +295,9 @@ async function point(
 ): Promise<{ x: number; y: number }> {
   await sendRoot(tabId, "Emulation.setFocusEmulationEnabled", { enabled: true });
   try {
-    await onNode(
+    // An element without a box has no point to act on; at a covered element's
+    // center another element would receive the input.
+    const reach = await onNode<"hidden" | "covered" | true>(
       tabId,
       selector,
       `async function(){
@@ -259,15 +310,14 @@ async function point(
       const cx=(Math.max(0,r.left)+Math.min(r.right,innerWidth))/2;
       const cy=(Math.max(0,r.top)+Math.min(r.bottom,innerHeight))/2;
       const hit=this.getRootNode().elementFromPoint?.(cx,cy) ?? document.elementFromPoint(cx,cy);
-      if(!r.width||!r.height||!hit||!(hit===this||this.contains(hit))) throw Error('element is hidden or covered');
+      if(!r.width||!r.height) return 'hidden';
+      if(!hit||!(hit===this||this.contains(hit))) return 'covered';
       return true;
     }`,
     );
-    const result = await send<{ quads: number[][] }>(
-      tabId,
-      "DOM.getContentQuads",
-      await node(tabId, selector),
-    );
+    if (reach === "hidden") fail("element_hidden", "element is hidden: it has no box");
+    if (reach === "covered") fail("element_action_failed", "element is covered by another element");
+    const result = await nodeCommand<{ quads: number[][] }>(tabId, selector, "DOM.getContentQuads");
     const quad = result.quads[0];
     if (!quad || quad.length !== 8) fail("element_hidden", "element has no content quad");
     const target = quadRect(tabId, quad);
@@ -296,7 +346,18 @@ async function mouse(
   });
 }
 
+// Runs a command. chrome.tabs and chrome.debugger name a closed tab in the
+// errors they report, also from presets.ts; the command fails with tab_missing.
 export async function execute(command: Command, budget: Budget): Promise<object> {
+  try {
+    return await run(command, budget);
+  } catch (error) {
+    const tabId = closedTabId(error as Error);
+    if (tabId !== undefined) closedTab(tabId);
+    throw error;
+  }
+}
+async function run(command: Command, budget: Budget): Promise<object> {
   budget.check();
   const { action, session: name } = command;
   const args = command.args ?? {};
@@ -320,9 +381,17 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         "batch needs 1–64 non-nested steps; close sessions and create artifacts separately",
       );
     const results: object[] = [];
-    for (const step of args.steps) {
-      budget.check();
-      results.push(await execute({ ...command, action: step.action, args: step.args }, budget));
+    const count = args.steps.length;
+    for (const [index, step] of args.steps.entries()) {
+      // A failed step keeps its code; the message says which step it was, so
+      // the steps before it completed.
+      try {
+        budget.check();
+        results.push(await execute({ ...command, action: step.action, args: step.args }, budget));
+      } catch (error) {
+        const { code, message } = fault(error as Error);
+        fail(code, `batch step ${index + 1} of ${count} (${step.action}): ${message}`);
+      }
     }
     return { results };
   }
@@ -393,8 +462,8 @@ export async function execute(command: Command, budget: Budget): Promise<object>
   if (action === "switch_tab") {
     const tabId = args.tabId;
     if (!tabId) fail("invalid_args", "tabId required");
-    assertOwner(name, tabId);
     const tab = await chrome.tabs.get(tabId);
+    assertOwner(name, tabId);
     if (tab.discarded) {
       await chrome.tabs.reload(tabId);
       await waitReady(tabId, budget);
@@ -585,9 +654,9 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       // close while the client's disconnect is handled here.
       await detachIfAttached(tabId, "end page CDP client");
       forgetTab(tabId);
+      leaveTab(s, tabId);
       s.tabs = s.tabs.filter((id) => id !== tabId);
       s.borrowed = s.borrowed.filter((id) => id !== tabId);
-      if (s.current === tabId) s.current = s.tabs.at(-1) ?? s.borrowed.at(-1);
       if (!s.tabs.length) s.group = undefined;
     }
     if (s.tabs.length || s.borrowed.length) await persist();
@@ -612,23 +681,25 @@ export async function execute(command: Command, budget: Budget): Promise<object>
   }
   if (action === "close_session") {
     const owned = [...s.tabs];
+    // A tab that closed meanwhile, before tabs.onRemoved reached the session,
+    // counts as closed. Another failure keeps the session, so that
+    // close_session can run again for the tabs that remain.
     for (const [key, stream] of streams)
       if (stream.session === name) {
         streams.delete(key);
-        await sendRoot(stream.tabId, "IO.close", { handle: stream.handle });
+        await sendRoot(stream.tabId, "IO.close", { handle: stream.handle }).catch(unlessClosed);
       }
     for (const tabId of owned) {
       budget.check();
-      await chrome.tabs.remove(tabId);
+      await chrome.tabs.remove(tabId).catch(unlessClosed);
     }
     for (const tabId of s.borrowed) {
       await releaseLayer(tabId);
-      await detach(tabId);
+      await detachIfAttached(tabId, "release borrowed");
       forgetTab(tabId);
     }
-    const closed = owned.length;
     await release(name);
-    return { success: true, closed };
+    return { success: true, closed: owned.length };
   }
   if (action === "artifact_read" || action === "artifact_close") {
     const handle = stringArg(args.handle, "handle");
@@ -676,6 +747,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     case "close_tab": {
       if (!s.tabs.includes(tabId))
         fail("borrowed_tab", "borrowed tabs are never closed; use close_session to release");
+      leaveTab(s, tabId);
       await chrome.tabs.remove(tabId);
       return { success: true, closed: true };
     }
@@ -773,7 +845,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       return { success: true };
     }
     case "key_type": {
-      if (args.selector) await send(tabId, "DOM.focus", await node(tabId, args.selector));
+      if (args.selector) await nodeCommand(tabId, args.selector, "DOM.focus");
       await send(tabId, "Input.insertText", { text: stringArg(args.text, "text") });
       return { success: true };
     }
@@ -880,40 +952,10 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       return { success: true };
     }
     case "wait": {
+      if (!args.selector && !args.expression && !args.load && !args.text && !args.url)
+        fail("invalid_args", "wait requires selector, expression, load, text or url");
       for (;;) {
-        budget.check();
-        let matched: boolean;
-        if (args.selector) {
-          matched = (await countNodes(tabId, args.selector)) > 0;
-          if (matched)
-            matched = await onNode<boolean>(
-              tabId,
-              args.selector,
-              "function(){return !!this.getClientRects().length&&getComputedStyle(this).visibility!=='hidden'}",
-            );
-        } else if (args.expression) matched = !!(await evaluate(tabId, args.expression));
-        else if (args.load)
-          matched = await evaluate<boolean>(
-            tabId,
-            args.load === "load"
-              ? "document.readyState==='complete'"
-              : "document.readyState!=='loading'",
-          );
-        else if (args.text)
-          matched = await evaluate<boolean>(
-            tabId,
-            `document.body.innerText.includes(${JSON.stringify(args.text)})`,
-          );
-        else if (args.url) {
-          const pattern =
-            "^" +
-            args.url
-              .split("*")
-              .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
-              .join(".*") +
-            "$";
-          matched = new RegExp(pattern, "u").test(await evaluate<string>(tabId, "location.href"));
-        } else fail("invalid_args", "wait requires selector, expression, load, text or url");
+        const matched = await waitCheck(budget, () => waitCondition(tabId, args));
         if (matched !== (args.state === "hidden")) return { success: true };
         await nextPoll(budget);
       }
@@ -935,9 +977,8 @@ export async function execute(command: Command, budget: Budget): Promise<object>
           "file_access_required",
           'turn on "Allow access to file URLs" for oh-my-webbridge in chrome://extensions to upload local files',
         );
-      await send(tabId, "DOM.setFileInputFiles", {
+      await nodeCommand(tabId, stringArg(args.selector, "selector"), "DOM.setFileInputFiles", {
         files: args.files,
-        ...(await node(tabId, stringArg(args.selector, "selector"))),
       });
       return { success: true, fileCount: args.files.length };
     }

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -158,6 +159,15 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonOut(w, 200, map[string]any{"running": true, "version": Version, "protocol": Protocol, "extension_connected": s.Hub.Connected(), "browsers": s.Hub.Browsers(), "inflight": s.Hub.Inflight(), "uptime_seconds": int(time.Since(s.Started).Seconds()), "native_cdp": s.Config.CDP != "", "memory": map[string]any{"heap_alloc_bytes": mem.HeapAlloc, "heap_sys_bytes": mem.HeapSys, "peak_rss_bytes": peakRSS, "goroutines": runtime.NumGoroutine()}})
 }
+
+// commandBody is the body of POST /command. Its timeoutMs hides the one of
+// Command, so an omitted deadline takes the default of 30 seconds and an
+// explicit one outside 1–120000, 0 included, is rejected.
+type commandBody struct {
+	Command
+	TimeoutMS *int `json:"timeoutMs"`
+}
+
 func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 	// Every command holds an admitted slot while its body is read and it runs.
 	// Once its browser is resolved, an ordinary command also needs one of that
@@ -171,13 +181,14 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
-	var cmd Command
+	var body commandBody
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if err := d.Decode(&cmd); err != nil {
+	if err := d.Decode(&body); err != nil {
 		jsonOut(w, 400, Reply{Error: &Fault{"invalid_request", err.Error()}})
 		return
 	}
+	cmd := body.Command
 	if err := d.Decode(new(any)); err != io.EOF {
 		jsonOut(w, 400, Reply{Error: &Fault{"invalid_request", "expected one JSON object"}})
 		return
@@ -190,12 +201,14 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, 400, Reply{Error: &Fault{"invalid_request", "browser must be chrome or firefox"}})
 		return
 	}
-	if cmd.TimeoutMS == 0 {
+	switch {
+	case body.TimeoutMS == nil:
 		cmd.TimeoutMS = 30000
-	}
-	if cmd.TimeoutMS < 1 || cmd.TimeoutMS > 120000 {
+	case *body.TimeoutMS < 1 || *body.TimeoutMS > 120000:
 		jsonOut(w, 400, Reply{Error: &Fault{"invalid_request", "timeoutMs must be 1–120000"}})
 		return
+	default:
+		cmd.TimeoutMS = *body.TimeoutMS
 	}
 	if cmd.ID == "" {
 		cmd.ID = NewID()
@@ -259,26 +272,31 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, Reply{ID: cmd.ID, Result: result})
 }
 
+// statusOf is the HTTP status of a fault code, for /command and the CDP
+// endpoints alike.
+func statusOf(code string) int {
+	switch code {
+	case "busy":
+		return 429
+	case "browser_offline":
+		return 503
+	case "outcome_unknown":
+		return 504
+	case "wait_timeout":
+		return 408
+	case "invalid_request", "invalid_args":
+		return 400
+	case "stale_ref", "tab_busy", "session_browser":
+		return 409
+	case "unsupported":
+		return 501
+	}
+	return 502
+}
+
 func replyError(w http.ResponseWriter, id string, err error) {
 	e := fault(err)
-	code := 502
-	switch e.Code {
-	case "busy":
-		code = 429
-	case "browser_offline":
-		code = 503
-	case "outcome_unknown":
-		code = 504
-	case "wait_timeout":
-		code = 408
-	case "invalid_request", "invalid_args":
-		code = 400
-	case "stale_ref", "tab_busy", "session_busy", "session_browser":
-		code = 409
-	case "unsupported":
-		code = 501
-	}
-	jsonOut(w, code, Reply{ID: id, Error: e})
+	jsonOut(w, statusOf(e.Code), Reply{ID: id, Error: e})
 }
 func (s *Server) extension(w http.ResponseWriter, r *http.Request) {
 	browser := originBrowser(r.Header.Get("Origin"))
@@ -397,10 +415,9 @@ func (s *Server) saveArtifact(ctx context.Context, browser string, cmd Command, 
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(s.Config.Dir, "artifacts")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
+	// Failures at a path that the caller chose are invalid_args; failures in
+	// the daemon's own artifacts directory stay internal.
+	chosen := target != ""
 	ext := ".png"
 	if artifact.Format == "jpeg" {
 		ext = ".jpg"
@@ -408,27 +425,25 @@ func (s *Server) saveArtifact(ctx context.Context, browser string, cmd Command, 
 	if cmd.Action == "save_as_pdf" {
 		ext = ".pdf"
 	}
-	if target == "" {
+	if !chosen {
+		dir := filepath.Join(s.Config.Dir, "artifacts")
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return nil, err
+		}
 		target = filepath.Join(dir, NewID()+ext)
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
-		return nil, err
+	} else if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+		return nil, &Fault{"invalid_args", "create the directory of the artifact path: " + err.Error()}
 	}
 	f, err := os.CreateTemp(filepath.Dir(target), ".omw-*")
 	if err != nil {
+		if chosen {
+			return nil, &Fault{"invalid_args", "create a file in the directory of the artifact path: " + err.Error()}
+		}
 		return nil, err
 	}
 	defer os.Remove(f.Name())
 	defer f.Close()
-	var total int64
-	write := func(data string) error {
-		n, err := io.Copy(f, io.LimitReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(data)), MaxArtifact-total+1))
-		total += n
-		if total > MaxArtifact {
-			return fmt.Errorf("artifact exceeds 100 MiB")
-		}
-		return err
-	}
+	out := &artifactWriter{w: f}
 	if artifact.Stream != "" {
 		for {
 			raw, _ := json.Marshal(map[string]string{"handle": artifact.Stream})
@@ -444,27 +459,21 @@ func (s *Server) saveArtifact(ctx context.Context, browser string, cmd Command, 
 			if err = json.Unmarshal(r, &chunk); err != nil {
 				return nil, err
 			}
+			data := io.Reader(strings.NewReader(chunk.Data))
 			if chunk.Base64 {
-				err = write(chunk.Data)
-			} else {
-				var n int
-				n, err = io.WriteString(f, chunk.Data)
-				total += int64(n)
-				if total > MaxArtifact {
-					err = fmt.Errorf("artifact exceeds 100 MiB")
-				}
+				data = base64.NewDecoder(base64.StdEncoding, data)
 			}
-			if err != nil {
+			if err = out.write(data); err != nil {
 				return nil, err
 			}
 			if chunk.EOF {
 				break
 			}
 		}
-	} else if err = write(artifact.Data); err != nil {
+	} else if err = out.write(base64.NewDecoder(base64.StdEncoding, strings.NewReader(artifact.Data))); err != nil {
 		return nil, err
 	}
-	if total == 0 {
+	if out.total == 0 {
 		return nil, fmt.Errorf("empty artifact")
 	}
 	if err = f.Sync(); err != nil {
@@ -473,11 +482,44 @@ func (s *Server) saveArtifact(ctx context.Context, browser string, cmd Command, 
 	if err = f.Close(); err != nil {
 		return nil, err
 	}
-	// Link refuses to overwrite an existing user file; temp and target share a filesystem.
+	// Link refuses to overwrite an existing file; the temporary file and the
+	// target share a directory, so they share a file system.
 	if err = os.Link(f.Name(), target); err != nil {
-		return nil, fmt.Errorf("save artifact (existing paths are never overwritten): %w", err)
+		if chosen {
+			return nil, linkFault(target, err)
+		}
+		return nil, fmt.Errorf("save artifact: %w", err)
 	}
-	return json.Marshal(map[string]any{"path": target, "sizeBytes": total, "mimeType": artifact.MIME, "pageTitle": artifact.PageTitle})
+	return json.Marshal(map[string]any{"path": target, "sizeBytes": out.total, "mimeType": artifact.MIME, "pageTitle": artifact.PageTitle})
+}
+
+// artifactWriter writes the bytes of one artifact and fails with
+// result_too_large once they exceed MaxArtifact.
+type artifactWriter struct {
+	w     io.Writer
+	total int64
+}
+
+func (a *artifactWriter) write(data io.Reader) error {
+	n, err := io.Copy(a.w, io.LimitReader(data, MaxArtifact-a.total+1))
+	a.total += n
+	if a.total > MaxArtifact {
+		return &Fault{"result_too_large", "the artifact exceeds 100 MiB; capture a smaller area or fewer pages"}
+	}
+	return err
+}
+
+// linkFault describes a failed link of a finished artifact to the path that
+// the caller chose: the path appeared after it was checked, or its file system
+// has no hard links (EPERM on Linux, ENOTSUP or EOPNOTSUPP on macOS).
+func linkFault(target string, err error) error {
+	switch {
+	case errors.Is(err, os.ErrExist):
+		return &Fault{"invalid_args", "artifact path already exists; choose a new path"}
+	case errors.Is(err, syscall.EPERM), errors.Is(err, syscall.ENOTSUP), errors.Is(err, syscall.EOPNOTSUPP), errors.Is(err, syscall.EXDEV):
+		return &Fault{"invalid_args", fmt.Sprintf("the file system of %s has no hard links, which the daemon needs to save without overwriting; choose a path on another file system (%v)", filepath.Dir(target), err)}
+	}
+	return fmt.Errorf("save artifact: %w", err)
 }
 
 func ParseCDP(endpoint string) (*url.URL, error) {

@@ -45,7 +45,7 @@ Firefox ESR、Developer Edition、Nightly 與未加品牌的建置版本，在 `
 3. **允許指令碼**：授予選用的 `userScripts` 權限。
 4. **和 Agent 試試看**：執行 `omw install-skill ~/.agents/skills`，再請 Agent 做點事。
 
-- **存取所有網站**是 `<all_urls>` 主機權限，在安裝時請求。你可以在 `about:addons` 的「權限」中關閉它。關閉後，頁面動作、`screenshot`、`cookies`、帶有 `cmd: "start"` 的 `network` 與帶有 `data` 的 `emulate` 會回傳 `restricted_tab`，預設集也會停止過濾請求。此時 `navigate` 到回應 204 No Content 或 205 Reset Content 的 URL，會一直等到指令的期限。重新開啓這項權限即可恢復過濾。
+- **存取所有網站**是 `<all_urls>` 主機權限，在安裝時請求。你可以在 `about:addons` 的「權限」中關閉它。關閉後，頁面動作、`screenshot`、`cookies`、帶有 `cmd: "start"` 的 `network` 與帶有 `data` 的 `emulate` 會回傳 `restricted_tab`，預設集也會停止過濾請求。此時 `navigate` 到回應 204 No Content 或 205 Reset Content 的 URL，會一直等到指令的期限。重新開啓這項權限即可恢復過濾。Firefox 不讓擴充功能存取的頁面（例如 `about:` 頁面與 addons.mozilla.org），即使開啓這項權限也會回傳 `restricted_tab`。頁面動作遇到分頁正在導覽時回傳 `outcome_unknown`，`wait` 則在新頁面上繼續檢查。
 - **使用者指令碼**是選用的 `userScripts` 權限。請在步驟 3 選擇**允許指令碼**，或到**設定**，再到**網頁**，並確認 Firefox 的提示。Firefox 只接受來自使用者操作的請求，所以這些按鈕是授予權限的唯一入口。在授予之前，`evaluate` 與帶有 `expression` 的 `wait` 會回傳 `unsupported`。
 
 彈出式視窗中的**暫停**會讓擴充功能與 daemon 中斷連線，直到你選擇**繼續**。
@@ -66,31 +66,31 @@ daemon 同一時間各保持一個 Chrome 連線與一個 Firefox 連線。同�
 
 除非表格列出差異，動作的行為與 Chrome 相同。Firefox 無法執行的動作或參數會回傳 `unsupported`（HTTP 501），訊息中會指出動作、參數與原因。
 
-| 動作                                                     | Firefox 的行為                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `navigate`                                               | 預設集封鎖頂層頁面時，分頁停留在目前的頁面；`navigate` 回傳該 URL，在新分頁中則回傳 `about:blank` |
-| `window_new`                                             | 忽略 `focused: false`；新視窗會取得焦點                                                           |
-| `click`、`dblclick`、`mouse_click`、`hover`、`send_keys` | 不受信任事件；檢查 `isTrusted` 的頁面會忽略它們                                                   |
-| `keyboard`（`down`、`up`）、`mouse`、`drag`              | `unsupported`                                                                                     |
-| `key_type`、`keyboard`（`insertText`）                   | 沒有可編輯元素取得焦點時，回傳 `element_action_failed`                                            |
-| `scroll`                                                 | 不觸發 `wheel` 事件；未知的 `direction` 回傳 `invalid_args`                                       |
-| `snapshot`、`read_page`、`find`                          | 角色與名稱取自 DOM；同一個頁面得到的文字可能與 Chrome 不同                                        |
-| `wait`                                                   | `expression` 需要使用者指令碼權限                                                                 |
-| `evaluate`                                               | 需要使用者指令碼權限；`contextId` 回傳 `unsupported`                                              |
-| `frame`                                                  | 以字串回傳數值的 `frameId`，不回傳 `contextId`                                                    |
-| `history`                                                | `back`、`forward` 與 `reload` 可用；`list` 回傳 `unsupported`                                     |
-| `dialog`、`console`                                      | `unsupported`                                                                                     |
-| `dialog_status`                                          | 只回傳 URL，不含對話框類型或訊息                                                                  |
-| `emulate`                                                | 只有 `data`（額外的請求標頭）可用                                                                 |
-| `cookies`                                                | 使用分頁的 cookie 存放區，可能是容器；涵蓋所有 cookie 分區；`set` 寫入未分區的 cookie             |
-| `download`                                               | 以分頁的 cookie 存放區傳送 cookie，該存放區可能是容器                                             |
-| `upload`                                                 | 由 daemon 讀取檔案：每個指令 16 MiB，傳輸中共 64 MiB                                              |
-| `screenshot`                                             | 擷取分頁但不啓用它；`selector` 與 `fullPage` 需要主框架                                           |
-| `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 會開啓儲存對話框，且不回傳 PDF 位元組                             |
-| `network`                                                | 最多 500 個項目；本文超過 1 MiB 或本文已被丟棄時，回傳錯誤                                        |
-| `preset`                                                 | 使用會阻擋的 `webRequest`；見[預設集](#presets)                                                   |
-| `cdp`、`cdp_attach`、`cdp_detach`、`list_targets`        | `unsupported`；Firefox 沒有 CDP                                                                   |
-| `artifact_read`、`artifact_close`                        | `unsupported`；Firefox 的動作不回傳 artifact 串流                                                 |
+| 動作                                                     | Firefox 的行為                                                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `navigate`                                               | 預設集封鎖頂層頁面時，分頁停留在目前的頁面；`navigate` 回傳該 URL，在新分頁中則回傳 `about:blank`        |
+| `window_new`                                             | 忽略 `focused: false`；新視窗會取得焦點                                                                  |
+| `click`、`dblclick`、`mouse_click`、`hover`、`send_keys` | 不受信任事件；檢查 `isTrusted` 的頁面會忽略它們                                                          |
+| `keyboard`（`down`、`up`）、`mouse`、`drag`              | `unsupported`                                                                                            |
+| `key_type`、`keyboard`（`insertText`）                   | 沒有可編輯元素取得焦點時，回傳 `element_action_failed`                                                   |
+| `scroll`                                                 | 不觸發 `wheel` 事件；未知的 `direction` 回傳 `invalid_args`                                              |
+| `snapshot`、`read_page`、`find`                          | 角色與名稱取自 DOM；同一個頁面得到的文字可能與 Chrome 不同                                               |
+| `wait`                                                   | `expression` 需要使用者指令碼權限                                                                        |
+| `evaluate`                                               | 需要使用者指令碼權限；`contextId` 回傳 `unsupported`                                                     |
+| `frame`                                                  | 以字串回傳數值的 `frameId`，不回傳 `contextId`                                                           |
+| `history`                                                | `back`、`forward` 與 `reload` 可用；`list` 回傳 `unsupported`                                            |
+| `dialog`、`console`                                      | `unsupported`                                                                                            |
+| `dialog_status`                                          | 只回傳 URL，不含對話框類型或訊息                                                                         |
+| `emulate`                                                | 只有 `data`（額外的請求標頭）可用                                                                        |
+| `cookies`                                                | 使用分頁的 cookie 存放區，可能是容器；涵蓋所有 cookie 分區；`set` 寫入未分區的 cookie                    |
+| `download`                                               | 以分頁的 cookie 存放區傳送 cookie，該存放區可能是容器                                                    |
+| `upload`                                                 | 由 daemon 讀取檔案：每個指令 16 MiB，傳輸中共 64 MiB                                                     |
+| `screenshot`                                             | 擷取分頁但不啓用它；`selector` 與 `fullPage` 需要主框架                                                  |
+| `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 會開啓儲存對話框，且不回傳 PDF 位元組                                    |
+| `network`                                                | 最多 500 個項目；本文超過 1 MiB 時回傳 `result_too_large`，Firefox 沒有保留的本文回傳 `body_unavailable` |
+| `preset`                                                 | 使用會阻擋的 `webRequest`；見[預設集](#presets)                                                          |
+| `cdp`、`cdp_attach`、`cdp_detach`、`list_targets`        | `unsupported`；Firefox 沒有 CDP                                                                          |
+| `artifact_read`、`artifact_close`                        | `unsupported`；Firefox 的動作不回傳 artifact 串流                                                        |
 
 Firefox 擴充功能無法產生受信任的輸入。`click`、`dblclick`、`mouse_click`、`hover` 與 `send_keys` 會分派 `pointer*`、`mouse*` 與 `key*` 事件，其 `isTrusted` 為 `false`。頁面不會取得使用者啓用狀態。頁面由這些事件發起的 `window.open` 彈出視窗、檔案選擇器、全螢幕與剪貼簿讀取都會失敗。`click` 之後仍會呼叫 `element.click()`，執行連結、按鈕與表單控制項的預設動作。`fill` 與 `key_type` 使用 `document.execCommand`，並產生受信任的 `beforeinput` 與 `input` 事件。`hover` 不會設定 `:hover`，所以由 CSS `:hover` 展開的選單會保持關閉。`send_keys` 接受 `Backspace`、`Delete`、`Enter`、`Tab`、`Shift+Tab`、`Control+A` 與 `Meta+A`。其他按鍵會回傳 `unsupported`。
 

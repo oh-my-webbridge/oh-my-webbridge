@@ -21,7 +21,7 @@ daemon 以兩種模式在 `127.0.0.1:17373` 提供 Chrome DevTools Protocol，�
 | `/json/version`          | GET       | 不含瀏覽器 WebSocket URL 的版本物件。 |
 | `/devtools/page/{tabId}` | WebSocket | 一個分頁的一個 CDP 工作階段。         |
 
-只有 Firefox 擴充功能已連線時，這些端點以 HTTP 501 回應，錯誤碼為 `unsupported`。沒有任何瀏覽器連線時，`/json` 與 `/json/list` 以 HTTP 503 回應，而 `/json/version` 仍回傳它的物件。
+只有 Firefox 擴充功能已連線時，這些端點以 HTTP 501 回應，錯誤碼為 `unsupported`。沒有任何瀏覽器連線時，`/json` 與 `/json/list` 以 HTTP 503 回應，錯誤碼為 `browser_offline`，而 `/json/version` 仍回傳它的物件。其他失敗會帶有錯誤碼，以及 `/command` 對該錯誤碼使用的 HTTP 狀態碼，列在[錯誤](./actions.mdx#errors)中。
 
 ### /json/list [#jsonlist]
 
@@ -61,7 +61,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:17373/json/list
 
 連線到 `ws://127.0.0.1:17373/devtools/page/{tabId}`，並在升級請求上帶 Bearer 標頭。在接受 WebSocket 之前，daemon 會要求擴充功能附加到該分頁。
 
-- 另一個工作階段正在使用的分頁，會以 HTTP 409 回應，而且不會被接管。
+- 另一個工作階段正在使用的分頁，會以 HTTP 409 與 `tab_busy` 回應，而且不會被接管。附加失敗時，回應帶有錯誤碼，以及 `/command` 對該錯誤碼使用的 HTTP 狀態碼：沒有 Chrome 連線時為 503，附加在 5 秒內沒有完成時為 504，受限的分頁或被拒絕的偵錯器為 502。
 - 用户端中斷連線、分頁關閉、偵錯工具分離，以及 daemon 停止或擴充功能暫停或中斷連線時，該分頁都會被釋放。之後用户端可以重新連線。
 - 該分頁的事件在附加開始之前就已訂閲，因此在附加回覆之前抵達的事件仍會被轉送。
 

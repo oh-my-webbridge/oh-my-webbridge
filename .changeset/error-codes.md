@@ -1,0 +1,20 @@
+---
+"oh-my-webbridge": patch
+---
+
+# Report each failure with the error code that describes it
+
+Commands that fail report the code their documentation names, in Chrome and Firefox alike, so an agent can tell a retry from a check of the page.
+
+- `wait` checks its condition at least once, also under a deadline of 500 ms or less. A check that is still running when the 500 ms reserve begins ends the wait with `wait_timeout`. An element that goes away during a check counts as not visible, and a document that has no body yet does not contain the text.
+- A command for a tab that was closed fails with `tab_missing`. When the session's current tab closes other than by `close_tab`, the next page action without `tabId` fails with `no_tab`; after `close_tab`, the session continues in the tab it opened last, or else the tab it borrowed last. `close_session` finishes when one of its tabs has already closed; another failure keeps the session, so `close_session` can run again.
+- A stale `@e` reference fails with `stale_ref`, and a selected frame that goes away during a command fails with `frame_unavailable`. In Chrome, a command cut off because the page navigated or the debugger detached fails with `outcome_unknown`.
+- An element that refuses focus, a file or a value fails with `element_action_failed`, and an element without a box fails with `element_hidden`. A selector that does not parse, an unknown `get` property and an unknown `storage` cmd fail with `invalid_args`, and so do a URL, a download file name or a cookie that Firefox rejects. Page-script errors carry the exception message.
+- In Firefox, a page action that meets a navigation of the tab fails with `outcome_unknown`, and `wait` keeps checking on the new page. Pages that Firefox protects from extensions return `restricted_tab`. An `evaluate` whose result cannot be returned, such as a DOM node, fails with `evaluation_failed` after the code ran.
+- A failed `batch` step keeps its code, and the message starts with `batch step N of M (action):`.
+- `outcome_unknown` messages name the cause: the deadline, `close_session`, a cancellation by the daemon or a closed connection. A command that `close_session` cancels while it waits in the queue says that it did not start.
+- A screenshot or PDF `path` whose directory cannot be created or written, that appears while the artifact is saved, or that lies on a file system without hard links fails with `invalid_args`. An artifact over 100 MiB fails with `result_too_large`.
+- A command for a browser that disconnects before the command is sent fails with `browser_offline`. An explicit `timeoutMs` outside 1 to 120000, including 0, fails with `invalid_request`, and the SDK rejects it before sending.
+- `/json`, `/json/list` and `/devtools/page/{tabId}` answer with the HTTP status that `/command` uses for the error code. `omw serve` checks the `cdp` endpoint in `config.json` before it starts.
+
+[PR #34](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/34)

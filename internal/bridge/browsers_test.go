@@ -652,8 +652,9 @@ func get(t *testing.T, s *Server, server *httptest.Server, path string) (int, st
 func TestCDPEndpointsNeedChrome(t *testing.T) {
 	s, server := newServer(t, config.Config{})
 	paths := []string{"/json", "/json/list", "/json/version", "/devtools/page/1", "/devtools/browser"}
-	// Without any extension the endpoints keep their earlier answers.
-	for path, want := range map[string]int{"/json/version": 200, "/json/list": 503, "/devtools/browser": 503} {
+	// Without any extension the endpoints that need Chrome answer
+	// browser_offline with its /command status.
+	for path, want := range map[string]int{"/json/version": 200, "/json/list": 503, "/devtools/page/1": 503, "/devtools/browser": 503} {
 		if code, body := get(t, s, server, path); code != want {
 			t.Errorf("no browser %s: %d %s", path, code, body)
 		}
@@ -684,6 +685,34 @@ func TestCDPEndpointsNeedChrome(t *testing.T) {
 	connect(t, native, nativeServer, firefoxExtension, Packet{Browser: Firefox})
 	if code, body := get(t, native, nativeServer, "/json/version"); code != 200 || !strings.Contains(body, "/devtools/browser") {
 		t.Fatalf("native /json/version: %d %s", code, body)
+	}
+}
+
+// An omitted timeoutMs takes the 30-second default; an explicit one outside
+// 1–120000, 0 included, is rejected before the command is sent.
+func TestExplicitDeadlineOutsideItsRangeIsRejected(t *testing.T) {
+	s, server := newServer(t, config.Config{})
+	_, seen := connect(t, s, server, chromeExtension, Packet{Browser: Chrome})
+	for _, timeout := range []any{0, -1, 120001, 1.5} {
+		reply := fails(t, s, server, map[string]any{"session": "deadline", "action": "echo", "timeoutMs": timeout}, 400, "invalid_request")
+		if !strings.Contains(reply.Error.Message, "timeoutMs") {
+			t.Errorf("timeoutMs %v: %q does not name the field", timeout, reply.Error.Message)
+		}
+	}
+	for _, tc := range []struct {
+		body map[string]any
+		want int
+	}{
+		{map[string]any{"session": "deadline", "action": "echo"}, 30000},
+		{map[string]any{"session": "deadline", "action": "echo", "timeoutMs": nil}, 30000},
+		{map[string]any{"session": "deadline", "action": "echo", "timeoutMs": 120000}, 120000},
+	} {
+		if code, reply := post(t, s, server, tc.body); code != 200 {
+			t.Fatalf("%v: HTTP %d %+v", tc.body, code, reply.Error)
+		}
+		if cmd := <-seen; cmd.TimeoutMS != tc.want {
+			t.Fatalf("%v: forwarded timeoutMs %d, want %d", tc.body, cmd.TimeoutMS, tc.want)
+		}
 	}
 }
 

@@ -75,12 +75,12 @@ const result = await task.call(
 );
 ```
 
-| 選項        | 型別          | 預設    | 意義                                                        |
-| ----------- | ------------- | ------- | ----------------------------------------------------------- |
-| `timeoutMs` | `number`      | `30000` | 指令的期限，包括它在佇列中的時間。daemon 接受 1 到 120000。 |
-| `signal`    | `AbortSignal` | 無      | 取消請求。它會與 `timeoutMs + 5000` 的內部逾時合併。        |
+| 選項        | 型別          | 預設    | 意義                                                                                                  |
+| ----------- | ------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `timeoutMs` | `number`      | `30000` | 指令的期限，包括它在佇列中的時間，範圍 1 到 120000。其他值會在送出請求之前以 `invalid_request` 拒絕。 |
+| `signal`    | `AbortSignal` | 無      | 取消請求。它會與 `timeoutMs + 5000` 的內部逾時合併。                                                  |
 
-請求在 daemon 期限之後 5 秒於本機中止。這讓 daemon 有時間在頁面沒有完成時，以 `outcome_unknown` 回應。
+請求在 daemon 期限之後 5 秒於本機中止。這讓 daemon 有時間在頁面沒有完成時，以 `outcome_unknown` 回應。經由 `signal` 中止的請求以 `AbortError` 拒絕；由內部逾時中止的請求以 `TimeoutError` 拒絕。
 
 ```js
 const controller = new AbortController();
@@ -121,7 +121,7 @@ try {
 
 回覆沒有 JSON 內容類型時，請求從未到達指令處理常式。可能的原因：token 被拒絕、`Host` 不是回送位址、網頁 `Origin`，或連接埠 17373 上是其他服務。
 
-被中止的請求以 `AbortError` 拒絕，沒有 daemon 的錯誤碼。被拒絕的連線以 `fetch` 的 `TypeError` 拒絕。
+被中止的請求以 `AbortError` 拒絕，內部逾時則以 `TimeoutError` 拒絕，兩者都沒有 daemon 的錯誤碼。被拒絕的連線以 `fetch` 的 `TypeError` 拒絕。
 
 完整的錯誤碼清單與復原步驟位於[動作參考](./actions.mdx#errors)。
 

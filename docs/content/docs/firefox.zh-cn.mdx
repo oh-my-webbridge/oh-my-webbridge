@@ -45,7 +45,7 @@ Firefox ESR、Developer Edition、Nightly 与未加品牌的构建版本，在 `
 3. **允许脚本**：授予选用的 `userScripts` 权限。
 4. **和 Agent 试试看**：运行 `omw install-skill ~/.agents/skills`，再请 Agent 做点事。
 
-- **访问所有网站**是 `<all_urls>` 主机权限，在安装时请求。你可以在 `about:addons` 的“权限”中关闭它。关闭后，页面动作、`screenshot`、`cookies`、带有 `cmd: "start"` 的 `network` 与带有 `data` 的 `emulate` 会返回 `restricted_tab`，预设也会停止过滤请求。此时 `navigate` 到响应 204 No Content 或 205 Reset Content 的 URL，会一直等到命令的期限。重新打开这项权限即可恢复过滤。
+- **访问所有网站**是 `<all_urls>` 主机权限，在安装时请求。你可以在 `about:addons` 的“权限”中关闭它。关闭后，页面动作、`screenshot`、`cookies`、带有 `cmd: "start"` 的 `network` 与带有 `data` 的 `emulate` 会返回 `restricted_tab`，预设也会停止过滤请求。此时 `navigate` 到响应 204 No Content 或 205 Reset Content 的 URL，会一直等到命令的期限。重新打开这项权限即可恢复过滤。Firefox 不让扩展程序访问的页面（例如 `about:` 页面与 addons.mozilla.org），即使打开这项权限也会返回 `restricted_tab`。页面动作遇到标签页正在导航时返回 `outcome_unknown`，`wait` 则在新页面上继续检查。
 - **用户脚本**是选用的 `userScripts` 权限。请在步骤 3 选择**允许脚本**，或到**设置**，再到**网页**，并确认 Firefox 的提示。Firefox 只接受来自用户操作的请求，所以这些按钮是授予权限的唯一入口。在授予之前，`evaluate` 与带有 `expression` 的 `wait` 会返回 `unsupported`。
 
 弹出式窗口中的**暂停**会让扩展程序与 daemon 中断连接，直到你选择**继续**。
@@ -66,31 +66,31 @@ daemon 同一时间各保持一个 Chrome 连接与一个 Firefox 连接。同�
 
 除非表格列出差异，动作的行为与 Chrome 相同。Firefox 无法运行的动作或参数会返回 `unsupported`（HTTP 501），消息中会指出动作、参数与原因。
 
-| 动作                                                     | Firefox 的行为                                                                                      |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `navigate`                                               | 预设拦截顶层页面时，标签页停留在目前的页面；`navigate` 返回该 URL，在新标签页中则返回 `about:blank` |
-| `window_new`                                             | 忽略 `focused: false`；新窗口会取得焦点                                                             |
-| `click`、`dblclick`、`mouse_click`、`hover`、`send_keys` | 不受信任事件；检查 `isTrusted` 的页面会忽略它们                                                     |
-| `keyboard`（`down`、`up`）、`mouse`、`drag`              | `unsupported`                                                                                       |
-| `key_type`、`keyboard`（`insertText`）                   | 没有可编辑元素取得焦点时，返回 `element_action_failed`                                              |
-| `scroll`                                                 | 不触发 `wheel` 事件；未知的 `direction` 返回 `invalid_args`                                         |
-| `snapshot`、`read_page`、`find`                          | 角色与名称取自 DOM；同一个页面得到的文字可能与 Chrome 不同                                          |
-| `wait`                                                   | `expression` 需要用户脚本权限                                                                       |
-| `evaluate`                                               | 需要用户脚本权限；`contextId` 返回 `unsupported`                                                    |
-| `frame`                                                  | 以字符串返回数值的 `frameId`，不返回 `contextId`                                                    |
-| `history`                                                | `back`、`forward` 与 `reload` 可用；`list` 返回 `unsupported`                                       |
-| `dialog`、`console`                                      | `unsupported`                                                                                       |
-| `dialog_status`                                          | 只返回 URL，不含对话框类型或消息                                                                    |
-| `emulate`                                                | 只有 `data`（额外的请求标头）可用                                                                   |
-| `cookies`                                                | 使用标签页的 cookie 存放区，可能是容器；涵盖所有 cookie 分区；`set` 写入未分区的 cookie             |
-| `download`                                               | 以标签页的 cookie 存放区发送 cookie，该存放区可能是容器                                             |
-| `upload`                                                 | 由 daemon 读取文件：每个命令 16 MiB，传输中共 64 MiB                                                |
-| `screenshot`                                             | 提取标签页但不激活它；`selector` 与 `fullPage` 需要主框架                                           |
-| `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 会打开保存对话框，且不返回 PDF 字节                                 |
-| `network`                                                | 最多 500 个项目；本文超过 1 MiB 或本文已被丢弃时，返回错误                                          |
-| `preset`                                                 | 使用会阻挡的 `webRequest`；见[预设](#presets)                                                       |
-| `cdp`、`cdp_attach`、`cdp_detach`、`list_targets`        | `unsupported`；Firefox 没有 CDP                                                                     |
-| `artifact_read`、`artifact_close`                        | `unsupported`；Firefox 的动作不返回 artifact 串流                                                   |
+| 动作                                                     | Firefox 的行为                                                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `navigate`                                               | 预设拦截顶层页面时，标签页停留在目前的页面；`navigate` 返回该 URL，在新标签页中则返回 `about:blank`      |
+| `window_new`                                             | 忽略 `focused: false`；新窗口会取得焦点                                                                  |
+| `click`、`dblclick`、`mouse_click`、`hover`、`send_keys` | 不受信任事件；检查 `isTrusted` 的页面会忽略它们                                                          |
+| `keyboard`（`down`、`up`）、`mouse`、`drag`              | `unsupported`                                                                                            |
+| `key_type`、`keyboard`（`insertText`）                   | 没有可编辑元素取得焦点时，返回 `element_action_failed`                                                   |
+| `scroll`                                                 | 不触发 `wheel` 事件；未知的 `direction` 返回 `invalid_args`                                              |
+| `snapshot`、`read_page`、`find`                          | 角色与名称取自 DOM；同一个页面得到的文字可能与 Chrome 不同                                               |
+| `wait`                                                   | `expression` 需要用户脚本权限                                                                            |
+| `evaluate`                                               | 需要用户脚本权限；`contextId` 返回 `unsupported`                                                         |
+| `frame`                                                  | 以字符串返回数值的 `frameId`，不返回 `contextId`                                                         |
+| `history`                                                | `back`、`forward` 与 `reload` 可用；`list` 返回 `unsupported`                                            |
+| `dialog`、`console`                                      | `unsupported`                                                                                            |
+| `dialog_status`                                          | 只返回 URL，不含对话框类型或消息                                                                         |
+| `emulate`                                                | 只有 `data`（额外的请求标头）可用                                                                        |
+| `cookies`                                                | 使用标签页的 cookie 存放区，可能是容器；涵盖所有 cookie 分区；`set` 写入未分区的 cookie                  |
+| `download`                                               | 以标签页的 cookie 存放区发送 cookie，该存放区可能是容器                                                  |
+| `upload`                                                 | 由 daemon 读取文件：每个命令 16 MiB，传输中共 64 MiB                                                     |
+| `screenshot`                                             | 提取标签页但不激活它；`selector` 与 `fullPage` 需要主框架                                                |
+| `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 会打开保存对话框，且不返回 PDF 字节                                      |
+| `network`                                                | 最多 500 个项目；本文超过 1 MiB 时返回 `result_too_large`，Firefox 没有保留的本文返回 `body_unavailable` |
+| `preset`                                                 | 使用会阻挡的 `webRequest`；见[预设](#presets)                                                            |
+| `cdp`、`cdp_attach`、`cdp_detach`、`list_targets`        | `unsupported`；Firefox 没有 CDP                                                                          |
+| `artifact_read`、`artifact_close`                        | `unsupported`；Firefox 的动作不返回 artifact 串流                                                        |
 
 Firefox 扩展程序无法产生受信任的输入。`click`、`dblclick`、`mouse_click`、`hover` 与 `send_keys` 会分派 `pointer*`、`mouse*` 与 `key*` 事件，其 `isTrusted` 为 `false`。页面不会取得用户激活状态。页面由这些事件发起的 `window.open` 弹出窗口、文件选择器、全屏幕与剪贴板读取都会失败。`click` 之后仍会调用 `element.click()`，运行链接、按钮与表单控制项的默认动作。`fill` 与 `key_type` 使用 `document.execCommand`，并产生受信任的 `beforeinput` 与 `input` 事件。`hover` 不会设置 `:hover`，所以由 CSS `:hover` 展开的菜单会保持关闭。`send_keys` 接受 `Backspace`、`Delete`、`Enter`、`Tab`、`Shift+Tab`、`Control+A` 与 `Meta+A`。其他按键会返回 `unsupported`。
 

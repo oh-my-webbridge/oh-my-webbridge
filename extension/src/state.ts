@@ -129,15 +129,31 @@ export async function release(name: string): Promise<void> {
   sessions.delete(name);
   await persist();
 }
+// A tab closed outside close_tab, by the user, the page or its window, leaves
+// its session. A session whose current tab it was has no current tab, so the
+// next page action names its tab or fails with no_tab.
 export async function removed(tabId: number): Promise<void> {
   await ready();
   for (const s of sessions.values()) {
     s.tabs = s.tabs.filter((id) => id !== tabId);
     if (!s.tabs.length) s.group = undefined;
     s.borrowed = s.borrowed.filter((id) => id !== tabId);
-    if (s.current === tabId) s.current = s.tabs.at(-1) ?? s.borrowed.at(-1);
+    if (s.current === tabId) s.current = undefined;
   }
   await persist();
+}
+// The session lets go of tabId through close_tab or the end of a page CDP
+// client. When it was the current tab, the session continues in its last other
+// task tab, else its last other borrowed tab. close_tab calls this before it
+// closes the tab, since removed() can run before chrome.tabs.remove resolves.
+export function leaveTab(s: Session, tabId: number): void {
+  if (s.current !== tabId) return;
+  const others = (ids: number[]): number[] => ids.filter((id) => id !== tabId);
+  s.current = others(s.tabs).at(-1) ?? others(s.borrowed).at(-1);
+}
+// A command addressed a tab that no longer exists.
+export function closedTab(tabId: number): never {
+  fail("tab_missing", `tab ${tabId} was closed`);
 }
 export async function removedGroup(groupId: number): Promise<void> {
   await ready();

@@ -140,6 +140,14 @@ export function selectedScope(tabId: number): Scope | undefined {
   }
   return scopes.get(tabId);
 }
+// A command sent to the selected frame scope found its flat session or its
+// execution context gone before Chrome reported it. The selection ends as lost
+// and the report fails the command; a selection that already ended reports
+// itself the same way.
+export function scopeGone(tabId: number, scope: Scope): void {
+  if (scopes.get(tabId) === scope) lose(tabId);
+  selectedScope(tabId);
+}
 // Selecting a frame after the selected one was lost starts from the main frame.
 export function clearLost(tabId: number): void {
   lost.delete(tabId);

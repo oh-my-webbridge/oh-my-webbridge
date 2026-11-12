@@ -197,20 +197,28 @@ function enqueue(request: Request, connection: WebSocket, execute: Bridge["execu
   }
   if (request.command.action === "close_session") {
     for (const job of jobs.values())
-      if (job.session === name && job.action !== "close_session") job.abort.abort();
+      if (job.session === name && job.action !== "close_session")
+        job.abort.abort("the session was closed");
   }
   const abort = new AbortController();
   jobs.set(request.id, { abort, session: name, action: request.command.action });
   queue.count++;
   queues.set(queueName, queue);
-  const timer = setTimeout(() => abort.abort(), Math.max(0, request.deadline - Date.now()));
+  const timer = setTimeout(
+    () => abort.abort("request deadline reached"),
+    Math.max(0, request.deadline - Date.now()),
+  );
   const check = (): void => {
-    if (abort.signal.aborted || Date.now() >= request.deadline) expired();
+    if (abort.signal.aborted) expired(abort.signal.reason);
+    if (Date.now() >= request.deadline) expired();
   };
   const previous = queue.tail;
   queue.tail = (async () => {
     await previous;
     try {
+      // A command cancelled while it waited in the session queue never started.
+      if (abort.signal.aborted)
+        expired(`${String(abort.signal.reason)} before the command started`);
       check();
       const result = await execute(request.command, {
         signal: abort.signal,
@@ -298,7 +306,7 @@ async function connect(): Promise<void> {
             );
           }, 20000);
         } else if (message.type === "cancel") {
-          if (message.id) jobs.get(message.id)?.abort.abort();
+          if (message.id) jobs.get(message.id)?.abort.abort("the daemon cancelled the request");
         } else if (message.type === "request") {
           if (
             typeof message.id !== "string" ||
@@ -319,7 +327,7 @@ async function connect(): Promise<void> {
       clearTimeout(opening);
       clearInterval(heartbeat);
       backlogs.delete(connection);
-      for (const job of jobs.values()) job.abort.abort();
+      for (const job of jobs.values()) job.abort.abort("the daemon connection closed");
       void disconnected?.().catch((error: Error) =>
         console.error("release connection state", error.message),
       );

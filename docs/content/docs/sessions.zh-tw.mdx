@@ -61,7 +61,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 結束工作階段 [#ending-a-session]
 
-`close_session` 會取消工作階段仍在執行或等待的指令，關閉工作階段開啟的分頁，並釋放借用的分頁，這些分頁會保持開啟。它會移除工作階段的瀏覽器綁定，並清除工作階段在借用分頁上記錄的內容：框架選擇、網路項目、主控台輸出與 `@e` 參照。你自己關閉分頁時，該分頁會從工作階段中移除；工作階段只會由 `close_session` 結束。
+`close_session` 會取消工作階段仍在執行或等待的指令，關閉工作階段開啟的分頁，並釋放借用的分頁，這些分頁會保持開啟。它會移除工作階段的瀏覽器綁定，並清除工作階段在借用分頁上記錄的內容：框架選擇、網路項目、主控台輸出與 `@e` 參照。你自己關閉分頁時，該分頁會從工作階段中移除；工作階段只會由 `close_session` 結束。工作階段的目前分頁以 `close_tab` 以外的方式關閉時，工作階段就沒有目前分頁：沒有 `tabId` 的頁面動作會以 `no_tab` 失敗，指定已關閉分頁的指令會以 `tab_missing` 失敗。`close_tab` 之後，工作階段改在它最後開啟的分頁繼續，沒有的話則是它最後借用的分頁。
 
 ## 限制 [#limits]
 
@@ -78,7 +78,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 逾時與結果不確定 [#timeouts-and-uncertain-results]
 
-`timeoutMs` 涵蓋整個請求，包括在工作階段佇列中等待的時間。條件未成立的 `wait` 則會在期限前稍早以 `wait_timeout` 失敗，它不會變更頁面。時間用完，或指令執行到一半時瀏覽器中斷連線，呼叫會回傳 `outcome_unknown`。此時動作可能已經送達頁面：點擊可能已經發生，表單可能已經送出。
+`timeoutMs` 涵蓋整個請求，包括在工作階段佇列中等待的時間。時間用完、`close_session` 取消了指令，或指令執行到一半時瀏覽器中斷連線，呼叫會回傳 `outcome_unknown`，訊息會指出原因。此時動作可能已經送達頁面：點擊可能已經發生，表單可能已經送出。條件未成立的 `wait` 則會在期限前稍早以 `wait_timeout` 失敗，它不會變更頁面。
 
 <Callout type="warn" title="收到 outcome_unknown 後重試">
   重新使用指令之前，請先觀察頁面。`snapshot`、`read_page`、分頁 URL、`get`

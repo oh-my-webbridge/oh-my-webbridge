@@ -235,6 +235,21 @@ func TestCancelFrameWaitsBehindALargeFrame(t *testing.T) {
 	tr.replied(map[string]<-chan outcome{"next": next, "big": big})
 }
 
+// A request whose frame was still waiting for its turn when the connection
+// ended was never sent: it fails with browser_offline, not outcome_unknown.
+func TestUnsentRequestOfAClosedConnectionIsOffline(t *testing.T) {
+	l := &link{browser: Firefox, closed: make(chan struct{})}
+	current := l.queue.enter()
+	done := make(chan error, 1)
+	go func() { done <- l.send(context.Background(), Packet{Type: "request", ID: "unsent"}) }()
+	close(l.closed)
+	err := <-done
+	if codeOf(err) != "browser_offline" || !strings.Contains(err.Error(), "firefox disconnected before the command was sent") {
+		t.Fatalf("request queued when the connection ended: %v", err)
+	}
+	l.queue.exit(current)
+}
+
 // A frame waiting for its turn is dropped when the connection ends, and gives
 // its place in the queue back.
 func TestQueuedFrameStopsWhenConnectionEnds(t *testing.T) {

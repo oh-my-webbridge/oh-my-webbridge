@@ -6,6 +6,7 @@ import {
   nextPoll,
   pause,
   stringArg,
+  waitCheck,
   type Args,
   type Budget,
   type Command,
@@ -15,7 +16,9 @@ import {
 import {
   assertOwner,
   claim,
+  closedTab,
   getSession,
+  leaveTab,
   persist,
   release,
   webTab,
@@ -24,11 +27,20 @@ import {
 import { requireSiteAccess } from "./access.js";
 import { cookies } from "./cookies.js";
 import { forgetHeaders, setExtraHeaders } from "./headers.js";
-import { callPage, clearRefs, evaluate, resetScope, scopeOf, selectFrame } from "./inject.js";
+import {
+  callPage,
+  clearRefs,
+  evaluate,
+  evaluateCondition,
+  resetScope,
+  scopeOf,
+  selectFrame,
+} from "./inject.js";
 import { createBlank, load, reload, traverse } from "./navigation.js";
 import { forgetNetwork, network } from "./network.js";
-import type { PageArgs, PageFile } from "./page-api.js";
+import { checkGetProperty, checkStorageCommand, type PageArgs, type PageFile } from "./page-api.js";
 import { configurePreset, forgetPreset, presetCurrent, presetStatus } from "./presets.js";
+import { closedTabId } from "./tabs.js";
 
 // Actions Firefox extensions cannot perform, with the reason reported to callers.
 const unavailable: Record<string, string> = {
@@ -111,16 +123,23 @@ export function forgetTab(tabId: number): void {
   forgetHeaders(tabId);
   resetScope(tabId);
 }
+// The tab is read before its owner is checked, so a closed tab fails with
+// tab_missing also once its session has dropped it.
 async function tabFor(name: string, s: Session, args: Args): Promise<number> {
   const tabId = args.tabId ?? args.tab ?? s.current;
   if (!tabId) fail("no_tab", "navigate or find_tab before using a page action");
-  assertOwner(name, tabId);
   const tab = await chrome.tabs.get(tabId);
+  assertOwner(name, tabId);
   if (!webTab(tab)) fail("restricted_tab", "only non-incognito HTTP(S) pages are supported");
   return tabId;
 }
+function parseURL(value: string, base?: string): URL {
+  const url = URL.parse(value, base);
+  if (!url) fail("invalid_args", `url ${JSON.stringify(value)} is not a valid URL`);
+  return url;
+}
 function validURL(value: string | undefined): string {
-  const url = new URL(stringArg(value, "url"));
+  const url = parseURL(stringArg(value, "url"));
   if (!["http:", "https:"].includes(url.protocol) && url.href !== "about:blank")
     fail("invalid_args", "url must use HTTP(S) or about:blank");
   return url.href;
@@ -163,6 +182,29 @@ async function leaveFrame(tabId: number): Promise<void> {
   }
   resetScope(tabId);
 }
+// One check of a wait condition, or undefined when the page navigated during
+// the check. callPage and evaluate fail with outcome_unknown only then; wait
+// does not act, so the next check runs in the next document.
+async function waitCondition(tabId: number, args: Args): Promise<boolean | undefined> {
+  try {
+    if (!args.selector && args.expression) return await evaluateCondition(tabId, args.expression);
+    return record(await callPage(tabId, "wait", pageArgs(args)), "wait").matched === true;
+  } catch (error) {
+    if (fault(error as Error).code === "outcome_unknown") return undefined;
+    throw error;
+  }
+}
+// Firefox checks the filename of a download and rejects a name it cannot use.
+async function startDownload(options: chrome.downloads.DownloadOptions): Promise<number> {
+  try {
+    return await chrome.downloads.download(options);
+  } catch (error) {
+    const { message } = fault(error as Error);
+    if (message.startsWith("filename must not"))
+      fail("invalid_args", `download filename: ${message}`);
+    throw error;
+  }
+}
 // Takes a new task tab, filters it and loads url in it once the tab's own
 // about:blank document has loaded.
 async function open(
@@ -188,7 +230,17 @@ async function open(
   });
 }
 
+// A Firefox call that names a closed tab fails with tab_missing.
 export async function execute(command: Command, budget: Budget): Promise<object> {
+  try {
+    return await act(command, budget);
+  } catch (error) {
+    const tabId = closedTabId(error as Error);
+    if (tabId !== undefined) closedTab(tabId);
+    throw error;
+  }
+}
+async function act(command: Command, budget: Budget): Promise<object> {
   budget.check();
   const { action, session: name } = command;
   const args = command.args ?? {};
@@ -213,10 +265,17 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         "invalid_args",
         "batch needs 1–64 non-nested steps; close sessions and create artifacts separately",
       );
+    // A failed step keeps its code and names its position: the steps before
+    // it completed.
     const results: object[] = [];
-    for (const step of args.steps) {
-      budget.check();
-      results.push(await execute({ ...command, action: step.action, args: step.args }, budget));
+    for (const [index, step] of args.steps.entries()) {
+      try {
+        budget.check();
+        results.push(await execute({ ...command, action: step.action, args: step.args }, budget));
+      } catch (error) {
+        const { code, message } = fault(error as Error);
+        fail(code, `batch step ${index + 1} of ${args.steps.length} (${step.action}): ${message}`);
+      }
     }
     return { results };
   }
@@ -247,8 +306,8 @@ export async function execute(command: Command, budget: Budget): Promise<object>
   if (action === "switch_tab") {
     const tabId = args.tabId;
     if (!tabId) fail("invalid_args", "tabId required");
-    assertOwner(name, tabId);
     const tab = await chrome.tabs.get(tabId);
+    assertOwner(name, tabId);
     if (tab.discarded) {
       await reload(tabId, budget);
     }
@@ -375,9 +434,15 @@ export async function execute(command: Command, budget: Budget): Promise<object>
   }
   if (action === "close_session") {
     const owned = [...s.tabs];
+    // A tab that is already closed counts as closed. Another failure keeps the
+    // session, so that close_session can run again for the tabs that remain.
     for (const tabId of owned) {
       budget.check();
-      await chrome.tabs.remove(tabId);
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch (error) {
+        if (closedTabId(error as Error) !== tabId) throw error;
+      }
     }
     // Borrowed tabs stay open; only the session's recording, headers and
     // activity layer end.
@@ -389,11 +454,18 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     return { success: true, closed: owned.length };
   }
   const tabId = await tabFor(name, s, args);
-  if (pageActions.has(action)) return record(await callPage(tabId, action, pageArgs(args)), action);
+  if (pageActions.has(action)) {
+    if (action === "get" || (action === "locate" && (args.cmd ?? "get") === "get"))
+      checkGetProperty(args.property ?? "text");
+    if (action === "storage") checkStorageCommand(args.cmd ?? "list");
+    return record(await callPage(tabId, action, pageArgs(args)), action);
+  }
   switch (action) {
     case "close_tab": {
       if (!s.tabs.includes(tabId))
         fail("borrowed_tab", "borrowed tabs are never closed; use close_session to release");
+      // tabs.onRemoved can arrive before tabs.remove resolves.
+      leaveTab(s, tabId);
       await chrome.tabs.remove(tabId);
       return { success: true, closed: true };
     }
@@ -411,12 +483,9 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       return { type: "value", value: await evaluate(tabId, stringArg(args.code, "code")) };
     case "wait": {
       for (;;) {
-        budget.check();
-        const matched =
-          !args.selector && args.expression
-            ? !!(await evaluate(tabId, args.expression))
-            : record(await callPage(tabId, "wait", pageArgs(args)), action).matched === true;
-        if (matched !== (args.state === "hidden")) return { success: true };
+        const matched = await waitCheck(budget, () => waitCondition(tabId, args));
+        if (matched !== undefined && matched !== (args.state === "hidden"))
+          return { success: true };
         await nextPoll(budget);
       }
     }
@@ -505,10 +574,10 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       await requireSiteAccess(action);
       return cookies(await frameUrl(tabId), await cookieStore(tabId), args);
     case "download": {
-      const url = new URL(stringArg(args.url, "url"), await frameUrl(tabId));
+      const url = parseURL(stringArg(args.url, "url"), await frameUrl(tabId));
       if (!["http:", "https:"].includes(url.protocol))
         fail("invalid_args", "download URL must use HTTP(S)");
-      const id = await chrome.downloads.download({
+      const id = await startDownload({
         url: url.href,
         saveAs: false,
         // The request carries the cookies of the tab's container.

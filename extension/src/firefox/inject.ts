@@ -1,6 +1,8 @@
 import { fail, type Json } from "../protocol.js";
-import { siteAccessHint } from "./access.js";
+import { closedTab } from "../state.js";
+import { refreshSiteAccess, siteAccessHint } from "./access.js";
 import type { PageArgs } from "./page-api.js";
+import { assertTab, closedTabId } from "./tabs.js";
 
 type Target = chrome.scripting.InjectionTarget;
 type Injected<T> = { documentId: string; frameId: number; result?: T };
@@ -23,6 +25,74 @@ function target(tabId: number): Target {
 function messageOf(value: unknown): string {
   return value instanceof Error ? value.message : String(value);
 }
+// The targeted frame is gone. A selected frame's selection ends with it.
+function frameGone(tabId: number, label: string, chosen: Target, detail: string): never {
+  if (chosen.documentIds) scopes.delete(tabId);
+  fail(
+    "frame_unavailable",
+    `${label}: the frame navigated or was removed; commands now use the main frame (${detail})`,
+  );
+}
+// The targeted document was replaced while the call was on its way, so the
+// script did not run in it: the selected frame or the page navigated.
+async function replaced(
+  tabId: number,
+  label: string,
+  chosen: Target,
+  detail: string,
+): Promise<never> {
+  await assertTab(tabId);
+  if (chosen.documentIds) frameGone(tabId, label, chosen, detail);
+  fail(
+    "outcome_unknown",
+    `${label}: the page navigated during the command; observe before retrying (${detail})`,
+  );
+}
+// Whether the tab's main frame runs extension scripts now.
+async function scriptable(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      injectImmediately: true,
+      func: () => true,
+    });
+    return true;
+  } catch (error) {
+    if (closedTabId(error as Error) === tabId) closedTab(tabId);
+    if (messageOf(error).startsWith("Missing host permission")) return false;
+    throw error;
+  }
+}
+// Firefox rejects with "Missing host permission" when no targeted document ran
+// the script: the extension lacks site access, Firefox protects the page from
+// extensions (about: pages, addons.mozilla.org), or the targeted document was
+// replaced on the way (Firefox bug 2047009). A main frame that runs scripts
+// again was navigating.
+async function unreached(
+  tabId: number,
+  label: string,
+  chosen: Target,
+  message: string,
+): Promise<never> {
+  if (!(await refreshSiteAccess()))
+    fail(
+      "restricted_tab",
+      `${label}: Firefox does not run extension scripts in this page (${message}); ${siteAccessHint}`,
+    );
+  if (chosen.documentIds || (chosen.frameIds?.[0] === 0 && (await scriptable(tabId))))
+    return replaced(tabId, label, chosen, message);
+  fail(
+    "restricted_tab",
+    `${label}: Firefox does not let extensions run scripts in this page (${message})`,
+  );
+}
+// The code ran, and its result is data that the reply to the daemon cannot carry.
+function unreturnable(label: string, detail: string): never {
+  fail(
+    "evaluation_failed",
+    `${label}: the code ran, but its result cannot be returned (${detail}); return JSON data such as a string, number, array or plain object`,
+  );
+}
 // Firefox rejects when no targeted frame can run the script and reports a
 // script exception through InjectionResult.error.
 async function inject<T>(
@@ -37,18 +107,12 @@ async function inject<T>(
     results = await run(chosen);
   } catch (error) {
     const message = messageOf(error);
-    if (/^Invalid (?:documentId|frame IDs)/u.test(message)) {
-      if ("documentIds" in chosen && chosen.documentIds) scopes.delete(tabId);
-      fail(
-        "frame_unavailable",
-        `${label}: the frame navigated or was removed; commands now use the main frame (${message})`,
-      );
-    }
+    if (closedTabId(error as Error) === tabId) closedTab(tabId);
+    if (/^Invalid (?:documentId|frame IDs)/u.test(message))
+      frameGone(tabId, label, chosen, message);
     if (message.startsWith("Missing host permission"))
-      fail(
-        "restricted_tab",
-        `${label}: Firefox does not run extension scripts in this page (${message}); ${siteAccessHint}`,
-      );
+      return unreached(tabId, label, chosen, message);
+    if (message.endsWith("result is non-structured-clonable data")) unreturnable(label, message);
     fail("browser_error", `${label}: ${message}`);
   }
   const [entry] = results;
@@ -79,7 +143,9 @@ export async function callPage(tabId: number, op: string, args: PageArgs = {}): 
     );
     answer = (await inject(tabId, op, "browser_error", call)).result;
   }
-  if (!answer) fail("browser_error", `${op}: page script returned no result`);
+  // Firefox returns no result when the document unloads as the script reaches
+  // it, and page.js is missing when the call reaches the next document.
+  if (!answer) return replaced(tabId, op, target(tabId), "page script returned no result");
   if (!answer.ok) fail(answer.code, answer.message);
   return answer.value;
 }
@@ -110,10 +176,11 @@ export async function selectFrame(tabId: number, frameId: number): Promise<void>
   const { url } = await chrome.tabs.get(tabId);
   scopes.set(tabId, { frameId, documentId: entry.documentId, url });
 }
-// Evaluates code in the page's main world of the selected frame. Firefox runs
-// code strings only through userScripts.execute, which needs the optional
-// userScripts permission granted from the popup.
-export async function evaluate(tabId: number, code: string): Promise<Json | undefined> {
+// Runs code in the page's main world of the selected frame and returns the
+// completion value. Firefox runs code strings only through
+// userScripts.execute, which needs the optional userScripts permission
+// granted from the popup.
+async function execute(tabId: number, code: string): Promise<Json | undefined> {
   if (!(await chrome.permissions.contains({ permissions: ["userScripts"] })))
     fail(
       "unsupported",
@@ -128,4 +195,20 @@ export async function evaluate(tabId: number, code: string): Promise<Json | unde
     }),
   );
   return entry.result;
+}
+// The value of code for the evaluate action. userScripts.execute returns
+// structured-clone data, which can hold values JSON cannot, such as a BigInt
+// or a cyclic object.
+export async function evaluate(tabId: number, code: string): Promise<Json | undefined> {
+  const value = await execute(tabId, code);
+  try {
+    JSON.stringify(value);
+  } catch (error) {
+    unreturnable("evaluate", messageOf(error));
+  }
+  return value;
+}
+// Whether code's value is truthy, for wait.
+export async function evaluateCondition(tabId: number, code: string): Promise<boolean> {
+  return !!(await execute(tabId, code));
 }

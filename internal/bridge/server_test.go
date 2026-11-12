@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -381,20 +383,21 @@ func TestPageCDPAttachWithUnknownOutcomeIsReleased(t *testing.T) {
 		}
 		return seen{}
 	}
-	refused := func(tab int) {
+	refused := func(tab, status int) {
 		t.Helper()
 		_, res, err := websocket.Dial(ctx, fmt.Sprintf("ws%s/devtools/page/%d", strings.TrimPrefix(server.URL, "http"), tab), &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": []string{"Bearer " + s.Config.Token}}})
-		if err == nil || res == nil || res.StatusCode != 409 {
-			t.Fatalf("page %d: %v %v, want HTTP 409", tab, res, err)
+		if err == nil || res == nil || res.StatusCode != status {
+			t.Fatalf("page %d: %v %v, want HTTP %d", tab, res, err, status)
 		}
 	}
 	// A refused attach has a known outcome and needs no cleanup.
-	refused(8)
+	refused(8, 409)
 	if item := next(); item.action != "cdp_attach" {
 		t.Fatalf("forwarded %+v, want cdp_attach", item)
 	}
-	// An attach that outlives its deadline is cancelled, then detached.
-	refused(7)
+	// An attach that outlives its deadline is cancelled, then detached, and
+	// answers outcome_unknown with the status /command uses.
+	refused(7, 504)
 	attach := next()
 	if attach.kind != "request" || attach.action != "cdp_attach" {
 		t.Fatalf("forwarded %+v, want the second cdp_attach", attach)
@@ -629,6 +632,145 @@ func TestPDFStreamClosesWhenDestinationFails(t *testing.T) {
 	}
 	if err := <-closed; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A path that appears while the PDF is read is not overwritten; the caller
+// learns it from invalid_args.
+func TestArtifactPathTakenDuringThePDFStream(t *testing.T) {
+	s, _, chrome := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	target := filepath.Join(t.TempDir(), "out.pdf")
+	go func() {
+		for {
+			var packet Packet
+			if wsjson.Read(ctx, chrome, &packet) != nil {
+				return
+			}
+			if packet.Command == nil {
+				continue
+			}
+			result := json.RawMessage(`{}`)
+			if packet.Command.Action == "artifact_read" {
+				// Another writer creates the path after the daemon checked it.
+				_ = os.WriteFile(target, []byte("theirs"), 0600)
+				result = json.RawMessage(`{"data":"aGVsbG8=","base64Encoded":true,"eof":true}`)
+			}
+			_ = wsjson.Write(ctx, chrome, Packet{Type: "response", ID: packet.ID, Result: result})
+		}
+	}()
+	args, _ := json.Marshal(map[string]string{"path": target})
+	_, err := s.saveArtifact(ctx, Chrome, Command{Action: "save_as_pdf", Session: "pdf", Args: args}, json.RawMessage(`{"stream":"pdf-1"}`))
+	if codeOf(err) != "invalid_args" || !strings.Contains(err.Error(), "artifact path already exists") {
+		t.Fatalf("path taken during the stream: %v", err)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "theirs" {
+		t.Fatalf("the other writer's file changed: %q %v", data, err)
+	}
+}
+
+// Failures at a path that the caller chose are invalid_args; failures in the
+// daemon's own artifacts directory stay internal.
+func TestArtifactDestinationFailures(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes into read-only directories")
+	}
+	data := json.RawMessage(`{"data":"aGVsbG8=","mimeType":"image/png"}`)
+	readOnly := filepath.Join(t.TempDir(), "read-only")
+	if err := os.Mkdir(readOnly, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0700) })
+	s := New(config.Config{Dir: t.TempDir()})
+	for path, want := range map[string]string{
+		filepath.Join(readOnly, "out.png"):        "create a file in the directory of the artifact path",
+		filepath.Join(readOnly, "sub", "out.png"): "create the directory of the artifact path",
+	} {
+		args, _ := json.Marshal(map[string]string{"path": path})
+		_, err := s.saveArtifact(context.Background(), Chrome, Command{Action: "screenshot", Args: args}, data)
+		if codeOf(err) != "invalid_args" || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want invalid_args %q", path, err, want)
+		}
+	}
+	// The daemon cannot create its artifacts directory below a regular file.
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	own := New(config.Config{Dir: file})
+	if _, err := own.saveArtifact(context.Background(), Chrome, Command{Action: "screenshot", Args: json.RawMessage(`{}`)}, data); codeOf(err) != "internal" {
+		t.Fatalf("daemon artifacts directory: %v, want internal", err)
+	}
+}
+
+// A file system without hard links, or a path that appeared after the check,
+// fails the link of a chosen path with invalid_args.
+func TestArtifactLinkFailures(t *testing.T) {
+	target := "/Volumes/stick/out.pdf"
+	link := func(errno syscall.Errno) error {
+		return linkFault(target, &os.LinkError{Op: "link", Old: "/Volumes/stick/.omw-1", New: target, Err: errno})
+	}
+	for _, errno := range []syscall.Errno{syscall.EPERM, syscall.ENOTSUP, syscall.EOPNOTSUPP, syscall.EXDEV} {
+		if err := link(errno); codeOf(err) != "invalid_args" || !strings.Contains(err.Error(), "the file system of /Volumes/stick has no hard links") {
+			t.Errorf("%v: %v", errno, err)
+		}
+	}
+	if err := link(syscall.EEXIST); codeOf(err) != "invalid_args" || !strings.Contains(err.Error(), "artifact path already exists") {
+		t.Errorf("EEXIST: %v", err)
+	}
+	if err := link(syscall.EIO); codeOf(err) != "internal" {
+		t.Errorf("EIO: %v, want internal", err)
+	}
+}
+
+// An artifact over 100 MiB fails with result_too_large.
+func TestArtifactOver100MiBIsTooLarge(t *testing.T) {
+	out := &artifactWriter{w: io.Discard, total: MaxArtifact - 5}
+	if err := out.write(strings.NewReader("hello")); err != nil || out.total != MaxArtifact {
+		t.Fatalf("artifact of exactly 100 MiB: %v, %d bytes", err, out.total)
+	}
+	if err := out.write(strings.NewReader("!")); codeOf(err) != "result_too_large" {
+		t.Fatalf("artifact over 100 MiB: %v", err)
+	}
+}
+
+// The CDP endpoints answer an extension fault with the status /command uses
+// for its code.
+func TestCDPEndpointsUseTheCommandStatuses(t *testing.T) {
+	s, server, c := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		for {
+			var packet Packet
+			if wsjson.Read(ctx, c, &packet) != nil {
+				return
+			}
+			if packet.Type != "request" {
+				continue
+			}
+			reply := Packet{Type: "response", ID: packet.ID}
+			switch packet.Command.Action {
+			case "list_targets":
+				reply.Error = &Fault{"busy", "128 requests already in flight to chrome"}
+			case "cdp_attach":
+				reply.Error = &Fault{"restricted_tab", "only non-incognito HTTP(S) pages are supported"}
+			default:
+				reply.Result = json.RawMessage(`{}`)
+			}
+			_ = wsjson.Write(ctx, c, reply)
+		}
+	}()
+	for path, want := range map[string]struct {
+		status int
+		code   string
+	}{"/json/list": {429, "busy"}, "/devtools/page/7": {502, "restricted_tab"}} {
+		status, body := get(t, s, server, path)
+		var reply Reply
+		if err := json.Unmarshal([]byte(body), &reply); err != nil || status != want.status || reply.Error == nil || reply.Error.Code != want.code {
+			t.Errorf("%s: HTTP %d %s, want %d %s", path, status, body, want.status, want.code)
+		}
 	}
 }
 

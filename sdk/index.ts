@@ -27,6 +27,12 @@ export async function connect(session: string, options: { browser?: Browser } = 
     options: { timeoutMs?: number; signal?: AbortSignal } = {},
   ): Promise<T> {
     const timeoutMs = options.timeoutMs ?? 30000;
+    // The daemon accepts 1 to 120000 ms; another deadline fails here, before
+    // anything is sent.
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000)
+      throw Object.assign(new Error("timeoutMs must be an integer from 1 to 120000"), {
+        code: "invalid_request",
+      });
     const response = await fetch(`http://${config.address}/command`, {
       method: "POST",
       headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },

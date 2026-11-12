@@ -19,7 +19,7 @@ Every request needs `Authorization: Bearer <token>`, including WebSocket upgrade
 | `/json/version`          | GET       | A version object without a browser WebSocket URL. |
 | `/devtools/page/{tabId}` | WebSocket | One CDP session for one tab.                      |
 
-When only the Firefox extension is connected, these endpoints answer HTTP 501 with the error code `unsupported`. When no browser is connected, `/json` and `/json/list` answer HTTP 503, while `/json/version` still returns its object.
+When only the Firefox extension is connected, these endpoints answer HTTP 501 with the error code `unsupported`. When no browser is connected, `/json` and `/json/list` answer HTTP 503 with `browser_offline`, while `/json/version` still returns its object. Other failures carry an error code and the HTTP status that `/command` uses for it, listed in [Errors](./actions.mdx#errors).
 
 ### /json/list
 
@@ -59,7 +59,7 @@ The object has no `webSocketDebuggerUrl`, so a client that discovers targets thr
 
 Connect to `ws://127.0.0.1:17373/devtools/page/{tabId}` with the Bearer header on the upgrade request. Before the WebSocket is accepted, the daemon asks the extension to attach to that tab.
 
-- A tab another session is using answers HTTP 409 and is not taken over.
+- A tab another session is using answers HTTP 409 with `tab_busy` and is not taken over. A failed attach answers with its error code and the HTTP status that `/command` uses for it: 503 without a Chrome connection, 504 when the attach does not finish within 5 seconds, and 502 for a restricted tab or a refused debugger.
 - The tab is released when the client disconnects, when the tab closes, when the debugger detaches, and when the daemon stops or the extension pauses or disconnects. Clients can reconnect afterwards.
 - Events for the tab are subscribed before the attach starts, so events that arrive before the attach reply are still forwarded.
 

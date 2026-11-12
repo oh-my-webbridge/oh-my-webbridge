@@ -64,6 +64,15 @@ test("SDK preserves session, JSON payloads, cancellation and structured errors",
     message: "HTTP 401: authentication required",
   });
   await assert.rejects(bridge.call("echo", {}, { signal: AbortSignal.abort() }));
+  const sent = commands.length;
+  for (const timeoutMs of [0, -1, 1.5, 120001])
+    await assert.rejects(bridge.call("echo", {}, { timeoutMs }), {
+      code: "invalid_request",
+      message: "timeoutMs must be an integer from 1 to 120000",
+    });
+  assert.equal(commands.length, sent, "a rejected deadline sends nothing");
+  await bridge.call("echo", {}, { timeoutMs: 120000 });
+  assert.equal(commands.at(-1).timeoutMs, 120000);
 });
 
 test("SDK sends the selected browser with every command", async (t) => {

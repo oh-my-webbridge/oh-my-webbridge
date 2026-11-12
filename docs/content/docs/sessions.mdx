@@ -61,7 +61,7 @@ Without `active: true`, `find_tab` only looks at tabs the session already holds.
 
 ## Ending a session
 
-`close_session` cancels the commands still running or waiting for the session, closes the tabs the session opened, and releases the ones it borrowed, which stay open. It removes the session's browser binding and drops what the session recorded on borrowed tabs: frame selection, network entries, console output and `@e` references. Closing a tab yourself removes it from the session; the session ends only with `close_session`.
+`close_session` cancels the commands still running or waiting for the session, closes the tabs the session opened, and releases the ones it borrowed, which stay open. It removes the session's browser binding and drops what the session recorded on borrowed tabs: frame selection, network entries, console output and `@e` references. Closing a tab yourself removes it from the session; the session ends only with `close_session`. When the session's current tab closes other than by `close_tab`, the session has no current tab: a page action without `tabId` fails with `no_tab`, and a command for the closed tab fails with `tab_missing`. After `close_tab`, the session continues in the tab it opened last, or else the tab it borrowed last.
 
 ## Limits
 
@@ -78,7 +78,7 @@ When a limit is reached the command fails with `busy` and HTTP 429 instead of wa
 
 ## Timeouts and uncertain results
 
-`timeoutMs` covers the whole request, including time spent waiting in the session queue. A `wait` whose condition does not hold fails with `wait_timeout` just before the deadline instead; it does not change the page. When it runs out, or when the browser disconnects in the middle of a command, the call returns `outcome_unknown`. The action may already have reached the page: a click may have happened, a form may be submitted.
+`timeoutMs` covers the whole request, including time spent waiting in the session queue. When it runs out, when `close_session` cancels the command, or when the browser disconnects in the middle of a command, the call returns `outcome_unknown`, and the message names the cause. The action may already have reached the page: a click may have happened, a form may be submitted. A `wait` whose condition does not hold fails with `wait_timeout` just before the deadline instead; it does not change the page.
 
 <Callout type="warn" title="Retrying after outcome_unknown">
   Observe the page before reusing a command. `snapshot`, `read_page`, the tab URL, `get` and the

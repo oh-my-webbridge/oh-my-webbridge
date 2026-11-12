@@ -124,6 +124,32 @@ async function settle(done, ms = 2000) {
   for (let i = 0; i < ms / 5 && !done(); i++) await new Promise((r) => setTimeout(r, 5));
 }
 
+test("close_session names itself as the cause of the commands it cancels", async (t) => {
+  const f = await transport(t, "close-cancel");
+  const entered = Promise.withResolvers(),
+    listed = Promise.withResolvers();
+  const query = globalThis.chrome.tabs.query;
+  globalThis.chrome.tabs.query = async (filter) => {
+    entered.resolve();
+    await listed.promise;
+    return query(filter);
+  };
+  // The first listing runs and waits for the tab list; the second waits behind it.
+  f.deliver("running", "task", "list_targets");
+  await entered.promise;
+  f.deliver("queued", "task", "list_targets");
+  f.deliver("close", "task", "close_session");
+  await settle(() => f.responses().some((m) => m.id === "close"));
+  listed.resolve();
+  await settle(() => f.responses().length >= 3);
+  const reply = (id) => f.responses().find((m) => m.id === id);
+  assert.ok(Array.isArray(reply("running").result));
+  assert.deepEqual(reply("queued").error, {
+    code: "outcome_unknown",
+    message: "the session was closed before the command started; observe before retrying",
+  });
+});
+
 test("a reply after a large one waits for the socket to drain and keeps its order", async (t) => {
   const f = await transport(t, "drain");
   f.page.title = "x".repeat(6 << 20);

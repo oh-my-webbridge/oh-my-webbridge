@@ -598,7 +598,8 @@ test("get, is, focus, check, select_option, wait and storage read and change the
   assert.equal(await get("input", "count"), 7);
   assert.equal(await get(undefined, "title"), "Form fixture");
   assert.equal(await get(undefined, "url"), tab.url);
-  await failure(tab, "get", { selector: "#para", property: "bogus" }, "element_action_failed");
+  await failure(tab, "get", { selector: "#para", property: "bogus" }, "invalid_args");
+  await failure(tab, "get", { selector: "#nope", property: "bogus" }, "invalid_args");
   await failure(tab, "get", {}, "invalid_args", /selector is required/u);
   assert.equal(await is("#para", "visible"), true);
   assert.equal(await is("#hidden", "visible"), false);
@@ -680,7 +681,17 @@ test("get, is, focus, check, select_option, wait and storage read and change the
   await store({ cmd: "set", kind: "session", name: "tab", value: "one" });
   assert.equal(await inPage(tab, "sessionStorage.getItem('tab')"), "one");
   assert.deepEqual((await store({ cmd: "clear", kind: "session" })).value, {});
-  await failure(tab, "storage", { cmd: "drop" }, "evaluation_failed");
+  await failure(tab, "storage", { cmd: "drop" }, "invalid_args");
+  // The origin's storage quota is full: the page refuses the write.
+  await inPage(tab, "localStorage.setItem('fill', 'x'.repeat(5_200_000))");
+  await failure(
+    tab,
+    "storage",
+    { cmd: "set", name: "more", value: "y".repeat(100_000) },
+    "evaluation_failed",
+    /^storage: QuotaExceededError: /u,
+  );
+  await inPage(tab, "localStorage.clear()");
 });
 
 test("fill and key_type insert text through trusted editing commands", async (t) => {
@@ -845,15 +856,10 @@ test("pointer actions check what is under the element and dispatch the mouse seq
   );
   await failure(tab, "click", { selector: "#target", button: "side" }, "invalid_args");
 
-  await failure(
-    tab,
-    "click",
-    { selector: "#covered" },
-    "element_action_failed",
-    /hidden or covered/u,
-  );
-  await failure(tab, "click", { selector: "#gone" }, "element_action_failed", /hidden or covered/u);
+  await failure(tab, "click", { selector: "#covered" }, "element_action_failed", /covered/u);
+  await failure(tab, "click", { selector: "#gone" }, "element_hidden", /has no box/u);
   await failure(tab, "hover", { selector: "#covered" }, "element_action_failed");
+  await failure(tab, "hover", { selector: "#gone" }, "element_hidden");
 
   await ok(tab, "click", { selector: "#inner" });
   assert.ok((await takeEvents(tab)).some((e) => e.type === "click" && e.target === "inner"));

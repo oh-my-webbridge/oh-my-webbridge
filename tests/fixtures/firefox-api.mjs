@@ -42,6 +42,10 @@ export async function bundle(contents, name) {
 // until then, and webNavigation calls answer after it. The load happens on a
 // timer after first use, or when the test calls state.loadWebNavigation with
 // options.webNavigation "manual".
+// Calls that name a tab missing from state.tabs reject as in Firefox, and
+// state.reject(api, details) may return an Error for scripting.executeScript,
+// userScripts.execute, tabs.captureTab, tabs.remove or cookies.set to reject
+// with.
 export function firefoxApi(options = {}) {
   const state = {
     sessions: structuredClone(options.sessions ?? {}),
@@ -66,7 +70,13 @@ export function firefoxApi(options = {}) {
     cookieWrites: [],
     cookieRemovals: [],
     page: options.page ?? (async (op) => ({ ok: true, value: { op } })),
+    reject: options.reject ?? (() => undefined),
   };
+  function call(api, tabId, details) {
+    if (tabId !== undefined && !state.tabs.has(tabId)) throw new Error(`Invalid tab ID: ${tabId}`);
+    const rejected = state.reject(api, details);
+    if (rejected) throw rejected;
+  }
   // Firefox reports the cookie store of every tab; a container tab has its own.
   for (const tab of options.tabs ?? [])
     state.tabs.set(tab.id, { status: "complete", cookieStoreId: "firefox-default", ...tab });
@@ -247,6 +257,7 @@ export function firefoxApi(options = {}) {
         return { ...state.tabs.get(tabId) };
       },
       remove: async (tabId) => {
+        call("tabs.remove", tabId, tabId);
         state.removed.push(tabId);
         state.tabs.delete(tabId);
       },
@@ -262,6 +273,7 @@ export function firefoxApi(options = {}) {
         return groupId ?? 1793637578864036;
       },
       captureTab: async (tabId, captureOptions) => {
+        call("tabs.captureTab", tabId, captureOptions);
         state.captures.push({ tabId, ...captureOptions });
         return `data:image/${captureOptions.format};base64,SU1BR0U=`;
       },
@@ -305,6 +317,7 @@ export function firefoxApi(options = {}) {
     },
     scripting: {
       executeScript: async (injection) => {
+        call("scripting.executeScript", injection.target.tabId, injection);
         const documentId = documentFor(injection.target);
         state.executed.push({
           target: injection.target,
@@ -329,6 +342,7 @@ export function firefoxApi(options = {}) {
     },
     userScripts: {
       execute: async (injection) => {
+        call("userScripts.execute", injection.target.tabId, injection);
         state.userScripts.push(injection);
         return [
           { frameId: 0, documentId: documentFor(injection.target), result: options.evaluate },
@@ -341,6 +355,7 @@ export function firefoxApi(options = {}) {
         return structuredClone(state.cookies);
       },
       set: async (details) => {
+        call("cookies.set", undefined, details);
         state.cookieWrites.push(details);
       },
       remove: async (details) => {
@@ -351,6 +366,8 @@ export function firefoxApi(options = {}) {
     // options.cancel runs for each cancel and may reject like Firefox.
     downloads: {
       download: async (details) => {
+        if (details.filename?.startsWith("/"))
+          throw new Error("filename must not be an absolute path");
         state.downloads.push(details);
         return 41;
       },

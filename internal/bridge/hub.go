@@ -152,7 +152,8 @@ func encode(packet Packet) []byte {
 }
 
 // send writes one request frame. A command that ends before its frame starts
-// is not sent.
+// is not sent. A connection that closes before the frame starts did not
+// receive the command, so the browser is offline for it.
 func (l *link) send(ctx context.Context, packet Packet) error {
 	data, err := json.Marshal(packet)
 	if err != nil {
@@ -164,6 +165,8 @@ func (l *link) send(ctx context.Context, packet Packet) error {
 		return nil
 	case errors.Is(err, errStopped):
 		return expired()
+	case errors.Is(err, errClosed):
+		return &Fault{"browser_offline", l.browser + " disconnected before the command was sent; the command did not run"}
 	default:
 		return &Fault{"outcome_unknown", "browser transport write failed: " + err.Error()}
 	}

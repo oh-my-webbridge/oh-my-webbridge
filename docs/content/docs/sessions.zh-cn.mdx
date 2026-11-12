@@ -63,7 +63,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 结束会话 [#ending-a-session]
 
-`close_session` 会取消会话仍在运行或等待的命令，关闭会话打开的标签页，并释放借用的标签页，这些标签页会保持打开。它会移除会话的浏览器绑定，并清除会话在借用标签页上记录的内容：框架选择、网络项目、控制台输出与 `@e` 引用。你自己关闭标签页时，该标签页会从会话中移除；会话只会由 `close_session` 结束。
+`close_session` 会取消会话仍在运行或等待的命令，关闭会话打开的标签页，并释放借用的标签页，这些标签页会保持打开。它会移除会话的浏览器绑定，并清除会话在借用标签页上记录的内容：框架选择、网络项目、控制台输出与 `@e` 引用。你自己关闭标签页时，该标签页会从会话中移除；会话只会由 `close_session` 结束。会话的目前标签页以 `close_tab` 以外的方式关闭时，会话就没有目前标签页：没有 `tabId` 的页面动作会以 `no_tab` 失败，指定已关闭标签页的命令会以 `tab_missing` 失败。`close_tab` 之后，会话改在它最后打开的标签页继续，没有的话则是它最后借用的标签页。
 
 ## 限制 [#limits]
 
@@ -80,7 +80,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 超时与结果不确定 [#timeouts-and-uncertain-results]
 
-`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。条件未成立的 `wait` 则会在期限前稍早以 `wait_timeout` 失败，它不会变更页面。时间用完，或命令运行到一半时浏览器中断连接，调用会返回 `outcome_unknown`。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。
+`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。时间用完、`close_session` 取消了命令，或命令运行到一半时浏览器中断连接，调用会返回 `outcome_unknown`，消息会指出原因。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。条件未成立的 `wait` 则会在期限前稍早以 `wait_timeout` 失败，它不会变更页面。
 
 <Callout type="warn" title="收到 outcome_unknown 后重试">
   重新使用命令之前，请先观察页面。`snapshot`、`read_page`、标签页 URL、`get`
