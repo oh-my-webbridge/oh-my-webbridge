@@ -86,6 +86,7 @@ fixed at 127.0.0.1:17373; no network-facing bind is supported.`)
 			if len(args) != 3 || args[1] != "--cdp" {
 				return errors.New("usage: omw serve [--cdp ws://...]")
 			}
+			// An empty --cdp is an error here; serve reads "" as no endpoint.
 			if _, err = bridge.ParseCDP(args[2]); err != nil {
 				return err
 			}
@@ -288,9 +289,17 @@ func status(c config.Config) error {
 	}
 	return nil
 }
+
+// serve runs the daemon. A native CDP endpoint from config.json is checked as
+// --cdp is, before the daemon listens.
 func serve(c config.Config) error {
 	if c.Address != config.Address {
 		return fmt.Errorf("address must be %s", config.Address)
+	}
+	if c.CDP != "" {
+		if _, err := bridge.ParseCDP(c.CDP); err != nil {
+			return fmt.Errorf("cdp endpoint %q: %w", c.CDP, err)
+		}
 	}
 	listener, err := net.Listen("tcp", c.Address)
 	if err != nil {

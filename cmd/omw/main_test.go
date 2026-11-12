@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/oh-my-webbridge/oh-my-webbridge/internal/config"
 )
 
 func TestCallCommandFlags(t *testing.T) {
@@ -47,5 +50,22 @@ func TestCallCommandRejectsBadArguments(t *testing.T) {
 		if _, err := callCommand(tc.args, nil); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%q: got %v, want %q", tc.args, err, tc.want)
 		}
+	}
+}
+
+// A native CDP endpoint from config.json is checked as --cdp is, before the
+// daemon listens.
+func TestServeRejectsAnInvalidCDPEndpoint(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		done <- serve(config.Config{Address: config.Address, CDP: "http://127.0.0.1:9222/devtools/browser/x"})
+	}()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "requires an explicit ws:// or wss:// browser endpoint") {
+			t.Fatalf("serve with an http:// cdp endpoint: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve started with an invalid cdp endpoint")
 	}
 }

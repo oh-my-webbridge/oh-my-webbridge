@@ -31,7 +31,7 @@ func (s *Server) firefoxOnly(w http.ResponseWriter) bool {
 	if s.Hub.ConnectedTo(Chrome) || !s.Hub.ConnectedTo(Firefox) {
 		return false
 	}
-	jsonOut(w, 501, Reply{Error: &Fault{"unsupported", "CDP endpoints are not available in Firefox; connect the Chrome extension"}})
+	replyError(w, "", &Fault{"unsupported", "CDP endpoints are not available in Firefox; connect the Chrome extension"})
 	return true
 }
 
@@ -43,7 +43,7 @@ func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	result, err := s.Hub.CallBrowser(ctx, Chrome, Command{Action: "list_targets", Session: "cdp", Args: json.RawMessage(`{}`)})
 	if err != nil {
-		jsonOut(w, 503, Reply{Error: fault(err)})
+		replyError(w, "", err)
 		return
 	}
 	var targets []struct {
@@ -52,7 +52,7 @@ func (s *Server) targets(w http.ResponseWriter, r *http.Request) {
 		Title string `json:"title"`
 	}
 	if err = json.Unmarshal(result, &targets); err != nil {
-		jsonOut(w, 502, Reply{Error: fault(err)})
+		replyError(w, "", err)
 		return
 	}
 	out := make([]map[string]any, 0, len(targets))
@@ -103,7 +103,7 @@ func (s *Server) pageCDP(w http.ResponseWriter, r *http.Request) {
 		if fault(err).Code == "outcome_unknown" {
 			cleanup()
 		}
-		jsonOut(w, 409, Reply{Error: fault(err)})
+		replyError(w, "", err)
 		return
 	}
 	defer cleanup()
