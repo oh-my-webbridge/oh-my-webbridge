@@ -19,7 +19,7 @@
     "@sankyu/react-circle-flags": "1.6.9",
     "fumadocs-core": "16.18.1",
     "fumadocs-extras": "^0.3.0",
-    "fumadocs-mdx": "15.4.10",
+    "fumadocs-mdx": "15.5.0",
     "fumadocs-page-history": "^0.4.2",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.18.1",
     "lucide-react": "^1.66.0",
