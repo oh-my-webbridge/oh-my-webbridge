@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const Version = "0.2.0"
+const Version = "0.2.1"
 const Protocol = 1
 const MaxMessage = 32 << 20
 const MaxArtifact = 100 << 20
