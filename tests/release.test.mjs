@@ -18,7 +18,7 @@ import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import { zipSync } from "fflate";
 import { fromMarkdown } from "mdast-util-from-markdown";
-import { renderNotes, releaseSection } from "../scripts/release.mjs";
+import { documentation, renderNotes, releaseSection } from "../scripts/release.mjs";
 import { packTarZst, withTarZst } from "../scripts/archive.mjs";
 
 const fixtureEnv = {
@@ -114,7 +114,7 @@ test("zstd release archives preserve installed files and reject failed or corrup
   );
 });
 
-test("release notes retain user headings, links and migration text without hashes", () => {
+test("release notes retain user headings, links and migration text without hashes", async () => {
   const release = { name: "oh-my-webbridge", newVersion: "0.2.0" };
   const plan = {
     changesets: [
@@ -139,8 +139,25 @@ test("release notes retain user headings, links and migration text without hashe
   assert.match(notes, /Load the extracted Chrome MV3 directory in Chrome\./u);
   assert.match(
     notes,
-    /install `omw-0\.2\.0-firefox-mv3-unsigned\.xpi` permanently only after it is signed\. For development, load the extracted Firefox MV3 directory as a temporary add-on in `about:debugging`\. See \[Firefox installation\]\(https:\/\/github\.com\/oh-my-webbridge\/oh-my-webbridge\/blob\/v0\.2\.0\/docs\/firefox\.md#installation\)\./u,
+    /install `omw-0\.2\.0-firefox-mv3-unsigned\.xpi` permanently only after it is signed\. For development, load the extracted Firefox MV3 directory as a temporary add-on in `about:debugging`\. See \[Firefox installation\]\(https:\/\/oh-my-webbridge\.github\.io\/en\/firefox\/#install\)\./u,
   );
+  // Each documentation link in the notes names a page and a heading that exist.
+  const links = [
+    ...notes.matchAll(
+      new RegExp(`${documentation.replaceAll(".", "\\.")}/([a-z-]+)/#([a-z-]+)`, "gu"),
+    ),
+  ];
+  assert.ok(links.length > 0);
+  for (const [, page, anchor] of links) {
+    const source = await readFile(`docs/content/docs/${page}.mdx`, "utf8");
+    const headings = [...source.matchAll(/^#{2,3} (.+)$/gmu)].map(([, title]) =>
+      title
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9]+/gu, "-")
+        .replaceAll(/^-|-$/gu, ""),
+    );
+    assert.ok(headings.includes(anchor), `${page}.mdx has no heading for #${anchor}`);
+  }
   const changelog = `# Changelog\n\n## [0.2.0](https://example.test)\n\n${notes}\n## [0.1.1]\n\nOld notes\n`;
   assert.equal(releaseSection(changelog, "0.2.0"), notes);
   assert.throws(() => releaseSection(changelog, "0.3.0"), /no release/u);

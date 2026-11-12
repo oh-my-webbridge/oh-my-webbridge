@@ -10,6 +10,9 @@ import { gfm } from "micromark-extension-gfm";
 import { parseFragment } from "parse5";
 const exec = promisify(execFile);
 const repository = "https://github.com/oh-my-webbridge/oh-my-webbridge";
+// The documentation site, built from docs/content/docs. A page path is the
+// file name without its extension; a heading's anchor is its slug.
+export const documentation = "https://oh-my-webbridge.github.io/en";
 const cli = resolve("node_modules/@changesets/cli/bin.js");
 const json = async (path) => JSON.parse(await readFile(path, "utf8"));
 // The Chrome and Firefox extension manifests carry the package version.
@@ -153,7 +156,7 @@ export function renderNotes(plan, release) {
     "",
     `The release workflow submits \`omw-${release.newVersion}-chrome-mv3.zip\` to the Chrome Web Store and the unsigned add-on to addons.mozilla.org; each store publishes the version after its review.`,
     "",
-    `Firefox release builds install \`omw-${release.newVersion}-firefox-mv3-unsigned.xpi\` permanently only after it is signed. For development, load the extracted Firefox MV3 directory as a temporary add-on in \`about:debugging\`. See [Firefox installation](${repository}/blob/v${release.newVersion}/docs/firefox.md#installation).`,
+    `Firefox release builds install \`omw-${release.newVersion}-firefox-mv3-unsigned.xpi\` permanently only after it is signed. For development, load the extracted Firefox MV3 directory as a temporary add-on in \`about:debugging\`. See [Firefox installation](${documentation}/firefox/#install).`,
     "",
     "Browser benchmarks report interface costs on a deterministic fixture; they do not establish real-site reliability. Platform acceptance and remaining differences are recorded in the repository.",
   );
