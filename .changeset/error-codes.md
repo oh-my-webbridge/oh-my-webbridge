@@ -16,3 +16,5 @@ Commands that fail report the code their documentation names, in Chrome and Fire
 - A screenshot or PDF `path` whose directory cannot be created or written, that appears while the artifact is saved, or that lies on a file system without hard links fails with `invalid_args`. An artifact over 100 MiB fails with `result_too_large`.
 - A command for a browser that disconnects before the command is sent fails with `browser_offline`. An explicit `timeoutMs` outside 1 to 120000, including 0, fails with `invalid_request`, and the SDK rejects it before sending.
 - `/json`, `/json/list` and `/devtools/page/{tabId}` answer with the HTTP status that `/command` uses for the error code. `omw serve` checks the `cdp` endpoint in `config.json` before it starts.
+
+[PR #34](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/34)
