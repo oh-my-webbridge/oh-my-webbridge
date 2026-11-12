@@ -1,4 +1,5 @@
 import {
+  ArrowRightLeft,
   BookOpen,
   Code,
   Globe,
@@ -8,6 +9,7 @@ import {
   Network,
   Plug,
   Rocket,
+  Scale,
   ShieldBan,
   Terminal,
   Wrench,
@@ -20,6 +22,7 @@ import type { ReactNode } from "react";
  * the bundle; an unknown name fails the build.
  */
 export const iconComponents = {
+  ArrowRightLeft,
   BookOpen,
   Code,
   Globe,
@@ -29,6 +32,7 @@ export const iconComponents = {
   Network,
   Plug,
   Rocket,
+  Scale,
   ShieldBan,
   Terminal,
   Wrench,

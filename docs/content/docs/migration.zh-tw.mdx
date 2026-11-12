@@ -1,0 +1,188 @@
+---
+title: 遷移到 oh-my-webbridge
+icon: ArrowRightLeft
+description: 把 Kimi 瀏覽器擴充功能、MCP 瀏覽器伺服器、瀏覽器 CLI 與 Playwright 或 Puppeteer 指令碼的指令對應到 oh-my-webbridge 的動作。
+---
+
+oh-my-webbridge 的每個指令都指定一個工作階段、一個動作，以及一個參數 JSON 物件。本頁的表格把其他工具的常用指令對應到這些動作。搬移任務之前，請先在[與其他工具比較](./comparison.mdx)中確認 oh-my-webbridge 沒有提供的功能。
+
+## 開始之前 [#before-you-start]
+
+1. 安裝 daemon 與擴充功能，並配對瀏覽器。請見[快速開始](./getting-started.mdx)。
+2. 以 `omw install-skill ~/.agents/skills` 安裝 Agent 技能。關閉原本工具的技能或 MCP 伺服器，讓 Agent 在一項任務中只使用一個工具。
+3. 執行 `omw status`。它為每個瀏覽器印出一行，例如 `chrome: connected (156.0.8078.80)`。
+
+## 所有工具共通的變更 [#changes-for-every-tool]
+
+- **工作階段。** 每項任務使用一個工作階段名稱，例如 `checkout`。第一個指令會開啟工作階段，它的分頁在背景開啟，並放進同一個分頁群組。任務結束時送出 `close_session`。所有工作階段都使用你的瀏覽器設定檔與其中的 cookie。
+- **參照。** 參照的格式為 `@e<generation>.<index>`，來自該分頁最新一次的 `snapshot`。以 `@e` 開頭、來自其他工具或較舊快照的參照會以 `stale_ref` 失敗。不帶 `@` 的參照（例如 `e12`）會被當成 CSS 選擇器。導覽之後請重新取得快照。
+- **定位器。** `selector` 參數接受 CSS 與文字定位器，Playwright 定位器可以對應到這些形式。`role=` 完全比對名稱，而 `getByRole` 在未設定 `exact: true` 時比對子字串。串接的定位器與 `.filter()` 沒有對應形式。請見[選擇器](./reference/actions.mdx#selectors)。
+
+| Playwright 定位器                                      | oh-my-webbridge 選擇器       |
+| ------------------------------------------------------ | ---------------------------- |
+| `getByRole("button", { name: "Submit", exact: true })` | `role=button[name="Submit"]` |
+| `getByText("Sign in")`                                 | `text=Sign in`               |
+| `getByLabel("Email")`                                  | `label=Email`                |
+| `getByPlaceholder("Search")`                           | `placeholder=Search`         |
+| `getByTestId("search")`                                | `testid=search`              |
+| `.first()`、`.last()`                                  | ` >>nth=0`、` >>nth=-1`      |
+
+- **JavaScript。** `evaluate` 接受運算式，而不是函式。請送出 `document.title`，或把函式包成呼叫：`(() => document.title)()`。使用 `await` 的程式碼放進非同步函式呼叫：`(async () => (await fetch("/api")).status)()`。
+- **檔案。** `screenshot` 與 `save_as_pdf` 接受絕對路徑 `path` 並傳回它，不會覆寫已存在的檔案。
+- **期限。** 指令預設在 30 秒後失敗。HTTP 請求本文的 `timeoutMs` 欄位可設定 1 到 120000 毫秒。
+- **Firefox。** 部分動作在 Firefox 中回應 `unsupported`。請見 [Firefox](./firefox.mdx)。
+
+## 從 Kimi 瀏覽器擴充功能遷移 [#from-the-kimi-browser-extension]
+
+請求格式與大多數動作名稱相同，位址、token 與部分參數不同。
+
+|            | Kimi 瀏覽器擴充功能               | oh-my-webbridge                                            |
+| ---------- | --------------------------------- | ---------------------------------------------------------- |
+| 位址       | `http://127.0.0.1:10086`          | `http://127.0.0.1:17373`                                   |
+| 指令       | `POST /command`                   | `POST /command`，帶 `Authorization: Bearer <token>`        |
+| 請求本文   | `action`、`args`、`session`       | `session`、`action`、`args`；可選 `browser` 與 `timeoutMs` |
+| 狀態       | `/status`                         | 帶 token 的 `GET /status`，或 `omw status`                 |
+| 啟動       | `kimi-webbridge start`            | `omw start`，或以 `omw service install` 安裝使用者服務     |
+| Agent 技能 | `kimi-webbridge install-skill -y` | `omw install-skill ~/.agents/skills`                       |
+| 命令列     | `curl`                            | `omw call SESSION ACTION JSON`，或 `curl`                  |
+
+同一個 `navigate` 請求送往兩個 daemon 的寫法：
+
+```sh
+# Kimi 瀏覽器擴充功能
+curl -s -X POST http://127.0.0.1:10086/command \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"navigate","args":{"url":"https://example.com","group_title":"Research"},"session":"research"}'
+
+# oh-my-webbridge
+TOKEN=$(omw connection | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -s -X POST http://127.0.0.1:17373/command \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"session":"research","action":"navigate","args":{"url":"https://example.com","group_title":"Research"}}'
+
+# oh-my-webbridge 命令列
+omw call research navigate '{"url":"https://example.com","group_title":"Research"}'
+```
+
+以下動作的名稱與參數不變：`navigate`、`find_tab`、`list_tabs`、`close_tab`、`close_session`、`mouse_click`、`fill`、`key_type`、`hover`、`drag`、`find`、`cdp`、`screenshot`、`save_as_pdf`、`upload` 與 `network`。以下動作有變更：
+
+| Kimi 瀏覽器擴充功能                            | oh-my-webbridge                                                      |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| `click`，呼叫 `el.click()`                     | `click`。在 Chrome 中透過 CDP 送出受信任的滑鼠輸入。                 |
+| `code` 中使用 `await` 的 `evaluate`            | `evaluate`，程式碼放進非同步函式呼叫                                 |
+| `snapshot` 帶 `ref`、`interactive`             | `snapshot` 帶 `interactive`、`maxDepth`。參照使用新的格式。          |
+| `read_page` 帶 `cursor`                        | `read_page` 傳回前 192000 個字元，不接受 cursor。                    |
+| `wait` 帶 `text_gone`                          | `wait` 帶 `text` 與 `"state": "hidden"`                              |
+| `wait` 帶 `timeout_ms`                         | 請求本文中的 `timeoutMs`                                             |
+| `dialog` 帶 `"action": "accept"`               | `dialog` 帶 `"accept": true`；`text` 改為 `promptText`               |
+| `dialog` 帶 `"action": "dismiss"`              | `dialog` 帶 `"accept": false`                                        |
+| `dialog` 帶 `"action": "status"`               | `dialog_status`                                                      |
+| `select_option` 帶 `values`                    | `select_option` 帶一個 `value`，依值或可見文字比對                   |
+| 不帶 `values` 的 `select_option`，用來列出選項 | 讀取元素 `options` 的 `evaluate`                                     |
+| `scroll` 帶 `text`                             | `scroll` 帶 `"selector": "text=..."`                                 |
+| `scroll` 帶 `to`                               | `scroll` 帶 `direction` 與 `amount`                                  |
+| `send_keys` 帶 `repeat`                        | 每按一次鍵送一次 `send_keys`，或在 `batch` 中放多個步驟              |
+| `set_checked`                                  | `check` 或 `uncheck`                                                 |
+| `go_back`、`go_forward`、`reload`              | `history`，`cmd` 設為 `back`、`forward` 或 `reload`                  |
+| `highlight_region`、`clear_highlight`          | 沒有對應動作。[活動層](./activity.mdx)會標示每個輸入動作的目標元素。 |
+
+## 從 MCP 瀏覽器伺服器遷移 [#from-mcp-browser-servers]
+
+oh-my-webbridge 沒有 MCP 伺服器。Agent 依技能說明，在 shell 中執行 `omw call`。一次工具呼叫對應一個指令：
+
+```sh
+omw call checkout click '{"selector":"role=button[name=\"Pay\"]"}'
+```
+
+Chrome DevTools MCP 的頁面工具還需要 `pageId`，預設為必填。下表省略這個參數。
+
+| 任務            | Playwright MCP                                 | Browser MCP                         | Chrome DevTools MCP                | oh-my-webbridge                                                  |
+| --------------- | ---------------------------------------------- | ----------------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| 開啟網址        | `browser_navigate {url}`                       | `goto <url>`                        | `navigate_page {type: "url", url}` | `navigate {"url"}`                                               |
+| 開新分頁        | `browser_tabs {action: "new", url}`            | `tab new <url>`                     | `new_page {url}`                   | `navigate {"url", "newTab": true}`                               |
+| 讀取頁面        | `browser_snapshot`                             | `snapshot -i`                       | `take_snapshot`                    | `snapshot`、`read_page`                                          |
+| 點擊            | `browser_click {target}`                       | `click e12`                         | `click {uid}`                      | `click {"selector"}`                                             |
+| 連按兩下        | `browser_click {target, doubleClick: true}`    | `click e12 --double`                | `click {uid, dblClick: true}`      | `dblclick {"selector"}`                                          |
+| 填寫欄位        | `browser_type {target, text}`                  | `fill e5 "text"`                    | `fill {uid, value}`                | `fill {"selector", "value"}`                                     |
+| 按鍵            | `browser_press_key {key}`                      | `press Enter`                       | `press_key {key}`                  | `send_keys {"keys"}`                                             |
+| 選取選項        | `browser_select_option {target, values}`       | `select e7 "value"`                 | `fill {uid, value}`                | `select_option {"selector", "value"}`                            |
+| 上傳檔案        | `browser_file_upload {paths}`                  | `upload <target> <path>`            | `upload_file`                      | `upload {"selector", "files"}`                                   |
+| 等待文字        | `browser_wait_for {text}`                      | `wait --text "<text>"`              | `wait_for`                         | `wait {"text"}`                                                  |
+| 回應對話框      | `browser_handle_dialog {accept, promptText}`   | `dialog`                            | `handle_dialog`                    | `dialog {"accept", "promptText"}`                                |
+| 螢幕截圖        | `browser_take_screenshot {fullPage, filename}` | `screenshot --full --path <file>`   | `take_screenshot {filePath}`       | `screenshot {"fullPage", "path"}`                                |
+| 執行 JavaScript | `browser_evaluate {function}`                  | `eval "<function>"`                 | `evaluate_script {function}`       | `evaluate {"code"}`，參數為運算式                                |
+| 主控台訊息      | `browser_console_messages`                     | `console`                           | `list_console_messages`            | `console {"cmd": "start"}`，再送 `{"cmd": "list"}`               |
+| 網路請求        | `browser_network_requests`                     | `requests`                          | `list_network_requests`            | `network {"cmd": "start"}`，再送 `{"cmd": "list"}`               |
+| 列出分頁        | `browser_tabs {action: "list"}`                | `tab list`                          | `list_pages`                       | `list_tabs`                                                      |
+| 使用你的分頁    | 在連線頁面上選取                               | `tab select <id>`                   | `select_page {pageId}`             | `find_tab {"url": "example.com", "active": true}` 借用作用中分頁 |
+| 關閉分頁        | `browser_tabs {action: "close", index}`        | `tab close <id>`                    | `close_page {pageId}`              | `close_tab {"tabId"}`                                            |
+| 結束任務        | `browser_close`                                | AI 應用程式關閉或閒置 10 分鐘後釋放 | CLI 中的 `chrome-devtools stop`    | `close_session`                                                  |
+
+- Browser MCP 的一次呼叫可以包含多行指令。`batch` 在一個請求中依序執行最多 64 個步驟，遇到第一個錯誤即停止：`omw call checkout batch '{"steps":[{"action":"fill","args":{"selector":"label=Email","value":"a@example.com"}},{"action":"send_keys","args":{"keys":"Enter"}}]}'`。`screenshot`、`save_as_pdf` 與 `close_session` 要分開送出。
+- 帶 `submit: true` 的 `browser_type` 對應為 `fill`，接著送出 `keys` 為 `Enter` 的 `send_keys`。
+- `console` 在 Chrome 中使用，傳回 `start` 之後記錄的訊息。請在會記錄訊息的步驟之前送出 `start`。
+- Chrome DevTools MCP 的效能追蹤、Lighthouse 與堆積快照，以及 Playwright MCP 的回應模擬、追蹤與程式碼產生，沒有內建動作。這類任務請保留原本的伺服器。[頁面連線](./reference/cdp.mdx#page-connections)接受 `chrome.debugger` 允許的協定網域，例如以 `Fetch` 攔截請求。
+
+## 從 agent-browser 與 PinchTab 遷移 [#from-agent-browser-and-pinchtab]
+
+oh-my-webbridge 不啟動瀏覽器，因此沒有對應 `--headed`、`--profile`、`--state`、設定檔管理或執行個體的功能。指令在你使用的瀏覽器的背景分頁中執行，沿用其中的登入狀態。`omw call` 的第一個參數是工作階段名稱。PinchTab 的 Agent 工作階段設定身分與權限；最接近 oh-my-webbridge 工作階段的是 PinchTab 的執行個體或分頁。
+
+| 任務       | agent-browser            | PinchTab                    | `omw call SESSION ...`                                       |
+| ---------- | ------------------------ | --------------------------- | ------------------------------------------------------------ |
+| 選擇任務   | `--session agent1`       | 執行個體，或 `--tab <id>`   | `omw call agent1 ...`                                        |
+| 開啟網址   | `open <url>`             | `nav <url>`                 | `navigate '{"url":"<url>"}'`                                 |
+| 快照       | `snapshot -i`            | `snap -i -c`                | `snapshot '{"interactive":true}'`                            |
+| 點擊       | `click @e1`              | `click e5`                  | `click '{"selector":"<參照>"}'`                              |
+| 填寫       | `fill @e4 "text"`        | `fill "#search" "q"`        | `fill '{"selector":"#search","value":"q"}'`                  |
+| 輸入文字   | `type <selector> <text>` | `type <selector> <text>`    | `key_type '{"selector":"...","text":"..."}'`                 |
+| 按鍵       | `press Enter`            | `press Enter`               | `send_keys '{"keys":"Enter"}'`                               |
+| 頁面文字   | `get text <selector>`    | `text`                      | `read_page`，或 `get '{"selector":"...","property":"text"}'` |
+| 螢幕截圖   | `screenshot <path>`      | `screenshot -o <path>`      | `screenshot '{"path":"/absolute/shot.png"}'`                 |
+| PDF        | `pdf <path>`             | `pdf -o <path>`             | `save_as_pdf '{"path":"/absolute/page.pdf"}'`                |
+| JavaScript | `eval "document.title"`  | `eval "document.title"`     | `evaluate '{"code":"document.title"}'`                       |
+| 列出分頁   | `tab list`               | `tab`                       | `list_tabs`                                                  |
+| 切換分頁   | `tab t2`                 | `tab <tab-id>`              | `switch_tab '{"tabId":412}'`                                 |
+| 關閉分頁   | `tab close`              | `tab close <tab-id>`        | `close_tab`                                                  |
+| 多個步驟   | `batch`                  | `POST /actions`             | `batch '{"steps":[...]}'`                                    |
+| 結束任務   | `close`                  | `POST /instances/{id}/stop` | `close_session`                                              |
+
+## 從 Playwright 或 Puppeteer 指令碼遷移 [#from-playwright-or-puppeteer-scripts]
+
+在擴充功能模式下，daemon 在 `/json/list` 列出頁面目標，並在 `/devtools/page/{tabId}` 提供單一分頁。它的 `/json/version` 沒有 `webSocketDebuggerUrl`。Playwright 的 `chromium.connectOverCDP` 與 Puppeteer 帶 `browserURL` 的 `puppeteer.connect` 會讀取這個欄位來找到瀏覽器端點（[Playwright 原始碼](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromium.ts)、[Puppeteer 原始碼](https://github.com/puppeteer/puppeteer/blob/main/packages/puppeteer-core/src/common/BrowserConnector.ts)）。這類指令碼有兩種搬移方式。
+
+### 讓指令碼使用原生模式 [#keep-the-script-on-native-mode]
+
+原生模式透過 daemon 轉送瀏覽器端點。以 `--remote-debugging-port=9222` 與另一個 `--user-data-dir` 啟動 Chrome，再以 `http://127.0.0.1:9222/json/version` 中的瀏覽器 URL 啟動 daemon：
+
+```sh
+omw serve --cdp ws://127.0.0.1:9222/devtools/browser/8b0d3f7c-...
+```
+
+Playwright 在 `headers` 中帶上 token 連線，寫法請見 [CDP](./reference/cdp.mdx#native-mode)。Puppeteer 則傳入 `browserURL: "http://127.0.0.1:17373"`，並在 `wsOptions.headers` 中帶上同一個標頭。這樣指令碼操作的是那個另外啟動的 Chrome，而不是你平常使用的設定檔。
+
+### 把指令碼改用 SDK [#move-the-script-to-the-sdk]
+
+SDK 透過擴充功能操作你使用的瀏覽器中的分頁。
+
+| Playwright                                                             | oh-my-webbridge SDK                                             |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `await page.goto(url)`                                                 | `await task.navigate(url)`                                      |
+| `await page.getByRole("button", { name: "Pay", exact: true }).click()` | `await task.click('role=button[name="Pay"]')`                   |
+| `await page.getByLabel("Email").fill("a@example.com")`                 | `await task.fill("label=Email", "a@example.com")`               |
+| `await page.keyboard.press("Enter")`                                   | `await task.call("send_keys", { keys: "Enter" })`               |
+| `await page.waitForSelector("#done")`                                  | `await task.call("wait", { selector: "#done" })`                |
+| `await page.evaluate(() => document.title)`                            | `await task.evaluate("document.title")`                         |
+| `await page.screenshot({ path: "shot.png" })`                          | `await task.call("screenshot", { path: "/absolute/shot.png" })` |
+| `await browser.close()`                                                | `await task.close()`                                            |
+
+```js
+import { connect } from "./dist/sdk.mjs";
+
+const task = await connect("checkout");
+await task.navigate("https://example.com/cart");
+await task.click('role=button[name="Pay"]');
+await task.close();
+```
+
+在擴充功能模式下需要原始協定時，請用 `cdp` 動作送出指令，或以帶 Bearer 標頭的 WebSocket 用戶端開啟 `/devtools/page/{tabId}`。請見 [CDP](./reference/cdp.mdx)。
