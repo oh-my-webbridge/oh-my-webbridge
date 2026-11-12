@@ -132,6 +132,13 @@ async function frameUrl(tabId: number): Promise<string> {
   if (typeof value !== "string") fail("browser_error", "frame url: the page returned no URL");
   return value;
 }
+// The cookie store of the tab, which Firefox reports for every tab: the
+// default store or the store of the tab's container.
+async function cookieStore(tabId: number): Promise<string> {
+  const { cookieStoreId } = await chrome.tabs.get(tabId);
+  if (!cookieStoreId) fail("browser_error", `tab ${tabId} reports no cookie store`);
+  return cookieStoreId;
+}
 // Resolves the frame that selector names, in the selected frame or, once that
 // frame navigated or was removed, in the main frame.
 async function frameOf(tabId: number, selector: string): Promise<number> {
@@ -446,6 +453,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
           "Firefox extensions can only add request headers (data)",
         );
       if (args.data) {
+        await requireSiteAccess(action);
         setExtraHeaders(tabId, args.data);
         const previous = s.settings;
         s.settings = { ...previous, data: args.data };
@@ -493,7 +501,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     case "cookies":
       // Without site access cookies.getAll answers with an empty list.
       await requireSiteAccess(action);
-      return cookies(await frameUrl(tabId), args);
+      return cookies(await frameUrl(tabId), await cookieStore(tabId), args);
     case "download": {
       const url = new URL(stringArg(args.url, "url"), await frameUrl(tabId));
       if (!["http:", "https:"].includes(url.protocol))
@@ -501,6 +509,8 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       const id = await chrome.downloads.download({
         url: url.href,
         saveAs: false,
+        // The request carries the cookies of the tab's container.
+        cookieStoreId: await cookieStore(tabId),
         ...(args.filename ? { filename: args.filename } : {}),
       });
       try {
@@ -514,11 +524,18 @@ export async function execute(command: Command, budget: Budget): Promise<object>
           await pause(50, budget.signal);
         }
       } catch (error) {
-        await chrome.downloads.cancel(id);
+        // Firefox refuses to cancel a completed or erased download; the
+        // original failure still describes the outcome.
+        try {
+          await chrome.downloads.cancel(id);
+        } catch (cause) {
+          console.warn(`cancel download ${id}`, fault(cause as Error).message);
+        }
         throw error;
       }
     }
     case "network":
+      if (args.cmd === "start") await requireSiteAccess(action);
       return network(tabId, args.cmd, args.filter, args.requestId);
     case "upload":
       return record(

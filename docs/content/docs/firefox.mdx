@@ -43,7 +43,7 @@ Installing the extension opens the setup page (`app.html`), which lists the setu
 3. **Allow scripts**: grants the optional `userScripts` permission.
 4. **Try it with an agent**: `omw install-skill ~/.agents/skills`, then ask the agent something.
 
-- **Access to all websites** is the `<all_urls>` host permission, requested at installation. You can turn it off under Permissions in `about:addons`. Without it, page actions, `screenshot` and `cookies` return `restricted_tab` and presets stop filtering requests. A `navigate` to a URL that answers 204 No Content or 205 Reset Content then waits until the command deadline. Turning the permission back on restores filtering.
+- **Access to all websites** is the `<all_urls>` host permission, requested at installation. You can turn it off under Permissions in `about:addons`. Without it, page actions, `screenshot`, `cookies`, `network` with `cmd: "start"` and `emulate` with `data` return `restricted_tab` and presets stop filtering requests. A `navigate` to a URL that answers 204 No Content or 205 Reset Content then waits until the command deadline. Turning the permission back on restores filtering.
 - **User scripts** is the optional `userScripts` permission. Choose **Allow scripts** in step 3, or under **Settings**, then **Pages**, and confirm the Firefox prompt. Firefox accepts the request only from a user action, so these buttons are the only place to grant it. Until it is granted, `evaluate` and `wait` with `expression` return `unsupported`.
 
 **Pause** in the popup disconnects the extension from the daemon until you select **Resume**.
@@ -80,7 +80,8 @@ Actions behave as in Chrome unless the table lists a difference. An action or pa
 | `dialog`, `console`                                      | `unsupported`                                                                                                                       |
 | `dialog_status`                                          | Returns the URL only, without the dialog type or message                                                                            |
 | `emulate`                                                | Only `data` (extra request headers) works                                                                                           |
-| `cookies`                                                | Covers all cookie partitions; `set` writes an unpartitioned cookie                                                                  |
+| `cookies`                                                | Uses the tab's cookie store, which can be a container; covers all cookie partitions; `set` writes an unpartitioned cookie           |
+| `download`                                               | Sends the cookies of the tab's cookie store, which can be a container                                                               |
 | `upload`                                                 | The daemon reads the files: 16 MiB per command, 64 MiB in flight                                                                    |
 | `screenshot`                                             | Captures the tab without activating it; `selector` and `fullPage` need the main frame                                               |
 | `save_as_pdf`                                            | `unsupported`; `tabs.saveAsPDF` opens a save dialog and returns no PDF bytes                                                        |

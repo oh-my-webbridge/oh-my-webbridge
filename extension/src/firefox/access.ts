@@ -1,8 +1,8 @@
 import { fail } from "../protocol.js";
 
 // Firefox lets the user withdraw "Access to all websites", the <all_urls>
-// host permission, in about:addons at any time. Without it Firefox still
-// calls the blocking webRequest listeners but ignores their cancellations,
+// host permission, in about:addons at any time. Without it Firefox
+// dispatches no webRequest events for requests to or from those websites,
 // tabs.captureTab disappears and cookies.getAll returns nothing.
 const allSites = { origins: ["<all_urls>"] };
 export const siteAccessHint = "check that oh-my-webbridge may access all websites in about:addons";

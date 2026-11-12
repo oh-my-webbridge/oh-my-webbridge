@@ -72,15 +72,17 @@ async function tracked(command: Command, budget: Budget): Promise<object> {
   const selector = args.selector;
   const follow =
     drawing && elementAction(command.action) && selector !== undefined && !scopeOf(tabId);
-  const target = (): Promise<void> =>
-    callPage(tabId, "box", { selector }).then(
-      (value) => {
-        const rect = rectOf(value);
-        if (rect) actionTarget(tabId, rect);
-      },
+  const target = async (): Promise<void> => {
+    let value: Json;
+    try {
+      value = await callPage(tabId, "box", { selector });
+    } catch {
       // The action reports a missing element itself.
-      () => undefined,
-    );
+      return;
+    }
+    const rect = rectOf(value);
+    if (rect) actionTarget(tabId, rect);
+  };
   try {
     if (follow && command.action !== "scroll") await target();
     const result = await execute(command, budget);

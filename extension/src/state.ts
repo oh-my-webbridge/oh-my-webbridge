@@ -23,16 +23,16 @@ let loaded: Promise<void> | undefined;
 // once their tabs are released and are not reported in hello.
 export function initSessions(release: (tabIds: number[]) => Promise<void>): Promise<void> {
   if (loaded) fail("internal", "session state is already initialized");
-  loaded = chrome.storage.session
-    .get("sessions")
-    .then(async (stored: { sessions?: Record<string, Session> }) => {
-      for (const [name, session] of Object.entries(stored.sessions ?? {}))
-        sessions.set(name, session);
-      await release([...sessions.values()].flatMap((s) => [...s.tabs, ...s.borrowed]));
-      if (takePageClients().length) await persist();
-      else for (const listener of listeners) listener();
-    });
+  loaded = restore(release);
   return loaded;
+}
+async function restore(release: (tabIds: number[]) => Promise<void>): Promise<void> {
+  const stored: { sessions?: Record<string, Session> } =
+    await chrome.storage.session.get("sessions");
+  for (const [name, session] of Object.entries(stored.sessions ?? {})) sessions.set(name, session);
+  await release([...sessions.values()].flatMap((s) => [...s.tabs, ...s.borrowed]));
+  if (takePageClients().length) await persist();
+  else for (const listener of listeners) listener();
 }
 async function ready(): Promise<void> {
   if (!loaded) fail("internal", "session state is not initialized");
@@ -95,7 +95,9 @@ export function controlledTabs(): Map<number, { session: string; borrowed: boole
 export function persist(): Promise<void> {
   for (const listener of listeners) listener();
   const version = ++revision;
-  const next = saving.then(async () => {
+  const previous = saving;
+  const next = (async () => {
+    await previous;
     if (written >= version) return;
     // Clone only at the write boundary. Bursts share the newest snapshot rather
     // than retaining one complete session graph per queued persistence call.
@@ -103,7 +105,7 @@ export function persist(): Promise<void> {
     const captured = revision;
     await chrome.storage.session.set({ sessions: snapshot });
     written = captured;
-  });
+  })();
   saving = next.catch((error: Error) => console.error("session persistence failed", error.message));
   return next;
 }
@@ -142,9 +144,12 @@ export async function removedGroup(groupId: number): Promise<void> {
   for (const s of sessions.values()) if (s.group === groupId) s.group = undefined;
   await persist();
 }
+// The committed URL, or the pending one while the tab has not committed a
+// document: Chrome then reports url as an empty string.
+export function tabURL(tab: chrome.tabs.Tab): string {
+  return tab.url || tab.pendingUrl || "";
+}
 export function webTab(tab: chrome.tabs.Tab): boolean {
-  return (
-    !tab.incognito &&
-    (/^https?:\/\//u.test(tab.url ?? tab.pendingUrl ?? "") || tab.url === "about:blank")
-  );
+  const url = tabURL(tab);
+  return !tab.incognito && (/^https?:\/\//u.test(url) || url === "about:blank");
 }

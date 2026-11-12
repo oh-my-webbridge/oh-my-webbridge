@@ -23,7 +23,7 @@ import {
 } from "./cdp.js";
 import { actionTarget, releaseLayer } from "./activity.js";
 import { feature, forgetObservations } from "./features.js";
-import { forgetFrames, resetScope, runtimeDisabled } from "./frames.js";
+import { forgetFrames, resetScope, runtimeDisabled, sessionEnded, topDocument } from "./frames.js";
 import { snowflake } from "./id.js";
 import { forget as forgetNetwork, network } from "./network.js";
 import { fail, stringArg, type Args, type Command, type JsonObject } from "./protocol.js";
@@ -35,6 +35,7 @@ import {
   getSession,
   persist,
   release,
+  tabURL,
   takePageClients,
   webTab,
   type Session,
@@ -42,6 +43,11 @@ import {
 
 type Budget = { signal: AbortSignal; check: () => void };
 const streams = new Map<string, { tabId: number; session: string; handle: string }>();
+// Task tabs whose current debugger session carries the session's emulation
+// settings. Chrome drops the overrides with the debugger session, so forgetTab
+// removes the tab, a restarted worker starts without any, and tabFor applies
+// the settings again before the tab's next command.
+const emulated = new Set<number>();
 function forgetStreams(tabId: number): void {
   for (const [key, stream] of streams) if (stream.tabId === tabId) streams.delete(key);
 }
@@ -58,6 +64,16 @@ export function forgetTab(tabId: number): void {
   clearRefs(tabId);
   forgetNetwork(tabId);
   rawEventTabs.delete(tabId);
+  emulated.delete(tabId);
+}
+// Chrome ended the tab's debugger session: the user cancelled the debugging
+// bar, DevTools took the tab, or the tab closed. The worker forgets the tab's
+// state, and a frame selection, or the pending report of a lost one, is
+// reported to the next command, which attaches a new session.
+export function debuggerDetached(tabId: number): void {
+  const selected = !topDocument(tabId);
+  forgetTab(tabId);
+  if (selected) sessionEnded(tabId);
 }
 // Chrome rejects a detach once the tab is gone ("No tab with given id 5.") or
 // the debugger is no longer attached ("Debugger is not attached to the tab
@@ -91,12 +107,16 @@ export async function releasePageClients(): Promise<void> {
   }
 }
 
-async function tabFor(name: string, s: Session, args: Args): Promise<number> {
+async function tabFor(name: string, s: Session, args: Args, budget: Budget): Promise<number> {
   const tabId = args.tabId ?? args.tab ?? s.current;
   if (!tabId) fail("no_tab", "navigate or find_tab before using a page action");
   assertOwner(name, tabId);
   const tab = await chrome.tabs.get(tabId);
   if (!webTab(tab)) fail("restricted_tab", "only non-incognito HTTP(S) pages are supported");
+  if (s.tabs.includes(tabId) && !emulated.has(tabId)) {
+    if (s.settings) await feature("emulate", tabId, s.settings, budget);
+    emulated.add(tabId);
+  }
   return tabId;
 }
 function validURL(value: string | undefined): string {
@@ -352,7 +372,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
   if (action === "list_targets")
     return (await chrome.tabs.query({}))
       .filter(webTab)
-      .map((tab) => ({ tabId: tab.id, url: tab.url, title: tab.title }));
+      .map((tab) => ({ tabId: tab.id, url: tabURL(tab), title: tab.title }));
   const s = await getSession(name);
   budget.check();
   if (action === "preset") {
@@ -410,6 +430,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
       await attach(tabId);
       await configurePreset(tabId, config, url);
       if (s.settings) await feature("emulate", tabId, s.settings, budget);
+      emulated.add(tabId);
       budget.check();
       const navigation = await navigateTo(tabId, url);
       try {
@@ -452,6 +473,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         await attach(tabId);
         await configurePreset(tabId, config, url);
         if (s.settings) await feature("emulate", tabId, s.settings, budget);
+        emulated.add(tabId);
         budget.check();
         const opened = await navigateTo(tabId, url);
         try {
@@ -475,7 +497,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         throw error;
       }
     } else {
-      tabId = await tabFor(name, s, args);
+      tabId = await tabFor(name, s, args, budget);
       const owned = s.tabs.includes(tabId);
       if (owned) {
         await attach(tabId);
@@ -512,7 +534,8 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         (!args.active && !s.tabs.includes(tab.id) && !s.borrowed.includes(tab.id))
       )
         return false;
-      return tab.url === query || new URL(tab.url!).hostname === query;
+      const url = tabURL(tab);
+      return url === query || new URL(url).hostname === query;
     });
     if (!match?.id)
       fail(
@@ -524,7 +547,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     return {
       success: true,
       tabId: match.id,
-      url: match.url,
+      url: tabURL(match),
       borrowed: s.borrowed.includes(match.id),
     };
   }
@@ -628,7 +651,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
     }
     return sendRoot(stream.tabId, "IO.read", { handle: stream.handle, size: 65536 });
   }
-  const tabId = await tabFor(name, s, args);
+  const tabId = await tabFor(name, s, args, budget);
   const extra = await feature(action, tabId, args, budget);
   if (extra !== undefined) {
     if (action === "emulate") {
@@ -912,6 +935,14 @@ export async function execute(command: Command, budget: Budget): Promise<object>
         args.files.some((file) => typeof file !== "string" || !file.startsWith("/"))
       )
         fail("invalid_args", "files must be non-empty absolute paths on Chrome's host");
+      // Chrome answers DOM.setFileInputFiles with "Not allowed" unless the
+      // extension's "Allow access to file URLs" switch is on, which it is not
+      // by default for a store installation.
+      if (!(await chrome.extension.isAllowedFileSchemeAccess()))
+        fail(
+          "file_access_required",
+          'turn on "Allow access to file URLs" for oh-my-webbridge in chrome://extensions to upload local files',
+        );
       await send(tabId, "DOM.setFileInputFiles", {
         files: args.files,
         ...(await node(tabId, stringArg(args.selector, "selector"))),

@@ -72,11 +72,16 @@ function collect(): PageSignals {
 // Reads the signals of a tab. Pages that extensions cannot script, such as
 // browser pages and extension stores, and pages that do not answer within
 // 500 ms, for example behind an alert, give undefined.
+async function inject(tabId: number): Promise<PageSignals | undefined> {
+  try {
+    const [frame] = await chrome.scripting.executeScript({ target: { tabId }, func: collect });
+    return frame?.result;
+  } catch {
+    // The browser refuses to script this page.
+    return undefined;
+  }
+}
 export async function readPage(tabId: number): Promise<PageSignals | undefined> {
-  const injected = chrome.scripting
-    .executeScript({ target: { tabId }, func: collect })
-    .then(([frame]) => frame?.result)
-    .catch(() => undefined);
   const late = new Promise<undefined>((resolve) => setTimeout(resolve, 500));
-  return Promise.race([injected, late]);
+  return Promise.race([inject(tabId), late]);
 }

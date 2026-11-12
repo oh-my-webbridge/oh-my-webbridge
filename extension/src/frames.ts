@@ -8,6 +8,26 @@ const lost = new Map<number, string>();
 // Whether commands on tabId run in the top document with no pending report of a
 // lost frame selection.
 export const topDocument = (tabId: number): boolean => !scopes.has(tabId) && !lost.has(tabId);
+// Tabs outside the top document, also kept in session storage: a restarted
+// worker detaches the debugger sessions it inherits and reports their frame
+// selections as lost (restoreLost).
+const framed = new Set<number>();
+let saving = Promise.resolve();
+async function save(previous: Promise<void>): Promise<void> {
+  await previous;
+  try {
+    await chrome.storage.session.set({ frames: [...framed] });
+  } catch (error) {
+    console.error("save frame selections", (error as Error).message);
+  }
+}
+function track(tabId: number): void {
+  const selected = !topDocument(tabId);
+  if (selected === framed.has(tabId)) return;
+  if (selected) framed.add(tabId);
+  else framed.delete(tabId);
+  saving = save(saving);
+}
 const children = new Map<number, Map<string, string>>();
 const contexts = new Map<number, Map<string, Scope>>();
 export function frameContext(tabId: number, frameId: string): Scope | undefined {
@@ -82,6 +102,21 @@ export function frameEvent(
 function lose(tabId: number, reason = "the selected frame navigated or was removed"): void {
   scopes.delete(tabId);
   lost.set(tabId, `${reason}; commands now use the main frame; select it again with frame`);
+  track(tabId);
+}
+// Chrome ended the tab's debugger session (chrome.debugger.onDetach) or a
+// restarted worker detached it. The next command attaches a new session, whose
+// frames and execution contexts this module has not seen.
+export function sessionEnded(tabId: number): void {
+  lose(tabId, "the debugger session ended");
+}
+// Runs after a restarted worker detached the debugger sessions of tabIds,
+// before any command. A recorded frame selection of these tabs ends as lost;
+// the records of other tabs are dropped.
+export async function restoreLost(tabIds: number[]): Promise<void> {
+  const { frames = [] } = (await chrome.storage.session.get("frames")) as { frames?: number[] };
+  for (const tabId of frames) if (tabIds.includes(tabId)) sessionEnded(tabId);
+  if (frames.length !== framed.size) saving = save(saving);
 }
 // Runtime.disable sent through the cdp action stops the context events that
 // report a replaced document. The session's contexts are forgotten and a frame
@@ -100,6 +135,7 @@ export function selectedScope(tabId: number): Scope | undefined {
   const report = lost.get(tabId);
   if (report) {
     lost.delete(tabId);
+    track(tabId);
     fail("frame_unavailable", report);
   }
   return scopes.get(tabId);
@@ -107,15 +143,18 @@ export function selectedScope(tabId: number): Scope | undefined {
 // Selecting a frame after the selected one was lost starts from the main frame.
 export function clearLost(tabId: number): void {
   lost.delete(tabId);
+  track(tabId);
 }
 export function selectScope(tabId: number, scope: Scope): void {
   lost.delete(tabId);
   scopes.set(tabId, scope);
+  track(tabId);
 }
 // Ends a frame selection, including the report of a lost one.
 export function resetScope(tabId: number): void {
   lost.delete(tabId);
   scopes.delete(tabId);
+  track(tabId);
 }
 export function forgetFrames(tabId: number): void {
   resetScope(tabId);

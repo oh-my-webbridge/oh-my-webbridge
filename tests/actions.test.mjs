@@ -223,7 +223,7 @@ async function sessionFixture(
   t.after(() => Object.assign(globalThis, original));
   const m = await load(
     t,
-    'export { execute } from "./extension/src/actions.ts"; export { removed } from "./extension/src/state.ts"; export { forgetPreset, presetEvent } from "./extension/src/presets.ts"; export { addRef, node, refEvent } from "./extension/src/cdp.ts";',
+    'export { debuggerDetached, execute } from "./extension/src/actions.ts"; export { removed } from "./extension/src/state.ts"; export { forgetPreset, presetEvent } from "./extension/src/presets.ts"; export { addRef, detached, node, refEvent } from "./extension/src/cdp.ts";',
   );
   const run = (action, args) =>
     m.execute(
@@ -344,6 +344,45 @@ test("navigation after a worker restart detaches the inherited session and reapp
   const status = await f.run("preset", { cmd: "status" });
   assert.equal(status.name, "anti-ad");
   assert.equal(status.network, true);
+});
+
+test("a task tab gets the session's emulation settings again in a new debugger session", async (t) => {
+  const f = await sessionFixture(
+    t,
+    {
+      task: {
+        tabs: [1],
+        borrowed: [],
+        current: 1,
+        title: "task",
+        settings: { width: 900, height: 700, colorScheme: "dark" },
+      },
+    },
+    { hold: false, inherited: [1] },
+  );
+  const applied = ["Emulation.setDeviceMetricsOverride", "Emulation.setEmulatedMedia"];
+  const emulation = (tabId) =>
+    f.calls.filter((c) => c.tabId === tabId && applied.includes(c.method)).map((c) => c.method);
+  // The restarted worker detached the session that carried the overrides.
+  await f.run("network", { cmd: "list" });
+  assert.deepEqual(emulation(1), applied);
+  assert.deepEqual(f.calls.find((c) => c.method === "Emulation.setDeviceMetricsOverride").params, {
+    width: 900,
+    height: 700,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await f.run("network", { cmd: "list" });
+  assert.deepEqual(emulation(1), applied, "the same session keeps them");
+  // chrome.debugger.onDetach, as worker.ts handles it.
+  f.m.detached(1);
+  f.m.debuggerDetached(1);
+  await f.run("network", { cmd: "list" });
+  assert.deepEqual(emulation(1), [...applied, ...applied]);
+  // A new task tab gets them once, before it navigates.
+  const { tabId } = await f.run("navigate", { url: "https://example.test/", newTab: true });
+  await f.run("network", { cmd: "list", tabId });
+  assert.deepEqual(emulation(tabId), applied);
 });
 
 // Commands that reconfiguring a preset sends to the current document.
@@ -635,10 +674,15 @@ test("navigate {preset:none} releases root requests while an iframe installation
 
 // A user tab that task sessions borrow one after another. The worker's frame,
 // network and preset events are fed in directly. The page has one button,
-// which snapshot reports with backend node id 11.
-async function borrowFixture(t) {
+// which snapshot reports with backend node id 11. access.files answers
+// chrome.extension.isAllowedFileSchemeAccess. stored is the session storage a
+// restarted worker reads, and inherited tabs start with a debugger session of
+// the previous worker instance; saved receives every session storage write.
+async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
   const original = { chrome: globalThis.chrome };
   const calls = [];
+  const saved = [];
+  const access = { files: true };
   const tab = { id: 5, url: "https://example.test/", title: "user tab", status: "complete" };
   const listeners = { addListener: () => {}, removeListener: () => {} };
   const replies = {
@@ -661,9 +705,16 @@ async function borrowFixture(t) {
     }),
     "DOM.resolveNode": () => ({ object: { type: "object", objectId: "button" } }),
     "Runtime.callFunctionOn": () => ({ result: { type: "string", value: "Send" } }),
+    "Network.getResponseBody": () => ({ body: '{"ok":true}', base64Encoded: false }),
   };
   globalThis.chrome = {
-    storage: { session: { get: async () => ({}), set: async () => {} } },
+    storage: {
+      session: {
+        get: async () => stored,
+        set: async (value) => saved.push(structuredClone(value)),
+      },
+    },
+    extension: { isAllowedFileSchemeAccess: async () => access.files },
     tabs: {
       get: async (id) => ({ ...tab, id }),
       query: async () => [tab],
@@ -672,7 +723,7 @@ async function borrowFixture(t) {
     },
     debugger: {
       onEvent: listeners,
-      getTargets: async () => [],
+      getTargets: async () => inherited.map((tabId) => ({ type: "page", tabId, attached: true })),
       attach: async ({ tabId }) => calls.push({ tabId, method: "attach" }),
       detach: async ({ tabId }) => calls.push({ tabId, method: "detach" }),
       sendCommand: async (source, method, params) => {
@@ -685,8 +736,8 @@ async function borrowFixture(t) {
   const m = await load(
     t,
     [
-      'export { execute } from "./extension/src/actions.ts";',
-      'export { refEvent } from "./extension/src/cdp.ts";',
+      'export { debuggerDetached, execute } from "./extension/src/actions.ts";',
+      'export { detached, refEvent } from "./extension/src/cdp.ts";',
       'export { frameEvent, resetScope } from "./extension/src/frames.ts";',
       'export { event as networkEvent } from "./extension/src/network.ts";',
       'export { owner, removed } from "./extension/src/state.ts";',
@@ -695,7 +746,12 @@ async function borrowFixture(t) {
   const run = (session, action, args = {}, check = () => {}) =>
     m.execute({ session, action, args }, { signal: new AbortController().signal, check });
   const borrow = (session) => run(session, "find_tab", { url: tab.url, active: true });
-  return { m, run, borrow, calls };
+  // chrome.debugger.onDetach as worker.ts handles it.
+  const debuggerDetached = (tabId) => {
+    m.detached(tabId);
+    m.debuggerDetached(tabId);
+  };
+  return { m, run, borrow, calls, saved, access, debuggerDetached, tab };
 }
 
 test("a released borrowed tab keeps no frame selection for the next session", async (t) => {
@@ -809,6 +865,75 @@ test("a cross-process frame is lost when its contexts are cleared or its target 
     await f.run("task", "evaluate", { code: "document.title" });
     assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined }, name);
   }
+});
+
+const sessionEnded = {
+  code: "frame_unavailable",
+  message:
+    "the debugger session ended; commands now use the main frame; select it again with frame",
+};
+
+test("a frame selection ends as lost when Chrome ends the tab's debugger session", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  // The user cancelled the debugging bar: the next command attaches anew.
+  f.debuggerDetached(5);
+  const sent = f.calls.length;
+  await assert.rejects(f.run("task", "click", { selector: "#submit" }), sessionEnded);
+  assert.deepEqual(
+    f.calls
+      .slice(sent)
+      .filter((c) => c.method === "Runtime.evaluate" || c.method.startsWith("Input.")),
+    [],
+    "the click reaches no document",
+  );
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
+  // A pending report outlives another detach.
+  sameProcessFrame(f, 7);
+  await f.run("task", "frame", { frameId: "child" });
+  f.m.frameEvent(5, "Runtime.executionContextDestroyed", { executionContextId: 7 });
+  f.debuggerDetached(5);
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), sessionEnded);
+});
+
+test("frame selections are kept in session storage while they last", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const records = async () => {
+    await setImmediate();
+    return f.saved.filter((value) => "frames" in value).map((value) => value.frames);
+  };
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  assert.deepEqual(await records(), [[5]]);
+  await f.run("task", "frame", { cmd: "main" });
+  assert.deepEqual(await records(), [[5], []]);
+  await f.run("task", "frame", { frameId: "oopif" });
+  // A lost selection stays recorded until its report is delivered.
+  f.m.frameEvent(5, "Target.detachedFromTarget", { sessionId: "oopif-session" });
+  assert.deepEqual(await records(), [[5], [], [5]]);
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), lostFrame);
+  assert.deepEqual(await records(), [[5], [], [5], []]);
+});
+
+test("a restarted worker reports the frame selection of a persisted tab as lost", async (t) => {
+  const f = await borrowFixture(t, {
+    stored: {
+      sessions: { task: { tabs: [], borrowed: [5], current: 5, title: "task" } },
+      // Tab 9 was closed while the previous worker was gone.
+      frames: [5, 9],
+    },
+    inherited: [5],
+  });
+  assert.deepEqual(f.calls.slice(0, 1), [{ tabId: 5, method: "detach" }]);
+  await setImmediate();
+  assert.deepEqual(f.saved.at(-1), { frames: [5] });
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), sessionEnded);
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
 });
 
 test("ending a frame selection also ends the report of a lost frame", async (t) => {
@@ -986,6 +1111,81 @@ test("a released borrowed tab keeps no network recording for the next session", 
 
   await f.borrow("second");
   assert.deepEqual((await f.run("second", "network", { cmd: "list" })).requests, []);
+});
+
+test("a network recording stays in the session of the frame selected at start", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const finished = (requestId, sessionId) => {
+    const request = { url: `https://example.test/${requestId}`, method: "GET" };
+    f.m.networkEvent(5, "Network.requestWillBeSent", { requestId, request }, sessionId);
+    f.m.networkEvent(5, "Network.loadingFinished", { requestId }, sessionId);
+  };
+  const recorded = async () =>
+    (await f.run("task", "network", { cmd: "list" })).requests.map((r) => r.requestId);
+  const sessionOf = (method) => f.calls.findLast((c) => c.method === method).sessionId;
+  // Started in the main frame, then a cross-process frame is selected.
+  await f.run("task", "network", { cmd: "start" });
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  finished("main-1");
+  finished("frame-1", "oopif-session");
+  assert.deepEqual(await recorded(), ["main-1"]);
+  const detail = await f.run("task", "network", { cmd: "detail", requestId: "main-1" });
+  assert.equal(detail.body, '{"ok":true}');
+  assert.equal(sessionOf("Network.getResponseBody"), undefined);
+  await f.run("task", "network", { cmd: "stop" });
+  assert.equal(sessionOf("Network.disable"), undefined);
+  // Started in the cross-process frame, then the main frame is selected.
+  await f.run("task", "network", { cmd: "start" });
+  assert.equal(sessionOf("Network.enable"), "oopif-session");
+  await f.run("task", "frame", { cmd: "main" });
+  finished("main-2");
+  finished("frame-2", "oopif-session");
+  assert.deepEqual(await recorded(), ["frame-2"]);
+  await f.run("task", "network", { cmd: "detail", requestId: "frame-2" });
+  assert.equal(sessionOf("Network.getResponseBody"), "oopif-session");
+  await f.run("task", "network", { cmd: "stop" });
+  assert.equal(sessionOf("Network.disable"), "oopif-session");
+});
+
+test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {
+  const f = await borrowFixture(t);
+  // Chrome reports an empty url until the tab commits its first document.
+  Object.assign(f.tab, { url: "", pendingUrl: "https://example.test/" });
+  assert.deepEqual(await f.run("task", "list_targets"), [
+    { tabId: 5, url: "https://example.test/", title: "user tab" },
+  ]);
+  assert.deepEqual(await f.run("task", "find_tab", { url: "example.test", active: true }), {
+    success: true,
+    tabId: 5,
+    url: "https://example.test/",
+    borrowed: true,
+  });
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
+});
+
+test("upload fails with file_access_required until file URL access is on", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const upload = {
+    selector: firstRef(await f.run("task", "snapshot")),
+    files: ["/srv/report.pdf"],
+  };
+  f.access.files = false;
+  await assert.rejects(f.run("task", "upload", upload), {
+    code: "file_access_required",
+    message:
+      'turn on "Allow access to file URLs" for oh-my-webbridge in chrome://extensions to upload local files',
+  });
+  assert.ok(!f.calls.some((c) => c.method === "DOM.setFileInputFiles"), "Chrome reads no file");
+  f.access.files = true;
+  assert.deepEqual(await f.run("task", "upload", upload), { success: true, fileCount: 1 });
+  assert.deepEqual(f.calls.findLast((c) => c.method === "DOM.setFileInputFiles").params, {
+    files: ["/srv/report.pdf"],
+    backendNodeId: 11,
+  });
 });
 
 test("a page CDP attach that outlives its request releases the tab", async (t) => {

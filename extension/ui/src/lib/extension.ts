@@ -18,15 +18,14 @@ function useStored<T>(
   const [value, setValue] = useState<T>();
   useEffect(() => {
     let live = true;
-    const load = (): void => {
-      void read().then((next) => {
-        if (live) setValue(next);
-      });
+    const load = async (): Promise<void> => {
+      const next = await read();
+      if (live) setValue(next);
     };
     const changed = (changes: Record<string, chrome.storage.StorageChange>, name: string): void => {
-      if (name === area && keys.some((key) => key in changes)) load();
+      if (name === area && keys.some((key) => key in changes)) void load();
     };
-    load();
+    void load();
     chrome.storage.onChanged.addListener(changed);
     return () => {
       live = false;
@@ -77,10 +76,12 @@ export function useDaemon(active: boolean): boolean | undefined {
 export function useActiveTab(): chrome.tabs.Tab | undefined {
   const [tab, setTab] = useState<chrome.tabs.Tab>();
   useEffect(() => {
-    void chrome.windows
-      .getLastFocused({ windowTypes: ["normal"] })
-      .then((window) => chrome.tabs.query({ active: true, windowId: window.id }))
-      .then(([active]) => setTab(active));
+    const load = async (): Promise<void> => {
+      const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+      const [active] = await chrome.tabs.query({ active: true, windowId: window.id });
+      setTab(active);
+    };
+    void load();
   }, []);
   return tab;
 }
@@ -95,9 +96,10 @@ export function useUserScripts(): [boolean | undefined, () => void] {
   const [granted, setGranted] = useState<boolean>();
   useEffect(() => {
     if (!isFirefox) return;
-    const read = (): void => {
-      void chrome.permissions.contains({ permissions: ["userScripts"] }).then(setGranted);
+    const load = async (): Promise<void> => {
+      setGranted(await chrome.permissions.contains({ permissions: ["userScripts"] }));
     };
+    const read = (): void => void load();
     read();
     chrome.permissions.onAdded.addListener(read);
     chrome.permissions.onRemoved.addListener(read);
@@ -106,9 +108,12 @@ export function useUserScripts(): [boolean | undefined, () => void] {
       chrome.permissions.onRemoved.removeListener(read);
     };
   }, []);
-  const request = (): void => {
-    void chrome.permissions.request({ permissions: ["userScripts"] }).then(setGranted);
+  const ask = async (): Promise<void> => {
+    setGranted(await chrome.permissions.request({ permissions: ["userScripts"] }));
   };
+  // ask calls permissions.request before its first await, so the request
+  // runs inside the click handler.
+  const request = (): void => void ask();
   return [granted, request];
 }
 export const version = chrome.runtime.getManifest().version;

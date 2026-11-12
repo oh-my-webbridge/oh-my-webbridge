@@ -15,6 +15,10 @@ export function CopyButton({
 }): React.ReactElement {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const copy = async (): Promise<void> => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+  };
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 1500);
@@ -24,9 +28,7 @@ export function CopyButton({
     <Button
       aria-label={copied ? t("copied") : label}
       className={className}
-      onClick={() => {
-        void navigator.clipboard.writeText(value).then(() => setCopied(true));
-      }}
+      onClick={() => void copy()}
       size="icon-sm"
       variant="ghost"
     >

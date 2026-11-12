@@ -45,7 +45,7 @@ Firefox ESR、Developer Edition、Nightly 与未加品牌的构建版本，在 `
 3. **允许脚本**：授予选用的 `userScripts` 权限。
 4. **和 Agent 试试看**：运行 `omw install-skill ~/.agents/skills`，再请 Agent 做点事。
 
-- **访问所有网站**是 `<all_urls>` 主机权限，在安装时请求。你可以在 `about:addons` 的“权限”中关闭它。关闭后，页面动作、`screenshot` 与 `cookies` 会返回 `restricted_tab`，预设也会停止过滤请求。此时 `navigate` 到响应 204 No Content 或 205 Reset Content 的 URL，会一直等到命令的期限。重新打开这项权限即可恢复过滤。
+- **访问所有网站**是 `<all_urls>` 主机权限，在安装时请求。你可以在 `about:addons` 的“权限”中关闭它。关闭后，页面动作、`screenshot`、`cookies`、带有 `cmd: "start"` 的 `network` 与带有 `data` 的 `emulate` 会返回 `restricted_tab`，预设也会停止过滤请求。此时 `navigate` 到响应 204 No Content 或 205 Reset Content 的 URL，会一直等到命令的期限。重新打开这项权限即可恢复过滤。
 - **用户脚本**是选用的 `userScripts` 权限。请在步骤 3 选择**允许脚本**，或到**设置**，再到**网页**，并确认 Firefox 的提示。Firefox 只接受来自用户操作的请求，所以这些按钮是授予权限的唯一入口。在授予之前，`evaluate` 与带有 `expression` 的 `wait` 会返回 `unsupported`。
 
 弹出式窗口中的**暂停**会让扩展程序与 daemon 中断连接，直到你选择**继续**。
@@ -82,7 +82,8 @@ daemon 同一时间各保持一个 Chrome 连接与一个 Firefox 连接。同�
 | `dialog`、`console`                                      | `unsupported`                                                                                       |
 | `dialog_status`                                          | 只返回 URL，不含对话框类型或消息                                                                    |
 | `emulate`                                                | 只有 `data`（额外的请求标头）可用                                                                   |
-| `cookies`                                                | 涵盖所有 cookie 分区；`set` 写入未分区的 cookie                                                     |
+| `cookies`                                                | 使用标签页的 cookie 存放区，可能是容器；涵盖所有 cookie 分区；`set` 写入未分区的 cookie             |
+| `download`                                               | 以标签页的 cookie 存放区发送 cookie，该存放区可能是容器                                             |
 | `upload`                                                 | 由 daemon 读取文件：每个命令 16 MiB，传输中共 64 MiB                                                |
 | `screenshot`                                             | 提取标签页但不激活它；`selector` 与 `fullPage` 需要主框架                                           |
 | `save_as_pdf`                                            | `unsupported`；`tabs.saveAsPDF` 会打开保存对话框，且不返回 PDF 字节                                 |

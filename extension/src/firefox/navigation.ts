@@ -24,8 +24,11 @@ async function until<T>(promise: Promise<T>, budget: Budget, seen: () => string)
   const abort = Promise.withResolvers<void>();
   budget.signal.addEventListener("abort", () => abort.resolve(), { once: true });
   const result = await Promise.race([
-    promise.then((value) => ({ value })),
-    abort.promise.then(() => undefined),
+    (async () => ({ value: await promise }))(),
+    (async () => {
+      await abort.promise;
+      return undefined;
+    })(),
   ]);
   if (result) return result.value;
   console.warn(seen());
@@ -99,10 +102,12 @@ chrome.webRequest.onHeadersReceived.addListener((details) => {
 export function documentBlocked(details: Request): void {
   if (details.tabId >= 0) dispatch(details.tabId, { kind: "blocked", url: startUrl(details) });
 }
-const listening = Promise.all([
-  chrome.webNavigation.getFrame({ documentId: "00000000-0000-0000-0000-000000000000" }),
-  chrome.webRequest.getSecurityInfo("0"),
-]).then(() => undefined);
+const listening = (async () => {
+  await Promise.all([
+    chrome.webNavigation.getFrame({ documentId: "00000000-0000-0000-0000-000000000000" }),
+    chrome.webRequest.getSecurityInfo("0"),
+  ]);
+})();
 function describe(event: TopEvent): string {
   return event.kind === "status"
     ? `status ${event.status}${event.url ? ` ${event.url}` : ""}`
@@ -224,8 +229,14 @@ function watchTop(tabId: number): {
     started: async (timeoutMs, budget) => {
       budget.check();
       return Promise.race([
-        began.promise.then(() => true),
-        pause(timeoutMs, budget.signal).then(() => false),
+        (async () => {
+          await began.promise;
+          return true;
+        })(),
+        (async () => {
+          await pause(timeoutMs, budget.signal);
+          return false;
+        })(),
       ]);
     },
     dispose: () => void watchers.delete(watcher),

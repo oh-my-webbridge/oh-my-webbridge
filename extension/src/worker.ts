@@ -1,5 +1,5 @@
 import { presetEvent } from "./presets.js";
-import { execute, forgetTab, releasePageClients } from "./actions.js";
+import { debuggerDetached, execute, forgetTab, releasePageClients } from "./actions.js";
 import {
   actionFinished,
   actionStarted,
@@ -18,6 +18,7 @@ import { currentTab, initSessions, removed, removedGroup, sessionNames } from ".
 import { topDocument } from "./frames.js";
 import { frameEvent, resetScope } from "./frames.js";
 import { observe } from "./features.js";
+import type { Rect } from "./overlay.js";
 
 // User-Agent Client Hints are not part of TypeScript's DOM library.
 type UserAgentData = {
@@ -48,7 +49,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
   void presetEvent(source.tabId, method, (params ?? {}) as JsonObject, source.sessionId).catch(
     (error: Error) => console.error("preset event", error.message),
   );
-  networkEvent(source.tabId, method, (params ?? {}) as JsonObject);
+  networkEvent(source.tabId, method, (params ?? {}) as JsonObject, source.sessionId);
   frameEvent(source.tabId, method, (params ?? {}) as JsonObject, source.sessionId);
   observe(source.tabId, method, (params ?? {}) as JsonObject);
   if (method === "Target.attachedToTarget") {
@@ -78,7 +79,7 @@ chrome.debugger.onDetach.addListener((source, reason) => {
   detached(source.tabId);
   if (rawEventTabs.has(source.tabId))
     emit({ type: "event", tabId: source.tabId, method: "Inspector.detached", params: { reason } });
-  forgetTab(source.tabId);
+  debuggerDetached(source.tabId);
 });
 chrome.tabs.onRemoved.addListener((tabId) => {
   forgetTab(tabId);
@@ -122,12 +123,16 @@ async function tracked(command: Command, budget: Budget): Promise<object> {
     !pointer.has(command.action) &&
     selector !== undefined &&
     topDocument(tabId);
-  const target = (): Promise<void> =>
-    onNode<{ x: number; y: number; width: number; height: number }>(tabId, selector!, measure).then(
-      (rect) => actionTarget(tabId, rect),
+  const target = async (): Promise<void> => {
+    let rect: Rect;
+    try {
+      rect = await onNode<Rect>(tabId, selector!, measure);
+    } catch {
       // The action reports a missing or detached element itself.
-      () => undefined,
-    );
+      return;
+    }
+    actionTarget(tabId, rect);
+  };
   try {
     if (follow && command.action !== "scroll") await target();
     const result = await execute(command, budget);

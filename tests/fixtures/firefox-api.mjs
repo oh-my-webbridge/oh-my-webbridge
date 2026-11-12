@@ -60,13 +60,16 @@ export function firefoxApi(options = {}) {
     removed: [],
     navigations: [],
     downloads: [],
+    cancelled: [],
     cookies: options.cookies ?? [],
     cookieQueries: [],
     cookieWrites: [],
     cookieRemovals: [],
     page: options.page ?? (async (op) => ({ ok: true, value: { op } })),
   };
-  for (const tab of options.tabs ?? []) state.tabs.set(tab.id, { status: "complete", ...tab });
+  // Firefox reports the cookie store of every tab; a container tab has its own.
+  for (const tab of options.tabs ?? [])
+    state.tabs.set(tab.id, { status: "complete", cookieStoreId: "firefox-default", ...tab });
   const api = Promise.withResolvers();
   const unattached = [];
   let loading = false;
@@ -228,7 +231,13 @@ export function firefoxApi(options = {}) {
       },
       query: async () => [...state.tabs.values()].map((tab) => ({ ...tab })),
       create: async ({ url }) => {
-        const tab = { id: state.nextTab++, url, status: "complete", active: false };
+        const tab = {
+          id: state.nextTab++,
+          url,
+          status: "complete",
+          active: false,
+          cookieStoreId: "firefox-default",
+        };
         createTab(tab);
         return { ...tab };
       },
@@ -262,7 +271,12 @@ export function firefoxApi(options = {}) {
     tabGroups: { update: async () => {}, onRemoved: event() },
     windows: {
       create: async () => {
-        const tab = { id: state.nextTab++, url: "about:blank", status: "complete" };
+        const tab = {
+          id: state.nextTab++,
+          url: "about:blank",
+          status: "complete",
+          cookieStoreId: "firefox-default",
+        };
         createTab(tab);
         return { id: 3, focused: true, tabs: [{ ...tab }] };
       },
@@ -333,21 +347,27 @@ export function firefoxApi(options = {}) {
         state.cookieRemovals.push(details);
       },
     },
+    // options.downloadItems answers search, a completed download by default;
+    // options.cancel runs for each cancel and may reject like Firefox.
     downloads: {
       download: async (details) => {
         state.downloads.push(details);
         return 41;
       },
-      search: async ({ id }) => [
-        {
-          id,
-          state: "complete",
-          filename: "/Users/test/Downloads/file.txt",
-          fileSize: 4,
-          mime: "text/plain",
-        },
-      ],
-      cancel: async () => {},
+      search: async ({ id }) =>
+        options.downloadItems?.(id) ?? [
+          {
+            id,
+            state: "complete",
+            filename: "/Users/test/Downloads/file.txt",
+            fileSize: 4,
+            mime: "text/plain",
+          },
+        ],
+      cancel: async (id) => {
+        state.cancelled.push(id);
+        await options.cancel?.(id);
+      },
     },
   };
   return { chrome, state };

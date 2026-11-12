@@ -70,6 +70,11 @@ function TokenRow(): React.ReactElement {
   const token = useToken();
   const [value, setValue] = useState("");
   const invalid = value !== "" && !validToken(value.trim());
+  const saveToken = async (next: string): Promise<void> => {
+    await chrome.storage.local.set({ token: next, paused: false });
+    setValue("");
+    toastManager.add({ title: t("tokenUpdated"), type: "success" });
+  };
   return (
     <div className="flex flex-col gap-3 py-3 pe-4">
       <div>
@@ -84,10 +89,7 @@ function TokenRow(): React.ReactElement {
         className="flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          void chrome.storage.local.set({ token: value.trim(), paused: false }).then(() => {
-            setValue("");
-            toastManager.add({ title: t("tokenUpdated"), type: "success" });
-          });
+          void saveToken(value.trim());
         }}
       >
         <Input

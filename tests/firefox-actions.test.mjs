@@ -166,7 +166,9 @@ test("cookies use the selected document and stop once another site replaces it",
   f.state.documents.set("doc-frame", { frameId });
   await f.run("frame", { selector: "iframe#pay" });
   await f.run("cookies", {});
-  assert.deepEqual(f.state.cookieQueries, [{ url: urls["doc-frame"], partitionKey: {} }]);
+  assert.deepEqual(f.state.cookieQueries, [
+    { url: urls["doc-frame"], storeId: "firefox-default", partitionKey: {} },
+  ]);
   // The iframe navigates to another site: its frameId stays, its document changes.
   f.state.documents.delete("doc-frame");
   f.state.documents.set("doc-moved", { frameId });
@@ -176,7 +178,11 @@ test("cookies use the selected document and stop once another site replaces it",
   assert.equal(f.state.cookieQueries.length, 1);
   // The selection has ended; the next command uses the tab's URL.
   await f.run("cookies", {});
-  assert.deepEqual(f.state.cookieQueries.at(-1), { url: urls["doc-main"], partitionKey: {} });
+  assert.deepEqual(f.state.cookieQueries.at(-1), {
+    url: urls["doc-main"],
+    storeId: "firefox-default",
+    partitionKey: {},
+  });
 });
 
 test("evaluate runs code in the main world only with the userScripts permission", async (t) => {
@@ -596,6 +602,40 @@ test("upload sends the file contents the daemon read", async (t) => {
   assert.deepEqual(received, [{ op: "upload", args: { selector: "input", files: [file] } }]);
 });
 
+// Firefox rejects downloads.cancel for an erased or a completed download.
+async function refuseCancel(id) {
+  throw new Error(`Download ${id} is already complete`);
+}
+
+test("a download that disappears keeps download_missing when the cancel fails", async (t) => {
+  const warnings = t.mock.method(console, "warn", () => {});
+  const f = await fixture(t, { ...owned, downloadItems: () => [], cancel: refuseCancel });
+  await assert.rejects(f.run("download", { url: "/file.txt" }), { code: "download_missing" });
+  assert.deepEqual(f.state.downloads, [
+    { url: "https://example.test/file.txt", saveAs: false, cookieStoreId: "firefox-default" },
+  ]);
+  assert.deepEqual(f.state.cancelled, [41]);
+  assert.deepEqual(warnings.mock.calls[0].arguments, [
+    "cancel download 41",
+    "Download 41 is already complete",
+  ]);
+});
+
+test("a download cancelled at the deadline keeps outcome_unknown when it completed", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const f = await fixture(t, {
+    ...owned,
+    downloadItems: (id) => [{ id, state: "in_progress" }],
+    cancel: refuseCancel,
+  });
+  const abort = new AbortController();
+  const pending = f.run("download", { url: "/file.txt" }, abort.signal);
+  for (let i = 0; i < 20 && !f.state.downloads.length; i++) await setImmediate();
+  abort.abort();
+  await assert.rejects(pending, { code: "outcome_unknown" });
+  assert.deepEqual(f.state.cancelled, [41]);
+});
+
 test("network records webRequest events and returns a captured body", async (t) => {
   const f = await fixture(t);
   assert.deepEqual(await f.run("network", { cmd: "start" }), { recording: true, capacity: 500 });
@@ -666,10 +706,18 @@ test("cookies cover every partition of the page URL and map Chrome's cookie fiel
       },
     ],
   });
-  assert.deepEqual(f.state.cookieQueries, [{ url: "https://example.test/", partitionKey: {} }]);
+  assert.deepEqual(f.state.cookieQueries, [
+    { url: "https://example.test/", storeId: "firefox-default", partitionKey: {} },
+  ]);
   await f.run("cookies", { cmd: "set", data: { name: "a", value: "b", sameSite: "Lax" } });
   assert.deepEqual(f.state.cookieWrites, [
-    { url: "https://example.test/", name: "a", value: "b", sameSite: "lax" },
+    {
+      url: "https://example.test/",
+      storeId: "firefox-default",
+      name: "a",
+      value: "b",
+      sameSite: "lax",
+    },
   ]);
   await assert.rejects(f.run("cookies", { cmd: "set", data: { name: "a", sameSite: "Loose" } }), {
     code: "invalid_args",
@@ -685,13 +733,51 @@ test("cookies cover every partition of the page URL and map Chrome's cookie fiel
   ]);
 });
 
-test("screenshot and cookies need access to all websites", async (t) => {
+test("cookies and downloads use the cookie store of the tab's container", async (t) => {
+  const f = await fixture(t, {
+    sessions: { task: { tabs: [], borrowed: [5], current: 5, title: "task" } },
+    tabs: [{ id: 5, url: "https://example.test/", cookieStoreId: "firefox-container-2" }],
+  });
+  await f.run("cookies", {});
+  await f.run("cookies", { cmd: "set", data: { name: "a", value: "b" } });
+  await f.run("download", { url: "/file.txt" });
+  assert.deepEqual(f.state.cookieQueries, [
+    { url: "https://example.test/", storeId: "firefox-container-2", partitionKey: {} },
+  ]);
+  assert.deepEqual(f.state.cookieWrites, [
+    { url: "https://example.test/", storeId: "firefox-container-2", name: "a", value: "b" },
+  ]);
+  assert.deepEqual(f.state.downloads, [
+    {
+      url: "https://example.test/file.txt",
+      saveAs: false,
+      cookieStoreId: "firefox-container-2",
+    },
+  ]);
+});
+
+// Without site access Firefox dispatches no webRequest events, so network
+// capture and extra headers would report success and do nothing.
+test("screenshot, cookies, network start and emulate data need access to all websites", async (t) => {
   const f = await fixture(t, { ...owned, permissions: [] });
-  for (const action of ["screenshot", "cookies"])
-    await assert.rejects(f.run(action, {}), {
+  const listeners = () =>
+    Object.values(f.chrome.webRequest)
+      .filter((target) => Array.isArray(target?.listeners))
+      .reduce((count, target) => count + target.listeners.length, 0);
+  const before = listeners();
+  for (const { action, args } of [
+    { action: "screenshot", args: {} },
+    { action: "cookies", args: {} },
+    { action: "network", args: { cmd: "start" } },
+    { action: "emulate", args: { data: { "X-Test": "1" } } },
+  ])
+    await assert.rejects(f.run(action, args), {
       code: "restricted_tab",
       message: new RegExp(`^${action}: .*access all websites in about:addons$`),
     });
   assert.deepEqual(f.state.captures, []);
   assert.deepEqual(f.state.cookieQueries, []);
+  assert.equal(listeners(), before);
+  assert.equal(f.state.sessions.task.settings, undefined);
+  assert.deepEqual(await f.run("network", { cmd: "list" }), { requests: [] });
 });

@@ -36,10 +36,12 @@ function optional(data: JsonObject, key: string, type: string): Json | undefined
 }
 // Firefox partitions third-party cookies by top-level site; an empty
 // partitionKey selects every partition, matching what the page can see.
-async function all(url: string): Promise<chrome.cookies.Cookie[]> {
-  return chrome.cookies.getAll({ url, partitionKey: {} });
+async function all(url: string, storeId: string): Promise<chrome.cookies.Cookie[]> {
+  return chrome.cookies.getAll({ url, storeId, partitionKey: {} });
 }
-export async function cookies(url: string, args: Args): Promise<object> {
+// storeId is the cookie store of the tab. Without it Firefox uses the
+// background's store, the default one, also for a tab in a container.
+export async function cookies(url: string, storeId: string, args: Args): Promise<object> {
   const cmd = args.cmd ?? "list";
   if (cmd === "set") {
     const data = args.data ?? {};
@@ -53,6 +55,7 @@ export async function cookies(url: string, args: Args): Promise<object> {
     const expires = optional(data, "expires", "number");
     await chrome.cookies.set({
       url,
+      storeId,
       name: stringArg(optional(data, "name", "string"), "cookie name"),
       value: optional(data, "value", "string") ?? "",
       ...(domain === undefined ? {} : { domain }),
@@ -66,7 +69,7 @@ export async function cookies(url: string, args: Args): Promise<object> {
   }
   if (cmd === "delete" || cmd === "clear") {
     const name = cmd === "delete" ? stringArg(args.name, "name") : undefined;
-    for (const cookie of await all(url))
+    for (const cookie of await all(url, storeId))
       if (name === undefined || cookie.name === name)
         await chrome.cookies.remove({
           url: cookieUrl(cookie),
@@ -77,5 +80,5 @@ export async function cookies(url: string, args: Args): Promise<object> {
     return { success: true };
   }
   if (cmd !== "list") fail("invalid_args", "cookies cmd must be list/set/delete/clear");
-  return { cookies: (await all(url)).map(view) };
+  return { cookies: (await all(url, storeId)).map(view) };
 }

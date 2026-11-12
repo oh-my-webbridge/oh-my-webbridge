@@ -136,6 +136,7 @@ test("a failed release keeps session commands failing", async (t) => {
 test("Chrome releases inherited debugger sessions of persisted tabs only", async (t) => {
   const detached = [];
   const { module: cdp, errors } = await load(t, "extension/src/cdp.ts", {
+    storage: { session: { get: async () => ({}), set: async () => {} } },
     debugger: {
       getTargets: async () => [
         { type: "page", tabId: 1, attached: true },
