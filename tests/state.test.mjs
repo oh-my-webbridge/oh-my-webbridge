@@ -190,3 +190,34 @@ test("restored sessions drop the sessions of page CDP clients", async (t) => {
   assert.deepEqual(await state.sessionNames(), ["task"], "hello omits the page client");
   assert.deepEqual(Object.keys(saved.at(-1).sessions), ["task"]);
 });
+
+test("a closed current tab leaves its session without a current tab", async (t) => {
+  const { module: state } = await load(
+    t,
+    "extension/src/state.ts",
+    restored({ task: { tabs: [1, 2], borrowed: [3], current: 2, title: "task" } }),
+  );
+  await state.initSessions(async () => {});
+  await state.removed(1);
+  assert.equal((await state.getSession("task")).current, 2, "another tab keeps the current one");
+  await state.removed(2);
+  const session = await state.getSession("task");
+  assert.equal(session.current, undefined);
+  assert.deepEqual(session.tabs, []);
+  assert.deepEqual(session.borrowed, [3]);
+});
+
+test("leaving the current tab continues in the last other task tab, else the last other borrowed tab", async (t) => {
+  const { module: state } = await load(t, "extension/src/state.ts", restored({}));
+  const session = { tabs: [1, 2, 3], borrowed: [4, 5], current: 2, title: "task" };
+  state.leaveTab(session, 3);
+  assert.equal(session.current, 2, "a tab other than the current one");
+  state.leaveTab(session, 2);
+  assert.equal(session.current, 3);
+  const borrowedOnly = { tabs: [3], borrowed: [4, 5], current: 3, title: "task" };
+  state.leaveTab(borrowedOnly, 3);
+  assert.equal(borrowedOnly.current, 5);
+  const last = { tabs: [], borrowed: [5], current: 5, title: "task" };
+  state.leaveTab(last, 5);
+  assert.equal(last.current, undefined);
+});

@@ -103,9 +103,11 @@ export function stringArg(value: string | undefined, name: string): string {
   return value;
 }
 // The deadline or a cancellation ended the command, and the browser may already
-// have acted.
-export function expired(): never {
-  fail("outcome_unknown", "request deadline reached; observe before retrying");
+// have acted. reason is the abort reason that bridge.ts gives the request's
+// signal, such as "the session was closed".
+export function expired(reason?: unknown): never {
+  const cause = typeof reason === "string" ? reason : "request deadline reached";
+  fail("outcome_unknown", `${cause}; observe before retrying`);
 }
 // Resolves after ms, or fails with outcome_unknown when the request ends first.
 export async function pause(ms: number, signal: AbortSignal): Promise<void> {
@@ -117,15 +119,41 @@ export async function pause(ms: number, signal: AbortSignal): Promise<void> {
   const aborted = await stop.promise;
   clearTimeout(timer);
   signal.removeEventListener("abort", abort);
-  if (aborted) expired();
+  if (aborted) expired(signal.reason);
 }
 // wait stops polling this long before the request deadline, so that its own
 // answer reaches the daemon before the daemon answers the deadline.
 const waitReserve = 500;
-// Sleeps until wait checks its condition again. wait does not change the page,
-// so a condition that has not held when the reserve begins is a known result.
+function waitTimedOut(): never {
+  fail("wait_timeout", "the wait condition did not hold before the deadline");
+}
+// Runs one check of a wait condition. wait does not change the page, so a
+// condition that has not held when the reserve begins is a known result, even
+// when a slow check is still running; that check is abandoned. Under a
+// deadline of a second or less the reserve is half of the remaining time, so
+// wait checks at least once.
+export async function waitCheck<T>(budget: Budget, check: () => Promise<T>): Promise<T> {
+  budget.check();
+  const remaining = budget.deadline - Date.now();
+  const left = remaining - Math.min(waitReserve, remaining / 2);
+  if (left <= 0) waitTimedOut();
+  const reserve = Promise.withResolvers<never>();
+  const timer = setTimeout(() => {
+    try {
+      waitTimedOut();
+    } catch (error) {
+      reserve.reject(error);
+    }
+  }, left);
+  try {
+    return await Promise.race([check(), reserve.promise]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// Sleeps until wait checks its condition again.
 export async function nextPoll(budget: Budget): Promise<void> {
   const left = budget.deadline - waitReserve - Date.now();
-  if (left <= 0) fail("wait_timeout", "the wait condition did not hold before the deadline");
+  if (left <= 0) waitTimedOut();
   await pause(Math.min(75, left), budget.signal);
 }

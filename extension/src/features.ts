@@ -1,4 +1,13 @@
-import { evaluate, node, onNode, send, sendRoot, clearRefs, countNodes } from "./cdp.js";
+import {
+  cause,
+  clearRefs,
+  countNodes,
+  evaluate,
+  nodeCommand,
+  onNode,
+  send,
+  sendRoot,
+} from "./cdp.js";
 import {
   childSession,
   clearLost,
@@ -52,6 +61,15 @@ export async function feature(
   switch (action) {
     case "get": {
       const property = args.property ?? "text";
+      if (
+        !["text", "html", "value", "attr", "box", "styles", "title", "url", "count"].includes(
+          property,
+        )
+      )
+        fail(
+          "invalid_args",
+          "get property must be text/html/value/attr/box/styles/title/url/count",
+        );
       if (property === "title" || property === "url")
         return {
           value: await evaluate(tabId, property === "title" ? "document.title" : "location.href"),
@@ -63,7 +81,7 @@ export async function feature(
       const value = await onNode(
         tabId,
         stringArg(selector, "selector"),
-        `function(property,attribute){switch(property){case'text':return this.innerText??this.textContent;case'html':return this.innerHTML;case'value':return this.value??null;case'attr':return this.getAttribute(attribute);case'box':{const r=this.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}case'styles':return Object.fromEntries(Array.from(getComputedStyle(this)).map(k=>[k,getComputedStyle(this).getPropertyValue(k)]));default:throw Error('unsupported get property')}}`,
+        `function(property,attribute){switch(property){case'text':return this.innerText??this.textContent;case'html':return this.innerHTML;case'value':return this.value??null;case'attr':return this.getAttribute(attribute);case'box':{const r=this.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}case'styles':return Object.fromEntries(Array.from(getComputedStyle(this)).map(k=>[k,getComputedStyle(this).getPropertyValue(k)]))}}`,
         [property, args.attribute ?? ""],
       );
       return { value };
@@ -82,7 +100,7 @@ export async function feature(
       };
     }
     case "focus":
-      await send(tabId, "DOM.focus", await node(tabId, stringArg(selector, "selector")));
+      await nodeCommand(tabId, stringArg(selector, "selector"), "DOM.focus");
       return { success: true };
     case "check":
     case "uncheck": {
@@ -95,7 +113,7 @@ export async function feature(
       if (!["checkbox", "radio"].includes(state.kind) || (!expected && state.kind === "radio"))
         fail("invalid_args", "expected checkbox (radio supports check only)");
       if (state.checked !== expected) {
-        await send(tabId, "DOM.focus", await node(tabId, selector!));
+        await nodeCommand(tabId, selector!, "DOM.focus");
         await send(tabId, "Input.dispatchKeyEvent", {
           type: "keyDown",
           key: " ",
@@ -273,6 +291,8 @@ export async function feature(
       return result;
     }
     case "storage": {
+      if (!["list", "get", "set", "remove", "clear"].includes(args.cmd ?? "list"))
+        fail("invalid_args", "storage cmd must be list/get/set/remove/clear");
       const result = await evaluate(
         tabId,
         `(() => {
@@ -282,7 +302,6 @@ export async function feature(
         if (cmd === "set") storage.setItem(name, ${JSON.stringify(args.value ?? "")});
         else if (cmd === "remove") storage.removeItem(name);
         else if (cmd === "clear") storage.clear();
-        else if (!['list','get'].includes(cmd)) throw Error('storage cmd must be list/get/set/remove/clear');
         return {origin: location.origin, kind: ${JSON.stringify(args.kind ?? "local")}, value: cmd === 'get' ? storage.getItem(name) : Object.fromEntries(Array.from({length:storage.length},(_,i)=>{const key=storage.key(i);return [key,storage.getItem(key)]}))};
       })()`,
       );
@@ -317,14 +336,18 @@ export async function feature(
         for (const child of f.childFrames ?? []) visit(child);
       };
       visit(root.frameTree);
+      // A frame's target can detach before Chrome reports it; its frames are gone.
       for (const sessionId of frameTargets(tabId)) {
         const child = await sendRoot<{ frameTree: Frame }>(
           tabId,
           "Page.getFrameTree",
           {},
           sessionId,
-        );
-        visit(child.frameTree);
+        ).catch((error: Error) => {
+          if (cause(error) === "session") return undefined;
+          throw error;
+        });
+        if (child) visit(child.frameTree);
       }
       const unique = new Map(frames.map((f) => [f.frame.id, f]));
       frames.splice(0, frames.length, ...unique.values());
@@ -334,11 +357,12 @@ export async function feature(
       clearLost(tabId);
       let frameId = args.frameId;
       if (args.selector) {
-        const found = await send<{ node: { frameId?: string } }>(tabId, "DOM.describeNode", {
-          ...(await node(tabId, args.selector)),
-          depth: 1,
-          pierce: true,
-        });
+        const found = await nodeCommand<{ node: { frameId?: string } }>(
+          tabId,
+          args.selector,
+          "DOM.describeNode",
+          { depth: 1, pierce: true },
+        );
         frameId = found.node.frameId;
       }
       frameId ??= frames.find(

@@ -1,6 +1,73 @@
 import { fail, type JsonObject } from "./protocol.js";
 import { locatorExpression } from "./locators.js";
-import { forgetFrames, restoreLost, scopes, selectedScope, type Scope } from "./frames.js";
+import {
+  forgetFrames,
+  restoreLost,
+  scopeGone,
+  scopes,
+  selectedScope,
+  type Scope,
+} from "./frames.js";
+import { closedTab } from "./state.js";
+
+// Chrome's errors by their cause. chrome.tabs and chrome.debugger
+// (debugger_api.cc) reject with plain text. Errors of DevTools protocol
+// commands, from content/browser/devtools, Blink's inspector agents and V8's
+// inspector, arrive as the JSON of {code, message}.
+const causes = {
+  // chrome.tabs: "No tab with id: 5."; chrome.debugger: "No tab with given id 5."
+  tab: ["No tab with id: ", "No tab with given id "],
+  // chrome.debugger once Chrome has ended the tab's debugger session.
+  detached: ["Debugger is not attached to the tab with id: "],
+  // The command ended without a reply after it may have reached the page.
+  cutoff: [
+    "Detached while handling command.",
+    "Execution context was destroyed.",
+    "Inspected target navigated or closed",
+  ],
+  // A frame's flat session or an execution context no longer exists.
+  session: ["Session with given id not found."],
+  context: ["Cannot find context with specified id"],
+  // A node addressed by its backend node id no longer exists.
+  node: [
+    "No node with given id found",
+    "Node with given id does not belong to the document",
+    "No node found for given backend id",
+  ],
+  // The element exists but does not take the command.
+  refused: ["Element is not focusable", "Node is not a file input element"],
+  // The element has no layout box.
+  boxless: ["Could not compute content quads."],
+} as const;
+type Cause = keyof typeof causes;
+function chromeMessage(error: Error): string {
+  if (!(error instanceof Error)) return "";
+  if (!error.message.startsWith("{")) return error.message;
+  return (JSON.parse(error.message) as { message?: string }).message ?? "";
+}
+// The cause of a Chrome error, or undefined for errors outside the list above
+// and for coded faults.
+export function cause(error: Error): Cause | undefined {
+  const message = chromeMessage(error);
+  return (Object.keys(causes) as Cause[]).find((key) =>
+    causes[key].some((text) => message.startsWith(text)),
+  );
+}
+// The tab that a chrome.tabs or chrome.debugger error reports as closed.
+export function closedTabId(error: Error): number | undefined {
+  const message = chromeMessage(error);
+  const prefix = causes.tab.find((text) => message.startsWith(text));
+  return prefix === undefined ? undefined : Number.parseInt(message.slice(prefix.length), 10);
+}
+async function tabClosed(tabId: number): Promise<boolean> {
+  try {
+    await chrome.tabs.get(tabId);
+    return false;
+  } catch (error) {
+    if (cause(error as Error) === "tab") return true;
+    throw error;
+  }
+}
 
 const attachments = new Map<number, Promise<void>>();
 export const rawEventTabs = new Set<number>();
@@ -18,6 +85,7 @@ export async function attach(tabId: number): Promise<void> {
         });
       } catch (error) {
         attachments.delete(tabId);
+        if (cause(error as Error) === "tab") closedTab(tabId);
         fail("debugger_unavailable", `attach tab ${tabId}: ${String(error)}`);
       }
     })();
@@ -26,6 +94,9 @@ export async function attach(tabId: number): Promise<void> {
   await pending;
 }
 export const attached = (tabId: number): boolean => attachments.has(tabId);
+// Sends a command to the selected frame's session, or the tab's root session.
+// A selected frame whose session or execution context went away before Chrome
+// reported it fails the command with frame_unavailable.
 export async function send<T extends object>(
   tabId: number,
   method: string,
@@ -33,8 +104,24 @@ export async function send<T extends object>(
   sessionId?: string,
 ): Promise<T> {
   await attach(tabId);
-  return sendRoot<T>(tabId, method, params, sessionId ?? selectedScope(tabId)?.sessionId);
+  const scope = sessionId ? undefined : selectedScope(tabId);
+  try {
+    return await sendRoot<T>(tabId, method, params, sessionId ?? scope?.sessionId);
+  } catch (error) {
+    const reason = cause(error as Error);
+    if (
+      scope &&
+      (reason === "session" ||
+        (reason === "context" && (params.contextId ?? scope.contextId) === scope.contextId))
+    )
+      scopeGone(tabId, scope);
+    throw error;
+  }
 }
+// A command that Chrome ends because the tab closed fails with tab_missing.
+// One cut off by a navigation or by the end of the debugger session fails with
+// outcome_unknown, since the page may have acted on it; Chrome ends the
+// commands of a closing tab the same way.
 export async function sendRoot<T extends object>(
   tabId: number,
   method: string,
@@ -42,11 +129,24 @@ export async function sendRoot<T extends object>(
   sessionId?: string,
 ): Promise<T> {
   await attach(tabId);
-  return ((await chrome.debugger.sendCommand(
-    { tabId, ...(sessionId ? { sessionId } : {}) },
-    method,
-    params,
-  )) ?? {}) as T;
+  try {
+    return ((await chrome.debugger.sendCommand(
+      { tabId, ...(sessionId ? { sessionId } : {}) },
+      method,
+      params,
+    )) ?? {}) as T;
+  } catch (error) {
+    const reason = cause(error as Error);
+    if (reason === "tab") closedTab(tabId);
+    if (reason === "cutoff") {
+      if (await tabClosed(tabId)) closedTab(tabId);
+      fail(
+        "outcome_unknown",
+        "the page navigated or the debugger detached during the command; observe before retrying",
+      );
+    }
+    throw error;
+  }
 }
 // Root sessions that report Page events. A navigation wait ends on the main
 // frame's Page.frameStoppedLoading, the only report Chrome sends when a
@@ -104,22 +204,30 @@ export type Remote = {
   objectId?: string;
   description?: string;
 };
+type ExceptionDetails = { text: string; exception?: Remote };
+// The first line of what a page script threw. V8 sets the text of a
+// synchronous throw to "Uncaught"; the description of an Error starts with its
+// name and message, followed by its stack.
+function thrown(details: ExceptionDetails): string {
+  return (details.exception?.description ?? details.text).split("\n", 1)[0] ?? details.text;
+}
 export async function evaluate<T>(
   tabId: number,
   expression: string,
   contextId?: number,
 ): Promise<T> {
   const selectedContext = contextId ?? scopes.get(tabId)?.contextId;
-  const response = await send<{
-    result: Remote;
-    exceptionDetails?: { text: string; exception?: Remote };
-  }>(tabId, "Runtime.evaluate", {
-    expression,
-    returnByValue: true,
-    awaitPromise: true,
-    userGesture: true,
-    ...(selectedContext ? { contextId: selectedContext } : {}),
-  });
+  const response = await send<{ result: Remote; exceptionDetails?: ExceptionDetails }>(
+    tabId,
+    "Runtime.evaluate",
+    {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+      userGesture: true,
+      ...(selectedContext ? { contextId: selectedContext } : {}),
+    },
+  );
   if (response.exceptionDetails)
     fail(
       "evaluation_failed",
@@ -160,6 +268,89 @@ export function addRef(tabId: number, backendNodeId: number, key: string, scope?
   keys.push(key);
   tabRefs.set(tabId, keys);
 }
+// A node that went away during a command: the element of an @e reference left
+// its document, or the element that a selector matched was removed.
+function nodeGone(selector: string): never {
+  if (selector.startsWith("@e"))
+    fail("stale_ref", "element no longer exists; take a fresh snapshot");
+  fail("element_missing", `no element matches ${selector}`);
+}
+// Sends a command about the element that selector names. A node or document
+// that went away fails as nodeGone, an element that the command does not take
+// fails with element_action_failed, and one without a layout box with
+// element_hidden.
+async function elementSend<T extends object>(
+  tabId: number,
+  selector: string,
+  method: string,
+  params: JsonObject,
+): Promise<T> {
+  try {
+    return await send<T>(tabId, method, params);
+  } catch (error) {
+    const reason = cause(error as Error);
+    if (reason === "node" || reason === "context") nodeGone(selector);
+    if (reason === "refused") fail("element_action_failed", chromeMessage(error as Error));
+    if (reason === "boxless") fail("element_hidden", "element has no layout box");
+    throw error;
+  }
+}
+// Sends a DOM command for the element that selector names, by its backend
+// node id.
+export async function nodeCommand<T extends object>(
+  tabId: number,
+  selector: string,
+  method: string,
+  params: JsonObject = {},
+): Promise<T> {
+  return elementSend<T>(tabId, selector, method, { ...params, ...(await node(tabId, selector)) });
+}
+// Releases a remote object. A navigation or a lost frame destroys its context,
+// which releases it too, so the release is best effort and never replaces the
+// result or the error of the command.
+async function release(tabId: number, objectId: string): Promise<void> {
+  try {
+    await sendRoot(tabId, "Runtime.releaseObject", { objectId }, scopes.get(tabId)?.sessionId);
+  } catch (error) {
+    console.warn(`release a remote object of tab ${tabId}`, (error as Error).message);
+  }
+}
+// Whether the node of an @e reference is still in its document. A removed
+// element keeps its node until it is collected.
+async function connected(tabId: number, selector: string, backendNodeId: number): Promise<boolean> {
+  const { object } = await elementSend<{ object: Remote }>(tabId, selector, "DOM.resolveNode", {
+    backendNodeId,
+  });
+  if (!object.objectId) nodeGone(selector);
+  const objectId = object.objectId;
+  try {
+    const { result } = await elementSend<{ result: Remote }>(
+      tabId,
+      selector,
+      "Runtime.callFunctionOn",
+      { objectId, functionDeclaration: "function(){return this.isConnected}", returnByValue: true },
+    );
+    return !!result.value;
+  } finally {
+    await release(tabId, objectId);
+  }
+}
+// Runs the locator for selector in the selected frame. A selector that the
+// locator rejects, such as CSS with a syntax error, fails with invalid_args.
+async function locate(tabId: number, selector: string, pick: "[0]" | ".length"): Promise<Remote> {
+  const contextId = scopes.get(tabId)?.contextId;
+  const found = await send<{ result: Remote; exceptionDetails?: ExceptionDetails }>(
+    tabId,
+    "Runtime.evaluate",
+    {
+      expression: `${locatorExpression(selector)}${pick}`,
+      returnByValue: pick === ".length",
+      ...(contextId ? { contextId } : {}),
+    },
+  );
+  if (found.exceptionDetails) fail("invalid_args", thrown(found.exceptionDetails));
+  return found.result;
+}
 export async function node(tabId: number, selector: string): Promise<{ backendNodeId: number }> {
   if (selector.startsWith("@e")) {
     const ref = refs.get(selector);
@@ -171,6 +362,7 @@ export async function node(tabId: number, selector: string): Promise<{ backendNo
       ref.scope?.sessionId !== scope?.sessionId
     )
       fail("stale_ref", "element reference expired; take a fresh snapshot");
+    if (!(await connected(tabId, selector, ref.backendNodeId))) nodeGone(selector);
     return { backendNodeId: ref.backendNodeId };
   }
   if (selector.startsWith("role=")) {
@@ -178,23 +370,19 @@ export async function node(tabId: number, selector: string): Promise<{ backendNo
     if (!nodes[0]) fail("element_missing", `no element matches ${selector}`);
     return nodes[0];
   }
-  const found = await send<{ result: Remote; exceptionDetails?: { text: string } }>(
-    tabId,
-    "Runtime.evaluate",
-    {
-      expression: `${locatorExpression(selector)}[0]`,
-      ...(scopes.has(tabId) ? { contextId: scopes.get(tabId)!.contextId } : {}),
-    },
-  );
-  if (found.exceptionDetails) fail("invalid_args", found.exceptionDetails.text);
-  if (!found.result.objectId) fail("element_missing", `no element matches ${selector}`);
+  const found = await locate(tabId, selector, "[0]");
+  if (!found.objectId) fail("element_missing", `no element matches ${selector}`);
+  const objectId = found.objectId;
   try {
-    const detail = await send<{ node: { backendNodeId: number } }>(tabId, "DOM.describeNode", {
-      objectId: found.result.objectId,
-    });
+    const detail = await elementSend<{ node: { backendNodeId: number } }>(
+      tabId,
+      selector,
+      "DOM.describeNode",
+      { objectId },
+    );
     return { backendNodeId: detail.node.backendNodeId };
   } finally {
-    await send(tabId, "Runtime.releaseObject", { objectId: found.result.objectId });
+    await release(tabId, objectId);
   }
 }
 export async function roleNodes(
@@ -240,16 +428,12 @@ export async function countNodes(tabId: number, selector: string): Promise<numbe
     await node(tabId, selector);
     return 1;
   }
-  return evaluate(tabId, `${locatorExpression(selector)}.length`);
+  return (await locate(tabId, selector, ".length")).value as number;
 }
 export async function object(tabId: number, selector: string): Promise<string> {
-  const result = await send<{ object: Remote }>(
-    tabId,
-    "DOM.resolveNode",
-    await node(tabId, selector),
-  );
-  if (!result.object.objectId) fail("stale_ref", "element no longer exists");
-  return result.object.objectId;
+  const { object } = await nodeCommand<{ object: Remote }>(tabId, selector, "DOM.resolveNode");
+  if (!object.objectId) nodeGone(selector);
+  return object.objectId;
 }
 export async function onNode<T>(
   tabId: number,
@@ -259,8 +443,9 @@ export async function onNode<T>(
 ): Promise<T> {
   const objectId = await object(tabId, selector);
   try {
-    const result = await send<{ result: Remote; exceptionDetails?: { text: string } }>(
+    const result = await elementSend<{ result: Remote; exceptionDetails?: ExceptionDetails }>(
       tabId,
+      selector,
       "Runtime.callFunctionOn",
       {
         objectId,
@@ -271,9 +456,9 @@ export async function onNode<T>(
         userGesture: true,
       },
     );
-    if (result.exceptionDetails) fail("element_action_failed", result.exceptionDetails.text);
+    if (result.exceptionDetails) fail("element_action_failed", thrown(result.exceptionDetails));
     return result.result.value as T;
   } finally {
-    await send(tabId, "Runtime.releaseObject", { objectId });
+    await release(tabId, objectId);
   }
 }

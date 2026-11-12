@@ -1,4 +1,4 @@
-import { fail, stringArg, type Args, type Json, type JsonObject } from "../protocol.js";
+import { fail, fault, stringArg, type Args, type Json, type JsonObject } from "../protocol.js";
 
 const sameSites = { Strict: "strict", Lax: "lax", None: "no_restriction" } as const;
 function cookieUrl(cookie: chrome.cookies.Cookie): string {
@@ -53,18 +53,26 @@ export async function cookies(url: string, storeId: string, args: Args): Promise
     const secure = optional(data, "secure", "boolean");
     const httpOnly = optional(data, "httpOnly", "boolean");
     const expires = optional(data, "expires", "number");
-    await chrome.cookies.set({
-      url,
-      storeId,
-      name: stringArg(optional(data, "name", "string"), "cookie name"),
-      value: optional(data, "value", "string") ?? "",
-      ...(domain === undefined ? {} : { domain }),
-      ...(path === undefined ? {} : { path }),
-      ...(secure === undefined ? {} : { secure }),
-      ...(httpOnly === undefined ? {} : { httpOnly }),
-      ...(expires === undefined ? {} : { expirationDate: expires }),
-      ...(sameSite === undefined ? {} : { sameSite: sameSites[sameSite] }),
-    });
+    const name = stringArg(optional(data, "name", "string"), "cookie name");
+    const value = optional(data, "value", "string") ?? "";
+    // Firefox rejects a cookie that the page URL cannot set, such as one for
+    // another domain, and a cookie its own cookie checks refuse.
+    try {
+      await chrome.cookies.set({
+        url,
+        storeId,
+        name,
+        value,
+        ...(domain === undefined ? {} : { domain }),
+        ...(path === undefined ? {} : { path }),
+        ...(secure === undefined ? {} : { secure }),
+        ...(httpOnly === undefined ? {} : { httpOnly }),
+        ...(expires === undefined ? {} : { expirationDate: expires }),
+        ...(sameSite === undefined ? {} : { sameSite: sameSites[sameSite] }),
+      });
+    } catch (error) {
+      fail("invalid_args", `cookies set: ${fault(error as Error).message}`);
+    }
     return { success: true };
   }
   if (cmd === "delete" || cmd === "clear") {

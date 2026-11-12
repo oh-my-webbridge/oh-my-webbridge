@@ -804,3 +804,242 @@ test("screenshot, cookies, network start and emulate data need access to all web
   assert.equal(f.state.sessions.task.settings, undefined);
   assert.deepEqual(await f.run("network", { cmd: "list" }), { requests: [] });
 });
+
+// Firefox's rejection when no targeted document ran the script.
+const missingHost = () => new Error("Missing host permission for the tab");
+// Rejects the page.js calls for op while count lasts.
+function rejectPageCalls(f, op, count, error = missingHost) {
+  let left = count;
+  f.state.reject = (api, details) =>
+    api === "scripting.executeScript" && details.args?.[0] === op && left-- > 0
+      ? error()
+      : undefined;
+}
+
+test("a page action cut off by a navigation fails with outcome_unknown", async (t) => {
+  const f = await fixture(t, {
+    ...owned,
+    page: async () => ({ ok: true, value: { success: true } }),
+  });
+  rejectPageCalls(f, "click", 1);
+  await assert.rejects(f.run("click", { selector: "#go" }), {
+    code: "outcome_unknown",
+    message:
+      "click: the page navigated during the command; observe before retrying (Missing host permission for the tab)",
+  });
+  // The document unloaded as the script reached it.
+  f.state.page = async () => undefined;
+  await assert.rejects(f.run("click", { selector: "#go" }), {
+    code: "outcome_unknown",
+    message: /^click: the page navigated during the command; .*page script returned no result/,
+  });
+});
+
+test("a page Firefox protects or a withdrawn site access fails with restricted_tab", async (t) => {
+  const f = await fixture(t);
+  f.state.reject = (api) => (api === "scripting.executeScript" ? missingHost() : undefined);
+  await assert.rejects(f.run("click", { selector: "#go" }), {
+    code: "restricted_tab",
+    message:
+      "click: Firefox does not let extensions run scripts in this page (Missing host permission for the tab)",
+  });
+  f.state.permissions.delete("<all_urls>");
+  await assert.rejects(f.run("click", { selector: "#go" }), {
+    code: "restricted_tab",
+    message: /^click: Firefox does not run extension scripts in this page .*about:addons$/,
+  });
+});
+
+test("a selected frame replaced during a call fails with frame_unavailable", async (t) => {
+  const frameId = 12884901889;
+  const f = await fixture(t, {
+    ...owned,
+    page: async (op, _args, documentId) => ({
+      ok: true,
+      value: op === "frame" ? { frameId } : { documentId },
+    }),
+  });
+  f.state.documents.set("doc-frame", { frameId });
+  await f.run("frame", { selector: "iframe#pay" });
+  rejectPageCalls(f, "get", 1, () => new Error("Missing host permission for the tab or frames"));
+  await assert.rejects(f.run("get", { selector: "h1" }), {
+    code: "frame_unavailable",
+    message: /^get: the frame navigated or was removed; commands now use the main frame/,
+  });
+  assert.deepEqual(await f.run("get", { selector: "h1" }), { documentId: "doc-main" });
+});
+
+test("wait keeps polling while the page navigates", async (t) => {
+  const answers = [true, false];
+  const f = await fixture(t, {
+    ...owned,
+    page: async () => ({ ok: true, value: { matched: answers.shift() } }),
+  });
+  rejectPageCalls(f, "wait", 2);
+  // A navigation is neither visible nor hidden.
+  assert.deepEqual(await f.run("wait", { selector: ".spinner", state: "hidden" }), {
+    success: true,
+  });
+  assert.deepEqual(answers, []);
+});
+
+test("wait for an expression keeps polling while the page navigates", async (t) => {
+  const f = await fixture(t, { ...owned, permissions: ["<all_urls>", "userScripts"], evaluate: 1 });
+  let navigating = 1;
+  f.state.reject = (api) =>
+    api === "userScripts.execute" && navigating-- > 0 ? missingHost() : undefined;
+  assert.deepEqual(await f.run("wait", { expression: "window.ready" }), { success: true });
+  assert.equal(f.state.userScripts.length, 1);
+});
+
+test("a closed tab fails with tab_missing, also once its session has dropped it", async (t) => {
+  const f = await fixture(t);
+  f.state.reject = (api) =>
+    api === "scripting.executeScript" ? new Error("Invalid tab ID: 5") : undefined;
+  await assert.rejects(f.run("click", { selector: "#go" }), {
+    code: "tab_missing",
+    message: "tab 5 was closed",
+  });
+  f.state.reject = (api) =>
+    api === "tabs.captureTab" ? new Error("Invalid tab ID: 5") : undefined;
+  await assert.rejects(f.run("screenshot", {}), { code: "tab_missing" });
+  f.state.tabs.delete(5);
+  await assert.rejects(f.run("get", { selector: "h1" }), {
+    code: "tab_missing",
+    message: "tab 5 was closed",
+  });
+});
+
+test("a closed tab that its session has dropped fails with tab_missing, not tab_busy", async (t) => {
+  const f = await fixture(t, {
+    sessions: { task: { tabs: [], borrowed: [], title: "task" } },
+    tabs: [],
+  });
+  for (const action of ["get", "switch_tab"])
+    await assert.rejects(f.run(action, { tabId: 5, selector: "h1" }), {
+      code: "tab_missing",
+      message: "tab 5 was closed",
+    });
+});
+
+test("close_tab continues in the session's previous task tab", async (t) => {
+  const f = await fixture(t, {
+    sessions: { task: { tabs: [4, 5], borrowed: [], current: 5, title: "task" } },
+    tabs: [
+      { id: 4, url: "https://example.test/a" },
+      { id: 5, url: "https://example.test/b" },
+    ],
+  });
+  assert.deepEqual(await f.run("close_tab", {}), { success: true, closed: true });
+  assert.deepEqual(f.state.removed, [5]);
+  await f.run("get", { selector: "h1" });
+  assert.equal(f.state.executed.at(-1).target.tabId, 4);
+});
+
+const closing = { task: { tabs: [4, 5, 6], borrowed: [], current: 6, title: "task" } };
+test("close_session counts a tab that is already closed as closed", async (t) => {
+  const f = await fixture(t, {
+    sessions: closing,
+    tabs: [
+      { id: 4, url: "https://example.test/a" },
+      { id: 6, url: "https://example.test/c" },
+    ],
+  });
+  assert.deepEqual(await f.run("close_session", {}), { success: true, closed: 3 });
+  assert.deepEqual(f.state.removed, [4, 6]);
+  assert.deepEqual(f.state.sessions, {});
+});
+
+test("close_session keeps the session when closing a tab fails", async (t) => {
+  const f = await fixture(t, {
+    sessions: closing,
+    tabs: [{ id: 4, url: "https://example.test/a" }],
+    reject: (api) => (api === "tabs.remove" ? new Error("tab is being dragged") : undefined),
+  });
+  await assert.rejects(f.run("close_session", {}), { message: "tab is being dragged" });
+  assert.deepEqual(Object.keys(f.state.sessions), ["task"]);
+});
+
+test("a failed batch step keeps its code and names its position", async (t) => {
+  const f = await fixture(t, {
+    ...owned,
+    page: async (op) =>
+      op === "get"
+        ? { ok: false, code: "element_missing", message: "no element matches #x" }
+        : { ok: true, value: { success: true } },
+  });
+  await assert.rejects(
+    f.run("batch", {
+      steps: [
+        { action: "click", args: { selector: "#go" } },
+        { action: "get", args: { selector: "#x" } },
+        { action: "click", args: { selector: "#next" } },
+      ],
+    }),
+    { code: "element_missing", message: "batch step 2 of 3 (get): no element matches #x" },
+  );
+  assert.equal(f.state.executed.filter((e) => e.args?.[0] === "click").length, 2);
+});
+
+test("get properties and storage commands are checked before page.js runs", async (t) => {
+  const f = await fixture(t);
+  for (const [action, args] of [
+    ["get", { selector: "h1", property: "bogus" }],
+    ["locate", { by: "css", value: "h1", property: "bogus" }],
+    ["storage", { cmd: "drop" }],
+  ])
+    await assert.rejects(f.run(action, args), { code: "invalid_args" }, action);
+  assert.deepEqual(f.state.executed, []);
+});
+
+test("evaluate results that cannot be returned fail with evaluation_failed", async (t) => {
+  const f = await fixture(t, {
+    ...owned,
+    permissions: ["<all_urls>", "userScripts"],
+    evaluate: 10n,
+  });
+  await assert.rejects(f.run("evaluate", { code: "10n" }), {
+    code: "evaluation_failed",
+    message: /^evaluate: the code ran, but its result cannot be returned \(.*BigInt/,
+  });
+  // wait reads only whether the value is truthy.
+  assert.deepEqual(await f.run("wait", { expression: "10n" }), { success: true });
+  f.state.reject = (api) =>
+    api === "userScripts.execute"
+      ? new Error("Script '<anonymous code>' result is non-structured-clonable data")
+      : undefined;
+  await assert.rejects(f.run("evaluate", { code: "document.body" }), {
+    code: "evaluation_failed",
+    message: /^evaluate: the code ran, but its result cannot be returned \(Script/,
+  });
+});
+
+test("URLs, download filenames and cookies that Firefox cannot use fail with invalid_args", async (t) => {
+  const f = await fixture(t);
+  for (const [action, args] of [
+    ["navigate", { url: "example.com" }],
+    ["window_new", { url: "example.com" }],
+    ["download", { url: "http://[" }],
+  ])
+    await assert.rejects(
+      f.run(action, args),
+      { code: "invalid_args", message: /is not a valid URL$/ },
+      action,
+    );
+  await assert.rejects(f.run("download", { url: "/file.txt", filename: "/etc/passwd" }), {
+    code: "invalid_args",
+    message: "download filename: filename must not be an absolute path",
+  });
+  assert.deepEqual(f.state.downloads, []);
+  f.state.reject = (api) =>
+    api === "cookies.set"
+      ? new Error('Permission denied to set cookie {"name":"a","domain":"other.test"}')
+      : undefined;
+  await assert.rejects(
+    f.run("cookies", { cmd: "set", data: { name: "a", domain: "other.test" } }),
+    {
+      code: "invalid_args",
+      message: /^cookies set: Permission denied to set cookie/,
+    },
+  );
+});

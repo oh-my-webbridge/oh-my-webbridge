@@ -8,7 +8,13 @@
 import { snowflake } from "../id.js";
 import { resolveElements } from "../locators.js";
 import { fail, fault, stringArg, type Json } from "../protocol.js";
-import type { PageArgs, PageFile, PageResult } from "./page-api.js";
+import {
+  checkGetProperty,
+  checkStorageCommand,
+  type PageArgs,
+  type PageFile,
+  type PageResult,
+} from "./page-api.js";
 
 const interactiveRoles = new Set([
   "button",
@@ -852,6 +858,7 @@ function locate(args: PageArgs): Json {
 
 function get(args: PageArgs): Json {
   const property = args.property ?? "text";
+  checkGetProperty(property);
   if (property === "title") return { value: document.title };
   if (property === "url") return { value: location.href };
   const selector = stringArg(args.selector, "selector");
@@ -879,7 +886,7 @@ function get(args: PageArgs): Json {
       };
     }
   }
-  fail("element_action_failed", "unsupported get property");
+  fail("invalid_args", "unsupported get property " + property);
 }
 function is(args: PageArgs): Json {
   const property = args.property ?? "visible";
@@ -941,14 +948,13 @@ function selectOption(args: PageArgs): Json {
   return { success: true, value: element.value };
 }
 function storage(args: PageArgs): Json {
-  const store = args.kind === "session" ? sessionStorage : localStorage;
   const cmd = args.cmd ?? "list";
+  checkStorageCommand(cmd);
+  const store = args.kind === "session" ? sessionStorage : localStorage;
   const name = args.name ?? "";
   if (cmd === "set") store.setItem(name, args.value ?? "");
   else if (cmd === "remove") store.removeItem(name);
   else if (cmd === "clear") store.clear();
-  else if (cmd !== "list" && cmd !== "get")
-    fail("evaluation_failed", "storage cmd must be list/get/set/remove/clear");
   const entries = Array.from({ length: store.length }, (_, index): [string, string] => {
     const key = store.key(index) ?? "";
     return [key, store.getItem(key) ?? ""];
@@ -1160,8 +1166,10 @@ function pointFor(element: Element): Point {
   const hit =
     (root instanceof ShadowRoot ? root.elementFromPoint(x, y) : null) ??
     document.elementFromPoint(x, y);
-  if (!box.width || !box.height || !hit || !(hit === element || element.contains(hit)))
-    fail("element_action_failed", "element is hidden or covered");
+  if (!box.width || !box.height)
+    fail("element_hidden", "element has no box: it is not rendered or has no size");
+  if (!hit || !(hit === element || element.contains(hit)))
+    fail("element_action_failed", "element is covered: another element is at its center");
   return { x, y, target: deepest(hit, x, y) };
 }
 function pointAt(x: number | undefined, y: number | undefined): Point {
@@ -1327,7 +1335,8 @@ function wait(args: PageArgs): Json {
   } else if (args.load)
     matched =
       args.load === "load" ? document.readyState === "complete" : document.readyState !== "loading";
-  else if (args.text) matched = bodyText().includes(args.text);
+  // A document that has no body yet does not contain the text.
+  else if (args.text) matched = (document.body?.innerText ?? "").includes(args.text);
   else if (args.url) {
     const pattern =
       "^" +
@@ -1442,11 +1451,13 @@ async function page(op: string, args: PageArgs): Promise<PageResult> {
   try {
     return { ok: true, value: run(op, args) };
   } catch (error) {
-    // A DOMException has a numeric code of its own.
+    // The page refused a DOM call, as storage does when the site may not
+    // store data or its quota is full. A DOMException has a numeric code of
+    // its own.
     if (error instanceof DOMException)
       return {
         ok: false,
-        code: "browser_error",
+        code: "evaluation_failed",
         message: op + ": " + error.name + ": " + error.message,
       };
     const { code, message } = fault(error as Error);

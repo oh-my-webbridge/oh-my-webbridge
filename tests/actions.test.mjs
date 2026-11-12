@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setImmediate } from "node:timers/promises";
+import { runInNewContext } from "node:vm";
 import { build } from "esbuild";
 import { FiltersEngine } from "@ghostery/adblocker";
 
@@ -213,6 +214,11 @@ async function sessionFixture(
         calls.push({ tabId: source.tabId, sessionId: source.sessionId, method, params });
         await intercept(source, method);
         if (failing.has(method)) throw Error(`${method} failed`);
+        // Element references resolve to nodes that are still in their document.
+        if (method === "DOM.resolveNode")
+          return { object: { type: "object", objectId: `node-${params.backendNodeId}` } };
+        if (method === "Runtime.callFunctionOn")
+          return { result: { type: "boolean", value: true } };
         return method === "Page.getFrameTree"
           ? { frameTree: { frame: { id: "main", url: "https://example.test/" } } }
           : {};
@@ -797,6 +803,94 @@ test("wait reports wait_timeout before the deadline when its condition never hol
   }
 });
 
+// Replaces the replies of the borrow fixture for the methods in replies.
+function reply(replies) {
+  const send = globalThis.chrome.debugger.sendCommand;
+  globalThis.chrome.debugger.sendCommand = async (source, method, params) =>
+    replies[method] ? replies[method](params) : send(source, method, params);
+}
+
+test("wait checks its condition at least once under a short deadline", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  for (const [args, code] of [
+    [{ url: "user*" }, undefined],
+    [{ url: "*nomatch*" }, "wait_timeout"],
+  ]) {
+    const { budget } = deadlineBudget(t, 300);
+    const pending = f.m.execute({ session: "task", action: "wait", args }, budget);
+    if (code) await assert.rejects(pending, { code });
+    else assert.deepEqual(await pending, { success: true });
+  }
+});
+
+test("a wait check that runs into the reserve reports wait_timeout before the deadline", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  // location.href answers only after the request deadline.
+  reply({
+    "Runtime.evaluate": async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return { result: { type: "string", value: "https://example.test/" } };
+    },
+  });
+  const { deadline, budget } = deadlineBudget(t, 900);
+  await assert.rejects(
+    f.m.execute({ session: "task", action: "wait", args: { url: "*nomatch*" } }, budget),
+    { code: "wait_timeout" },
+  );
+  assert.ok(Date.now() < deadline, "wait answers before the request deadline");
+});
+
+test("wait for a hidden element succeeds when the element goes away between its lookups", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  // The count finds the element; the lookup that follows finds nothing.
+  reply({
+    "Runtime.evaluate": ({ expression }) =>
+      expression.endsWith(".length")
+        ? { result: { type: "number", value: 1 } }
+        : { result: { type: "undefined" } },
+  });
+  assert.deepEqual(await f.run("task", "wait", { selector: "#spinner", state: "hidden" }), {
+    success: true,
+  });
+});
+
+test("wait for a hidden @e element succeeds once its reference has expired", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const { tree } = await f.run("task", "snapshot");
+  const ref = tree.match(/@e\S+/u)[0];
+  // Chrome has collected the node that the reference names.
+  reply({
+    "DOM.resolveNode": () => {
+      throw Error(JSON.stringify({ code: -32000, message: "No node with given id found" }));
+    },
+  });
+  assert.deepEqual(await f.run("task", "wait", { selector: ref, state: "hidden" }), {
+    success: true,
+  });
+  await assert.rejects(f.run("task", "wait", { selector: ref }), { code: "stale_ref" });
+});
+
+test("wait for text treats a document without a body as not containing it", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const expressions = [];
+  reply({
+    "Runtime.evaluate": ({ expression }) => {
+      expressions.push(expression);
+      return { result: { type: "boolean", value: true } };
+    },
+  });
+  assert.deepEqual(await f.run("task", "wait", { text: "Done" }), { success: true });
+  // The expression the page runs, against a document that has no body yet.
+  const check = (document) => runInNewContext(expressions.at(-1), { document });
+  assert.equal(check({ body: null }), false);
+  assert.equal(check({ body: { innerText: "Done." } }), true);
+});
+
 test("a cancelled wait fails with outcome_unknown while it sleeps between polls", async (t) => {
   const f = await borrowFixture(t);
   await f.borrow("task");
@@ -1336,14 +1430,380 @@ test("a page CDP attach that fails before attaching leaves no session", async (t
     await assert.rejects(
       f.run(pageClient(n), "cdp_attach", { tabId: [5, 9, 11][n % 3] }),
       (error) => {
-        const kind = error.code ?? "missing";
-        failures[kind] = (failures[kind] ?? 0) + 1;
+        failures[error.code] = (failures[error.code] ?? 0) + 1;
         return true;
       },
     );
   }
-  assert.deepEqual(failures, { tab_busy: 42, restricted_tab: 43, missing: 43 });
+  assert.deepEqual(failures, { tab_busy: 42, restricted_tab: 43, tab_missing: 43 });
   assert.equal(f.m.owner(5), "task");
   assert.ok(!f.calls.some((c) => c.method === "detach"), "the task session's tab stays attached");
   assert.deepEqual(await f.run("research", "list_tabs"), { success: true, tabs: [] });
+});
+
+// DevTools protocol errors as chrome.debugger rejects them.
+const protocolError = (message, code = -32000) => Error(JSON.stringify({ code, message }));
+const closedTabFault = { code: "tab_missing", message: "tab 5 was closed" };
+
+test("a command on a closed tab fails with tab_missing, and with no_tab once the tab left its session", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  // Chrome still lists the tab while it closes; the debugger finds none.
+  globalThis.chrome.debugger.attach = async ({ tabId }) => {
+    throw Error(`No tab with given id ${tabId}.`);
+  };
+  await assert.rejects(f.run("task", "evaluate", { code: "1" }), closedTabFault);
+  globalThis.chrome.debugger.attach = async () => {};
+  reply({
+    "Runtime.evaluate": () => {
+      throw Error("No tab with given id 5.");
+    },
+  });
+  await assert.rejects(f.run("task", "evaluate", { code: "1" }), closedTabFault);
+  globalThis.chrome.tabs.get = async (id) => {
+    throw Error(`No tab with id: ${id}.`);
+  };
+  await assert.rejects(f.run("task", "evaluate", { code: "1" }), closedTabFault);
+  // chrome.tabs.onRemoved
+  await f.m.removed(5);
+  await assert.rejects(f.run("task", "evaluate", { code: "1" }), { code: "no_tab" });
+  await assert.rejects(f.run("task", "evaluate", { code: "1", tabId: 5 }), closedTabFault);
+});
+
+test("close_tab continues in the last other task tab; a tab closed elsewhere leaves no current tab", async (t) => {
+  const f = await sessionFixture(t, {}, { hold: false });
+  for (let n = 0; n < 3; n++)
+    await f.run("navigate", { url: "https://example.test/", newTab: true });
+  const commandTab = async (args = {}) => {
+    await f.run("cdp", { method: "DOM.getDocument", ...args });
+    return f.calls.findLast((c) => c.method === "DOM.getDocument").tabId;
+  };
+  assert.equal(await commandTab(), 9);
+  // The next command runs before tabs.onRemoved reaches the session.
+  await f.run("close_tab");
+  assert.deepEqual(f.removed, [9]);
+  assert.equal(await commandTab(), 8);
+  await f.closed(9);
+  assert.equal(await commandTab(), 8);
+  // The user closes the current tab.
+  await f.closed(8);
+  await assert.rejects(f.run("cdp", { method: "DOM.getDocument" }), { code: "no_tab" });
+  assert.equal(await commandTab({ tabId: 7 }), 7);
+});
+
+test("a command cut off by a navigation or a debugger detach fails with outcome_unknown, or tab_missing once the tab is gone", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  for (const error of [
+    Error("Detached while handling command."),
+    protocolError("Execution context was destroyed."),
+    protocolError("Inspected target navigated or closed"),
+  ]) {
+    reply({
+      "Runtime.evaluate": () => {
+        throw error;
+      },
+    });
+    await assert.rejects(f.run("task", "evaluate", { code: "form.submit()" }), {
+      code: "outcome_unknown",
+      message:
+        "the page navigated or the debugger detached during the command; observe before retrying",
+    });
+  }
+  // Chrome ends the commands of a closing tab the same way.
+  reply({
+    "Runtime.evaluate": () => {
+      globalThis.chrome.tabs.get = async (id) => {
+        throw Error(`No tab with id: ${id}.`);
+      };
+      throw Error("Detached while handling command.");
+    },
+  });
+  await assert.rejects(f.run("task", "evaluate", { code: "form.submit()" }), closedTabFault);
+});
+
+const removedElement = {
+  code: "stale_ref",
+  message: "element no longer exists; take a fresh snapshot",
+};
+
+test("an @e reference fails with stale_ref once its element left the document", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const ref = firstRef(await f.run("task", "snapshot"));
+  const sent = f.calls.length;
+  // The element was removed; Chrome keeps its node until it is collected.
+  reply({
+    "Runtime.callFunctionOn": ({ functionDeclaration }) =>
+      functionDeclaration.includes("isConnected")
+        ? { result: { type: "boolean", value: false } }
+        : { result: { type: "string", value: "Send" } },
+  });
+  for (const [action, args] of [
+    ["get", {}],
+    ["focus", {}],
+    ["click", {}],
+    ["key_type", { text: "x" }],
+    ["upload", { files: ["/srv/report.pdf"] }],
+  ])
+    await assert.rejects(f.run("task", action, { selector: ref, ...args }), removedElement, action);
+  // The node was collected.
+  reply({
+    "DOM.resolveNode": () => {
+      throw protocolError("No node with given id found");
+    },
+  });
+  await assert.rejects(f.run("task", "get", { selector: ref }), removedElement);
+  assert.deepEqual(
+    f.calls
+      .slice(sent)
+      .filter((c) =>
+        ["DOM.focus", "DOM.setFileInputFiles", "Input.dispatchMouseEvent"].includes(c.method),
+      ),
+    [],
+    "no command reaches the removed element",
+  );
+  // The node is collected between its lookup and the command.
+  reply({
+    "Runtime.callFunctionOn": () => ({ result: { type: "boolean", value: true } }),
+    "DOM.resolveNode": () => ({ object: { type: "object", objectId: "button" } }),
+    "DOM.focus": () => {
+      throw protocolError("No node found for given backend id");
+    },
+  });
+  await assert.rejects(f.run("task", "focus", { selector: ref }), removedElement);
+});
+
+test("a selected frame that goes away before Chrome reports it fails the command with frame_unavailable", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const lost = {
+    code: "frame_unavailable",
+    message:
+      "the selected frame navigated or was removed; commands now use the main frame; select it again with frame",
+  };
+  // A cross-process frame's session and a same-process frame's context.
+  crossProcessFrame(f, 3);
+  sameProcessFrame(f, 7);
+  const send = globalThis.chrome.debugger.sendCommand;
+  for (const [frameId, contextId, error] of [
+    ["oopif", 3, protocolError("Session with given id not found.", -32001)],
+    ["child", 7, protocolError("Cannot find context with specified id")],
+  ]) {
+    globalThis.chrome.debugger.sendCommand = send;
+    await f.run("task", "frame", { frameId });
+    globalThis.chrome.debugger.sendCommand = async (source, method, params) => {
+      if (method === "Runtime.evaluate" && params.contextId === contextId) throw error;
+      return send(source, method, params);
+    };
+    await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), lost, frameId);
+    await f.run("task", "evaluate", { code: "document.title" });
+    assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined }, frameId);
+  }
+});
+
+test("releasing a remote object never replaces the error of the command", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  crossProcessFrame(f, 3);
+  await f.run("task", "frame", { frameId: "oopif" });
+  const ref = firstRef(await f.run("task", "snapshot"));
+  // The fill reaches a read-only field while the frame's target detaches.
+  reply({
+    "Runtime.callFunctionOn": ({ functionDeclaration }) => {
+      if (functionDeclaration.includes("isConnected"))
+        return { result: { type: "boolean", value: true } };
+      f.m.frameEvent(5, "Target.detachedFromTarget", { sessionId: "oopif-session" });
+      return {
+        result: { type: "undefined" },
+        exceptionDetails: {
+          text: "Uncaught",
+          exception: {
+            type: "object",
+            description: "Error: element is not editable\n    at <anonymous>:1:200",
+          },
+        },
+      };
+    },
+  });
+  await assert.rejects(f.run("task", "fill", { selector: ref, value: "typed" }), {
+    code: "element_action_failed",
+    message: "Error: element is not editable",
+  });
+  // The next command that runs in the frame reports it.
+  await assert.rejects(f.run("task", "evaluate", { code: "document.title" }), lostFrame);
+});
+
+test("frame list skips the frames of a target that detached before Chrome reported it", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  f.m.frameEvent(5, "Target.attachedToTarget", {
+    sessionId: "gone-session",
+    targetInfo: { targetId: "gone" },
+  });
+  const send = globalThis.chrome.debugger.sendCommand;
+  globalThis.chrome.debugger.sendCommand = async (source, method, params) => {
+    if (source.sessionId === "gone-session")
+      throw protocolError("Session with given id not found.", -32001);
+    return send(source, method, params);
+  };
+  assert.deepEqual(await f.run("task", "frame", { cmd: "list" }), {
+    frames: [{ id: "main", url: "https://example.test/" }],
+  });
+});
+
+test("an element that refuses a DOM command fails with element_action_failed", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const ref = firstRef(await f.run("task", "snapshot"));
+  reply({
+    "DOM.focus": () => {
+      throw protocolError("Element is not focusable");
+    },
+    "DOM.setFileInputFiles": () => {
+      throw protocolError("Node is not a file input element");
+    },
+  });
+  const notFocusable = { code: "element_action_failed", message: "Element is not focusable" };
+  await assert.rejects(f.run("task", "focus", { selector: ref }), notFocusable);
+  await assert.rejects(f.run("task", "key_type", { selector: ref, text: "x" }), notFocusable);
+  await assert.rejects(f.run("task", "upload", { selector: ref, files: ["/srv/report.pdf"] }), {
+    code: "element_action_failed",
+    message: "Node is not a file input element",
+  });
+});
+
+test("click tells an element without a box from a covered one", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const ref = firstRef(await f.run("task", "snapshot"));
+  // The page's check of the element answers hidden or covered.
+  let reach = "hidden";
+  reply({
+    "Runtime.callFunctionOn": ({ functionDeclaration }) => ({
+      result: functionDeclaration.includes("isConnected")
+        ? { type: "boolean", value: true }
+        : { type: "string", value: reach },
+    }),
+  });
+  await assert.rejects(f.run("task", "click", { selector: ref }), {
+    code: "element_hidden",
+    message: "element is hidden: it has no box",
+  });
+  reach = "covered";
+  await assert.rejects(f.run("task", "click", { selector: ref }), {
+    code: "element_action_failed",
+    message: "element is covered by another element",
+  });
+  // The element lost its layout box after the check.
+  reach = true;
+  reply({
+    "DOM.getContentQuads": () => {
+      throw protocolError("Could not compute content quads.");
+    },
+  });
+  await assert.rejects(f.run("task", "hover", { selector: ref }), {
+    code: "element_hidden",
+    message: "element has no layout box",
+  });
+  assert.ok(!f.calls.some((c) => c.method === "Input.dispatchMouseEvent"), "no input is sent");
+});
+
+test("arguments are checked before page scripts run, and page errors keep their message", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const sent = f.calls.length;
+  await assert.rejects(f.run("task", "get", { selector: "#name", property: "bogus" }), {
+    code: "invalid_args",
+  });
+  await assert.rejects(f.run("task", "storage", { cmd: "drop" }), { code: "invalid_args" });
+  assert.deepEqual(
+    f.calls.slice(sent).filter((c) => c.method.startsWith("Runtime.")),
+    [],
+    "no page script runs",
+  );
+  // The locator throws for a selector that is not valid CSS.
+  reply({
+    "Runtime.evaluate": () => ({
+      result: { type: "object", subtype: "error" },
+      exceptionDetails: {
+        text: "Uncaught",
+        exception: {
+          type: "object",
+          description:
+            "SyntaxError: Failed to execute 'querySelectorAll' on 'Document': 'div[' is not a valid selector.\n    at <anonymous>:1:30",
+        },
+      },
+    }),
+  });
+  const invalidSelector = {
+    code: "invalid_args",
+    message:
+      "SyntaxError: Failed to execute 'querySelectorAll' on 'Document': 'div[' is not a valid selector.",
+  };
+  await assert.rejects(f.run("task", "get", { selector: "div[" }), invalidSelector);
+  await assert.rejects(
+    f.run("task", "get", { selector: "div[", property: "count" }),
+    invalidSelector,
+  );
+});
+
+test("close_session counts a tab that closed meanwhile as closed, and another failure keeps the session", async (t) => {
+  const f = await sessionFixture(t, {}, { hold: false });
+  for (let n = 0; n < 2; n++)
+    await f.run("navigate", { url: "https://example.test/", newTab: true });
+  // Tab 7 closed before tabs.onRemoved reached the session.
+  globalThis.chrome.tabs.remove = async (id) => {
+    if (id === 7) throw Error(`No tab with id: ${id}.`);
+    f.removed.push(id);
+  };
+  assert.deepEqual(await f.run("close_session"), { success: true, closed: 2 });
+  assert.deepEqual(f.removed, [8]);
+  assert.equal(f.saved.at(-1).sessions.task, undefined);
+  // Another failure is reported and keeps the session, so close_session can
+  // run again for the tab that remains.
+  await f.run("navigate", { url: "https://example.test/", newTab: true });
+  globalThis.chrome.tabs.remove = async () => {
+    throw Error("Tabs cannot be edited right now (user may be dragging a tab).");
+  };
+  await assert.rejects(f.run("close_session"), /dragging/u);
+  assert.deepEqual(f.saved.at(-1).sessions.task.tabs, [9]);
+  globalThis.chrome.tabs.remove = async (id) => f.removed.push(id);
+  assert.deepEqual(await f.run("close_session"), { success: true, closed: 1 });
+  assert.equal(f.saved.at(-1).sessions.task, undefined);
+});
+
+test("close_session releases a borrowed tab that closed meanwhile", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  await f.run("task", "evaluate", { code: "1" });
+  globalThis.chrome.debugger.detach = async ({ tabId }) => {
+    throw Error(`No tab with given id ${tabId}.`);
+  };
+  assert.deepEqual(await f.run("task", "close_session"), { success: true, closed: 0 });
+  assert.equal(f.m.owner(5), undefined);
+});
+
+test("a failed batch step keeps its code and names the step", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const steps = [
+    { action: "evaluate", args: { code: "1" } },
+    { action: "get", args: { selector: "#name", property: "bogus" } },
+    { action: "evaluate", args: { code: "2" } },
+  ];
+  await assert.rejects(f.run("task", "batch", { steps }), {
+    code: "invalid_args",
+    message:
+      "batch step 2 of 3 (get): get property must be text/html/value/attr/box/styles/title/url/count",
+  });
+  reply({
+    "Runtime.evaluate": () => {
+      throw protocolError("Internal error", -32603);
+    },
+  });
+  await assert.rejects(f.run("task", "batch", { steps: steps.slice(0, 1) }), {
+    code: "browser_error",
+    message: 'batch step 1 of 1 (evaluate): {"code":-32603,"message":"Internal error"}',
+  });
 });

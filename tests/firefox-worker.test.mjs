@@ -187,6 +187,21 @@ test("closing a task tab releases its listeners and session entry", async (t) =>
   assert.deepEqual(f.state.sessions.task.tabs, []);
 });
 
+test("a page action after its tab closed answers tab_missing or no_tab, never browser_error", async (t) => {
+  const f = await transport(t);
+  // The tab closes while the session still names it.
+  f.state.tabs.delete(5);
+  f.deliver("r1", { selector: "h1" });
+  await settle(() => f.responses().length === 1);
+  assert.deepEqual(f.responses()[0].error, { code: "tab_missing", message: "tab 5 was closed" });
+  // Once Firefox reports the removal, the session has no current tab.
+  f.chrome.tabs.onRemoved.emit(5);
+  await settle(() => f.state.sessions.task?.tabs.length === 0);
+  f.deliver("r2", { selector: "h1" });
+  await settle(() => f.responses().length === 2);
+  assert.equal(f.responses()[1].error.code, "no_tab");
+});
+
 test("a frame selection ends when the tab's URL changes, not when Firefox repeats it", async (t) => {
   const frameId = 12884901889;
   const f = await start(t, {

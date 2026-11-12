@@ -14,7 +14,7 @@ async function until<T>(promise: Promise<T>, budget: Budget, seen: () => string)
   ]);
   if (result) return result.value;
   console.warn(seen());
-  expired();
+  expired(budget.signal.reason);
 }
 
 type TopEvent =
