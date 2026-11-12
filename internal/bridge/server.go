@@ -269,6 +269,8 @@ func replyError(w http.ResponseWriter, id string, err error) {
 		code = 503
 	case "outcome_unknown":
 		code = 504
+	case "wait_timeout":
+		code = 408
 	case "invalid_request", "invalid_args":
 		code = 400
 	case "stale_ref", "tab_busy", "session_busy", "session_browser":

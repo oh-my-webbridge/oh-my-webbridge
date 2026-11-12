@@ -80,7 +80,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 超时与结果不确定 [#timeouts-and-uncertain-results]
 
-`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。时间用完，或命令运行到一半时浏览器中断连接，调用会返回 `outcome_unknown`。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。
+`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。条件未成立的 `wait` 则会在期限前稍早以 `wait_timeout` 失败，它不会变更页面。时间用完，或命令运行到一半时浏览器中断连接，调用会返回 `outcome_unknown`。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。
 
 <Callout type="warn" title="收到 outcome_unknown 后重试">
   重新使用命令之前，请先观察页面。`snapshot`、`read_page`、标签页 URL、`get`

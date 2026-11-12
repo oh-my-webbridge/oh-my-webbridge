@@ -94,7 +94,7 @@ A session holds at most 32 tabs across task and borrowed ones.
 
 ## Waiting
 
-`wait` returns as soon as the condition holds, polling every 75 ms until the request deadline. Set one of its fields.
+`wait` returns as soon as the condition holds, and checks it again every 75 ms. When the condition has not held 500 ms before the request deadline, `wait` fails with `wait_timeout`. Set the deadline with `timeoutMs`, or `--timeout-ms` in `omw call`. Set one of these fields:
 
 | Field        | Meaning                                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
@@ -208,6 +208,7 @@ Every fault carries `code` and `message`. The HTTP status is shown below; a code
 | `browser_offline`       | 503  | The target browser has no extension connection, including a session bound to a browser that is not connected.                                                             | Check `omw doctor` and the extension, or continue in a new session.                                           |
 | `session_browser`       | 409  | The session is bound to the other browser and the request named this one.                                                                                                 | Drop `browser`, or close the session and start a new one.                                                     |
 | `outcome_unknown`       | 504  | The command may have run: the deadline, a transport write or a disconnect cut off the reply.                                                                              | Observe the page or network state before repeating. Never replay a submit, payment or publish blindly.        |
+| `wait_timeout`          | 408  | The `wait` condition did not hold before the deadline. `wait` does not change the page.                                                                                   | Send `wait` again with a longer deadline, or check the condition.                                             |
 | `tab_busy`              | 409  | The tab belongs to another session.                                                                                                                                       | Use a tab this session holds, or another session.                                                             |
 | `stale_ref`             | 409  | An `@e` reference outlived its document.                                                                                                                                  | Take a new `snapshot`.                                                                                        |
 | `no_tab`                | 502  | A page action ran before the session had a tab.                                                                                                                           | Run `navigate` or `find_tab` first.                                                                           |

@@ -29,7 +29,7 @@ oh-my-webbridge 的每個指令都指定一個工作階段、一個動作，以�
 
 - **JavaScript。** `evaluate` 接受運算式，而不是函式。請送出 `document.title`，或把函式包成呼叫：`(() => document.title)()`。使用 `await` 的程式碼放進非同步函式呼叫：`(async () => (await fetch("/api")).status)()`。
 - **檔案。** `screenshot` 與 `save_as_pdf` 接受絕對路徑 `path` 並傳回它，不會覆寫已存在的檔案。
-- **期限。** 指令預設在 30 秒後失敗。HTTP 請求本文的 `timeoutMs` 欄位可設定 1 到 120000 毫秒。
+- **期限。** 指令預設在 30 秒後失敗。HTTP 請求本文的 `timeoutMs` 欄位，或 `omw call` 的 `--timeout-ms`，可設定 1 到 120000 毫秒。時間用盡的 `wait` 會以 `wait_timeout` 失敗。
 - **Firefox。** 部分動作在 Firefox 中回應 `unsupported`。請見 [Firefox](./firefox.mdx)。
 
 ## 從 Kimi 瀏覽器擴充功能遷移 [#from-the-kimi-browser-extension]
@@ -74,7 +74,7 @@ omw call research navigate '{"url":"https://example.com","group_title":"Research
 | `snapshot` 帶 `ref`、`interactive`             | `snapshot` 帶 `interactive`、`maxDepth`。參照使用新的格式。          |
 | `read_page` 帶 `cursor`                        | `read_page` 傳回前 192000 個字元，不接受 cursor。                    |
 | `wait` 帶 `text_gone`                          | `wait` 帶 `text` 與 `"state": "hidden"`                              |
-| `wait` 帶 `timeout_ms`                         | 請求本文中的 `timeoutMs`                                             |
+| `wait` 帶 `timeout_ms`                         | 請求本文中的 `timeoutMs`，或 `omw call` 的 `--timeout-ms`            |
 | `dialog` 帶 `"action": "accept"`               | `dialog` 帶 `"accept": true`；`text` 改為 `promptText`               |
 | `dialog` 帶 `"action": "dismiss"`              | `dialog` 帶 `"accept": false`                                        |
 | `dialog` 帶 `"action": "status"`               | `dialog_status`                                                      |

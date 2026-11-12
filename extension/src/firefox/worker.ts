@@ -6,10 +6,10 @@ import {
   startActivity,
   withoutLayer,
 } from "../activity.js";
-import { startBridge, type Budget } from "../bridge.js";
+import { startBridge } from "../bridge.js";
 import { startIndicator } from "../indicator.js";
 import type { Rect } from "../overlay.js";
-import { fault, type Command, type Hello, type Json } from "../protocol.js";
+import { fault, type Budget, type Command, type Hello, type Json } from "../protocol.js";
 import { currentTab, initSessions, removed, removedGroup, sessionNames } from "../state.js";
 import { paintFirefox } from "./layer.js";
 import { refreshSiteAccess } from "./access.js";

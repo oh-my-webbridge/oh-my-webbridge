@@ -1,4 +1,13 @@
-import { fail, fault, type Command, type Fault, type Hello, type Request } from "./protocol.js";
+import {
+  expired,
+  fail,
+  fault,
+  type Budget,
+  type Command,
+  type Fault,
+  type Hello,
+  type Request,
+} from "./protocol.js";
 import { pageClient } from "./state.js";
 import {
   daemonRunning,
@@ -8,7 +17,6 @@ import {
   type Settings,
 } from "./status.js";
 
-export type Budget = { signal: AbortSignal; check: () => void };
 export type Bridge = {
   hello: () => Promise<Hello>;
   execute: (command: Command, budget: Budget) => Promise<object>;
@@ -197,15 +205,18 @@ function enqueue(request: Request, connection: WebSocket, execute: Bridge["execu
   queues.set(queueName, queue);
   const timer = setTimeout(() => abort.abort(), Math.max(0, request.deadline - Date.now()));
   const check = (): void => {
-    if (abort.signal.aborted || Date.now() >= request.deadline)
-      fail("outcome_unknown", "request deadline reached; observe before retrying");
+    if (abort.signal.aborted || Date.now() >= request.deadline) expired();
   };
   const previous = queue.tail;
   queue.tail = (async () => {
     await previous;
     try {
       check();
-      const result = await execute(request.command, { signal: abort.signal, check });
+      const result = await execute(request.command, {
+        signal: abort.signal,
+        check,
+        deadline: request.deadline,
+      });
       respond(connection, request.id, { result });
     } catch (error) {
       respond(connection, request.id, { error: fault(error as Error) });

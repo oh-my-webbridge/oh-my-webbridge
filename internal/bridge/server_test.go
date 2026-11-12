@@ -167,6 +167,40 @@ func TestDeadlineDoesNotReplayAndDisconnectIsUncertain(t *testing.T) {
 	}
 }
 
+// A wait that ends at its deadline reports wait_timeout, distinct from the
+// outcome_unknown of an interrupted command, and the daemon passes its deadline
+// to the extension.
+func TestWaitTimeoutKeepsItsCode(t *testing.T) {
+	_, server, c := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		var packet Packet
+		if wsjson.Read(ctx, c, &packet) != nil {
+			return
+		}
+		if packet.Command.TimeoutMS != 2000 || packet.Deadline <= time.Now().UnixMilli() {
+			_ = wsjson.Write(ctx, c, Packet{Type: "response", ID: packet.ID, Error: &Fault{"internal", "deadline not forwarded"}})
+			return
+		}
+		_ = wsjson.Write(ctx, c, Packet{Type: "response", ID: packet.ID, Error: &Fault{"wait_timeout", "the wait condition did not hold before the deadline"}})
+	}()
+	req, _ := http.NewRequestWithContext(ctx, "POST", server.URL+"/command", strings.NewReader(`{"session":"repro","action":"wait","args":{"url":"*nomatch*"},"timeoutMs":2000}`))
+	req.Header.Set("Authorization", "Bearer "+strings.Repeat("a", 64))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var reply Reply
+	if err = json.NewDecoder(res.Body).Decode(&reply); err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 408 || reply.Error == nil || reply.Error.Code != "wait_timeout" {
+		t.Fatalf("wait deadline: %d %+v", res.StatusCode, reply.Error)
+	}
+}
+
 func TestRecoveryCommandsReachABusyExtension(t *testing.T) {
 	_, server, c := fixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

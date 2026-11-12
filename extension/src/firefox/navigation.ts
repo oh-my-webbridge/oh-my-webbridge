@@ -1,22 +1,4 @@
-import { fail } from "../protocol.js";
-import type { Budget } from "../bridge.js";
-
-// A cancelled wait reports that the browser may already have acted, like the
-// request deadline check in bridge.ts.
-function outcomeUnknown(): never {
-  fail("outcome_unknown", "request deadline reached; observe before retrying");
-}
-export async function pause(ms: number, signal: AbortSignal): Promise<void> {
-  const stop = Promise.withResolvers<boolean>();
-  const timer = setTimeout(() => stop.resolve(false), ms);
-  const abort = (): void => stop.resolve(true);
-  if (signal.aborted) abort();
-  else signal.addEventListener("abort", abort, { once: true });
-  const aborted = await stop.promise;
-  clearTimeout(timer);
-  signal.removeEventListener("abort", abort);
-  if (aborted) outcomeUnknown();
-}
+import { expired, fail, pause, type Budget } from "../protocol.js";
 // Waits for promise unless the request is cancelled first. A cancelled wait
 // logs what it had seen, for diagnosis.
 async function until<T>(promise: Promise<T>, budget: Budget, seen: () => string): Promise<T> {
@@ -32,7 +14,7 @@ async function until<T>(promise: Promise<T>, budget: Budget, seen: () => string)
   ]);
   if (result) return result.value;
   console.warn(seen());
-  outcomeUnknown();
+  expired();
 }
 
 type TopEvent =
