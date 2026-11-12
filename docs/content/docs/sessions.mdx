@@ -78,7 +78,7 @@ When a limit is reached the command fails with `busy` and HTTP 429 instead of wa
 
 ## Timeouts and uncertain results
 
-`timeoutMs` covers the whole request, including time spent waiting in the session queue. When it runs out, or when the browser disconnects in the middle of a command, the call returns `outcome_unknown`. The action may already have reached the page: a click may have happened, a form may be submitted.
+`timeoutMs` covers the whole request, including time spent waiting in the session queue. A `wait` whose condition does not hold fails with `wait_timeout` just before the deadline instead; it does not change the page. When it runs out, or when the browser disconnects in the middle of a command, the call returns `outcome_unknown`. The action may already have reached the page: a click may have happened, a form may be submitted.
 
 <Callout type="warn" title="Retrying after outcome_unknown">
   Observe the page before reusing a command. `snapshot`, `read_page`, the tab URL, `get` and the

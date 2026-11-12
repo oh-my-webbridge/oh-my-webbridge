@@ -82,6 +82,9 @@ export type Hello = {
 };
 export type Command = { action: string; session: string; args?: Args; timeoutMs?: number };
 export type Request = { type: "request"; id: string; command: Command; deadline: number };
+// signal aborts when the request reaches its deadline or is cancelled. deadline
+// is the request deadline in epoch milliseconds.
+export type Budget = { signal: AbortSignal; check: () => void; deadline: number };
 export type Fault = { code: string; message: string };
 export function fail(code: string, message: string): never {
   throw { code, message } satisfies Fault;
@@ -98,4 +101,31 @@ export function fault(error: object | string | number | boolean | null | undefin
 export function stringArg(value: string | undefined, name: string): string {
   if (typeof value !== "string" || !value) fail("invalid_args", `${name} is required`);
   return value;
+}
+// The deadline or a cancellation ended the command, and the browser may already
+// have acted.
+export function expired(): never {
+  fail("outcome_unknown", "request deadline reached; observe before retrying");
+}
+// Resolves after ms, or fails with outcome_unknown when the request ends first.
+export async function pause(ms: number, signal: AbortSignal): Promise<void> {
+  const stop = Promise.withResolvers<boolean>();
+  const timer = setTimeout(() => stop.resolve(false), ms);
+  const abort = (): void => stop.resolve(true);
+  if (signal.aborted) abort();
+  else signal.addEventListener("abort", abort, { once: true });
+  const aborted = await stop.promise;
+  clearTimeout(timer);
+  signal.removeEventListener("abort", abort);
+  if (aborted) expired();
+}
+// wait stops polling this long before the request deadline, so that its own
+// answer reaches the daemon before the daemon answers the deadline.
+const waitReserve = 500;
+// Sleeps until wait checks its condition again. wait does not change the page,
+// so a condition that has not held when the reserve begins is a known result.
+export async function nextPoll(budget: Budget): Promise<void> {
+  const left = budget.deadline - waitReserve - Date.now();
+  if (left <= 0) fail("wait_timeout", "the wait condition did not hold before the deadline");
+  await pause(Math.min(75, left), budget.signal);
 }

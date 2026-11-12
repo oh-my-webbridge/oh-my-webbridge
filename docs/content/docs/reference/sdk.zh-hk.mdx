@@ -115,6 +115,7 @@ try {
 | `unsupported`                              | 該瀏覽器沒有這個動作或引數。HTTP 501。                                                     |
 | `busy`                                     | 指令容量已滿。HTTP 429。等執行中的指令完成後重試。                                         |
 | `outcome_unknown`                          | 指令可能已經生效。重試之前，先讀取頁面。HTTP 504。                                         |
+| `wait_timeout`                             | `wait` 的條件在 `timeoutMs` 用完前沒有成立，頁面未變更。HTTP 408。                         |
 | `invalid_args`、`invalid_request`          | 引數在分派之前就被拒絕。HTTP 400。                                                         |
 | `http_error`                               | 回覆不是 JSON，因此缺少 daemon 的錯誤物件。訊息為 `HTTP <status>: <本文的前 200 個字元>`。 |
 

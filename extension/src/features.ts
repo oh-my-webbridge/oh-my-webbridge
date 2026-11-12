@@ -7,9 +7,8 @@ import {
   resetScope,
   selectScope,
 } from "./frames.js";
-import { fail, stringArg, type Args, type JsonObject } from "./protocol.js";
+import { fail, pause, stringArg, type Args, type Budget, type JsonObject } from "./protocol.js";
 
-type Budget = { signal: AbortSignal; check: () => void };
 const logs = new Map<number, { level: string; text: string; timestamp: number }[]>();
 const dialogs = new Map<number, JsonObject>();
 export function observe(tabId: number, method: string, params: JsonObject): void {
@@ -41,19 +40,7 @@ export function forgetObservations(tabId: number): void {
 }
 async function tick(budget: Budget): Promise<void> {
   budget.check();
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(done, 50);
-    function done() {
-      budget.signal.removeEventListener("abort", abort);
-      resolve();
-    }
-    function abort() {
-      clearTimeout(timer);
-      reject(new Error("cancelled"));
-    }
-    budget.signal.addEventListener("abort", abort, { once: true });
-    if (budget.signal.aborted) abort();
-  });
+  await pause(50, budget.signal);
 }
 export async function feature(
   action: string,

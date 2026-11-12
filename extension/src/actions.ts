@@ -26,7 +26,15 @@ import { feature, forgetObservations } from "./features.js";
 import { forgetFrames, resetScope, runtimeDisabled, sessionEnded, topDocument } from "./frames.js";
 import { snowflake } from "./id.js";
 import { forget as forgetNetwork, network } from "./network.js";
-import { fail, stringArg, type Args, type Command, type JsonObject } from "./protocol.js";
+import {
+  fail,
+  nextPoll,
+  stringArg,
+  type Args,
+  type Budget,
+  type Command,
+  type JsonObject,
+} from "./protocol.js";
 import { quadRect } from "./layer.js";
 import { snapshot } from "./snapshot.js";
 import {
@@ -41,7 +49,6 @@ import {
   type Session,
 } from "./state.js";
 
-type Budget = { signal: AbortSignal; check: () => void };
 const streams = new Map<string, { tabId: number; session: string; handle: string }>();
 // Task tabs whose current debugger session carries the session's emulation
 // settings. Chrome drops the overrides with the debugger session, so forgetTab
@@ -124,21 +131,6 @@ function validURL(value: string | undefined): string {
   if (!["http:", "https:"].includes(url.protocol) && url.href !== "about:blank")
     fail("invalid_args", "url must use HTTP(S) or about:blank");
   return url.href;
-}
-async function pause(ms: number, signal: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const done = (): void => {
-      signal.removeEventListener("abort", abort);
-      resolve();
-    };
-    const timer = setTimeout(done, ms);
-    const abort = (): void => {
-      clearTimeout(timer);
-      reject(new Error("request cancelled"));
-    };
-    if (signal.aborted) abort();
-    else signal.addEventListener("abort", abort, { once: true });
-  });
 }
 // Resolves on the tab's next update, on a stopped load in its root session,
 // after ms, or on cancellation. On a busy macOS host the worker's timers can
@@ -923,7 +915,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
           matched = new RegExp(pattern, "u").test(await evaluate<string>(tabId, "location.href"));
         } else fail("invalid_args", "wait requires selector, expression, load, text or url");
         if (matched !== (args.state === "hidden")) return { success: true };
-        await pause(75, budget.signal);
+        await nextPoll(budget);
       }
     }
     case "network":

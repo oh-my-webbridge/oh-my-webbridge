@@ -1,11 +1,13 @@
 import { releaseLayer } from "../activity.js";
-import type { Budget } from "../bridge.js";
 import { presetConfig, type Preset } from "../filters.js";
 import {
   fail,
   fault,
+  nextPoll,
+  pause,
   stringArg,
   type Args,
+  type Budget,
   type Command,
   type Json,
   type JsonObject,
@@ -23,7 +25,7 @@ import { requireSiteAccess } from "./access.js";
 import { cookies } from "./cookies.js";
 import { forgetHeaders, setExtraHeaders } from "./headers.js";
 import { callPage, clearRefs, evaluate, resetScope, scopeOf, selectFrame } from "./inject.js";
-import { createBlank, load, pause, reload, traverse } from "./navigation.js";
+import { createBlank, load, reload, traverse } from "./navigation.js";
 import { forgetNetwork, network } from "./network.js";
 import type { PageArgs, PageFile } from "./page-api.js";
 import { configurePreset, forgetPreset, presetCurrent, presetStatus } from "./presets.js";
@@ -415,7 +417,7 @@ export async function execute(command: Command, budget: Budget): Promise<object>
             ? !!(await evaluate(tabId, args.expression))
             : record(await callPage(tabId, "wait", pageArgs(args)), action).matched === true;
         if (matched !== (args.state === "hidden")) return { success: true };
-        await pause(75, budget.signal);
+        await nextPoll(budget);
       }
     }
     case "keyboard": {

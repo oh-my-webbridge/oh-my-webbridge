@@ -26,11 +26,17 @@ async function fixture(t, options = owned) {
     t.name,
   );
   // Like bridge.ts, check fails once the request is cancelled.
-  const run = (action, args, signal = new AbortController().signal) =>
+  const run = (
+    action,
+    args,
+    signal = new AbortController().signal,
+    deadline = Date.now() + 30000,
+  ) =>
     m.execute(
       { session: "task", action, args },
       {
         signal,
+        deadline,
         check: () => {
           if (signal.aborted)
             throw {
@@ -213,6 +219,23 @@ test("wait polls the page condition and honours state:hidden", async (t) => {
     success: true,
   });
   assert.deepEqual(answers, []);
+});
+
+test("wait reports wait_timeout before the deadline and outcome_unknown when cancelled", async (t) => {
+  const f = await fixture(t, {
+    ...owned,
+    page: async () => ({ ok: true, value: { matched: false } }),
+  });
+  const deadline = Date.now() + 800;
+  await assert.rejects(f.run("wait", { url: "*nomatch*" }, undefined, deadline), {
+    code: "wait_timeout",
+  });
+  assert.ok(Date.now() < deadline, "wait answers before the request deadline");
+  const abort = new AbortController();
+  const pending = f.run("wait", { selector: "#nope" }, abort.signal);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  abort.abort();
+  await assert.rejects(pending, { code: "outcome_unknown" });
 });
 
 test("emulate adds request headers and reports every other field as unsupported", async (t) => {

@@ -111,7 +111,7 @@ The token is 32 random bytes in hex, the same value that `config.json` holds. It
 ## call
 
 ```sh
-omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]
+omw call [--browser chrome|firefox] [--timeout-ms N] SESSION ACTION [JSON|-]
 ```
 
 Sends one action to the daemon and prints its JSON reply. The session name is 1 to 96 letters (including CJK), digits, `_`, `.` or `-`. `ACTION` is one of the actions in the [action reference](./actions.mdx).
@@ -125,7 +125,15 @@ echo '{"selector":"#submit"}' | omw call --browser firefox form click -
 
 `--browser` sends the action to the named browser. Without it the daemon routes by the session binding, then the only connected browser, then Chrome.
 
-The client waits up to 125 seconds. The daemon applies the command's own deadline, which defaults to 30 seconds. The reply is printed as the daemon sends it. An HTTP status of 400 or above makes the command exit with status 1 after printing the reply.
+`--timeout-ms` sets the command deadline, 1 to 120000 milliseconds, as `timeoutMs` does in the request body. Without it the deadline is 30 seconds.
+
+```sh
+omw call --timeout-ms 5000 research wait '{"selector":"#done"}'
+```
+
+Flags come before the session name. Put `--` before a session name that starts with `-`.
+
+The client waits up to 125 seconds. The reply is printed as the daemon sends it. An HTTP status of 400 or above makes the command exit with status 1 after printing the reply.
 
 ## service install
 

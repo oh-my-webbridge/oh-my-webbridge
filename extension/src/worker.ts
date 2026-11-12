@@ -8,12 +8,12 @@ import {
   startActivity,
   withoutLayer,
 } from "./activity.js";
-import { emit, startBridge, type Budget } from "./bridge.js";
+import { emit, startBridge } from "./bridge.js";
 import { clearRefs, detached, onNode, rawEventTabs, refEvent, releaseInherited } from "./cdp.js";
 import { startIndicator } from "./indicator.js";
 import { paintChrome } from "./layer.js";
 import { event as networkEvent } from "./network.js";
-import { fault, type Command, type Hello, type JsonObject } from "./protocol.js";
+import { fault, type Budget, type Command, type Hello, type JsonObject } from "./protocol.js";
 import { currentTab, initSessions, removed, removedGroup, sessionNames } from "./state.js";
 import { topDocument } from "./frames.js";
 import { frameEvent, resetScope } from "./frames.js";

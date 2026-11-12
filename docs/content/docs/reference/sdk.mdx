@@ -113,6 +113,7 @@ try {
 | `unsupported`                              | The action or argument is not available in that browser. HTTP 501.                                                                   |
 | `busy`                                     | Command capacity is full. HTTP 429. Retry after a running command finishes.                                                          |
 | `outcome_unknown`                          | The command may have taken effect. Read the page before retrying. HTTP 504.                                                          |
+| `wait_timeout`                             | The `wait` condition did not hold before `timeoutMs` ran out. The page is unchanged. HTTP 408.                                       |
 | `invalid_args`, `invalid_request`          | The arguments were rejected before dispatch. HTTP 400.                                                                               |
 | `http_error`                               | The reply was not JSON, so the daemon's error object is missing. The message is `HTTP <status>: <first 200 characters of the body>`. |
 

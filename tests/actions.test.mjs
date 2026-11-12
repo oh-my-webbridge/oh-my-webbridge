@@ -228,7 +228,7 @@ async function sessionFixture(
   const run = (action, args) =>
     m.execute(
       { session: "task", action, args },
-      { signal: new AbortController().signal, check: () => {} },
+      { signal: new AbortController().signal, check: () => {}, deadline: Date.now() + 30000 },
     );
   const cancel = async (action, args) => {
     const abort = new AbortController();
@@ -744,7 +744,10 @@ async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
     ].join("\n"),
   );
   const run = (session, action, args = {}, check = () => {}) =>
-    m.execute({ session, action, args }, { signal: new AbortController().signal, check });
+    m.execute(
+      { session, action, args },
+      { signal: new AbortController().signal, check, deadline: Date.now() + 30000 },
+    );
   const borrow = (session) => run(session, "find_tab", { url: tab.url, active: true });
   // chrome.debugger.onDetach as worker.ts handles it.
   const debuggerDetached = (tabId) => {
@@ -753,6 +756,59 @@ async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
   };
   return { m, run, borrow, calls, saved, access, debuggerDetached, tab };
 }
+
+// A budget like the one bridge.ts builds: the signal aborts at the deadline and
+// check fails with outcome_unknown once it has.
+function deadlineBudget(t, ms) {
+  const abort = new AbortController();
+  const deadline = Date.now() + ms;
+  const timer = setTimeout(() => abort.abort(), ms);
+  t.after(() => clearTimeout(timer));
+  return {
+    abort,
+    deadline,
+    budget: {
+      signal: abort.signal,
+      deadline,
+      check: () => {
+        if (abort.signal.aborted || Date.now() >= deadline)
+          throw { code: "outcome_unknown", message: "request deadline reached" };
+      },
+    },
+  };
+}
+
+test("wait returns when its condition holds", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  // location.href evaluates to the fixture's string reply.
+  assert.deepEqual(await f.run("task", "wait", { url: "user*" }), { success: true });
+});
+
+test("wait reports wait_timeout before the deadline when its condition never holds", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  for (const args of [{ url: "*nomatch*" }, { url: "user*", state: "hidden" }]) {
+    const { deadline, budget } = deadlineBudget(t, 800);
+    await assert.rejects(f.m.execute({ session: "task", action: "wait", args }, budget), {
+      code: "wait_timeout",
+    });
+    assert.ok(Date.now() < deadline, "wait answers before the request deadline");
+  }
+});
+
+test("a cancelled wait fails with outcome_unknown while it sleeps between polls", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  const { abort, budget } = deadlineBudget(t, 30000);
+  const pending = f.m.execute(
+    { session: "task", action: "wait", args: { url: "*nomatch*" } },
+    budget,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  abort.abort();
+  await assert.rejects(pending, { code: "outcome_unknown" });
+});
 
 test("a released borrowed tab keeps no frame selection for the next session", async (t) => {
   const f = await borrowFixture(t);

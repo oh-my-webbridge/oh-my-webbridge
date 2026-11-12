@@ -29,7 +29,7 @@ Every oh-my-webbridge command names a session, an action and a JSON object of ar
 
 - **JavaScript.** `evaluate` takes an expression, not a function. Send `document.title`, or wrap the function in a call: `(() => document.title)()`. Code that uses `await` goes in an async function call: `(async () => (await fetch("/api")).status)()`.
 - **Files.** `screenshot` and `save_as_pdf` take an absolute `path` and return it. They do not overwrite an existing file.
-- **Deadlines.** A command fails after 30 seconds by default. The HTTP body field `timeoutMs` sets 1 to 120000 milliseconds.
+- **Deadlines.** A command fails after 30 seconds by default. The HTTP body field `timeoutMs`, or `--timeout-ms` in `omw call`, sets 1 to 120000 milliseconds. A `wait` that runs out of time fails with `wait_timeout`.
 - **Firefox.** Some actions answer `unsupported` in Firefox. See [Firefox](./firefox.mdx).
 
 ## From the Kimi browser extension
@@ -74,7 +74,7 @@ These actions keep their names and arguments: `navigate`, `find_tab`, `list_tabs
 | `snapshot` with `ref`, `interactive`                  | `snapshot` with `interactive`, `maxDepth`. References use a new format.                           |
 | `read_page` with `cursor`                             | `read_page` returns the first 192000 characters and takes no cursor.                              |
 | `wait` with `text_gone`                               | `wait` with `text` and `"state": "hidden"`                                                        |
-| `wait` with `timeout_ms`                              | `timeoutMs` in the request body                                                                   |
+| `wait` with `timeout_ms`                              | `timeoutMs` in the request body, or `--timeout-ms` in `omw call`                                  |
 | `dialog` with `"action": "accept"`                    | `dialog` with `"accept": true`; `text` becomes `promptText`                                       |
 | `dialog` with `"action": "dismiss"`                   | `dialog` with `"accept": false`                                                                   |
 | `dialog` with `"action": "status"`                    | `dialog_status`                                                                                   |

@@ -111,7 +111,7 @@ token 是以十六進位表示的 32 個隨機位元組，與 `config.json` 保�
 ## call [#call]
 
 ```sh
-omw call [--browser chrome|firefox] SESSION ACTION [JSON|-]
+omw call [--browser chrome|firefox] [--timeout-ms N] SESSION ACTION [JSON|-]
 ```
 
 對 daemon 送出一個動作，並印出它的 JSON 回覆。工作階段名稱由 1 到 96 個字元組成，可用字母（包括 CJK）、數字、`_`、`.` 或 `-`。`ACTION` 是[動作參考](./actions.mdx)中的其中一個動作。
@@ -125,7 +125,15 @@ echo '{"selector":"#submit"}' | omw call --browser firefox form click -
 
 `--browser` 把動作送往指定的瀏覽器。省略時，daemon 依序依據工作階段綁定、唯一已連線的瀏覽器、Chrome 來路由。
 
-用戶端最多等待 125 秒。daemon 套用指令自己的期限，預設為 30 秒。回覆照 daemon 送出的內容印出。HTTP 狀態碼為 400 或以上時，指令在印出回覆後以狀態碼 1 結束。
+`--timeout-ms` 設定指令的期限，範圍 1 到 120000 毫秒，與請求本文中的 `timeoutMs` 相同。省略時期限為 30 秒。
+
+```sh
+omw call --timeout-ms 5000 research wait '{"selector":"#done"}'
+```
+
+旗標放在工作階段名稱之前。工作階段名稱以 `-` 開頭時，在它前面加上 `--`。
+
+用戶端最多等待 125 秒。回覆照 daemon 送出的內容印出。HTTP 狀態碼為 400 或以上時，指令在印出回覆後以狀態碼 1 結束。
 
 ## service install [#service-install]
 

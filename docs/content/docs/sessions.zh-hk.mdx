@@ -80,7 +80,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 逾時與結果不確定 [#timeouts-and-uncertain-results]
 
-`timeoutMs` 涵蓋整個請求，包括在工作階段佇列中等待的時間。時間用完，或指令執行到一半時瀏覽器中斷連線，呼叫會回傳 `outcome_unknown`。此時動作可能已經送達頁面：點擊可能已經發生，表單可能已經送出。
+`timeoutMs` 涵蓋整個請求，包括在工作階段佇列中等待的時間。條件未成立的 `wait` 則會在期限前稍早以 `wait_timeout` 失敗，它不會變更頁面。時間用完，或指令執行到一半時瀏覽器中斷連線，呼叫會回傳 `outcome_unknown`。此時動作可能已經送達頁面：點擊可能已經發生，表單可能已經送出。
 
 <Callout type="warn" title="收到 outcome_unknown 後重試">
   重新使用指令之前，請先觀察頁面。`snapshot`、`read_page`、分頁 URL、`get`

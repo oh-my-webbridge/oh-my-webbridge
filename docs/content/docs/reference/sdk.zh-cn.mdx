@@ -115,6 +115,7 @@ try {
 | `unsupported`                              | 该浏览器没有这个动作或参数。HTTP 501。                                                     |
 | `busy`                                     | 命令容量已满。HTTP 429。等运行中的命令完成后重试。                                         |
 | `outcome_unknown`                          | 命令可能已经生效。重试之前，先读取页面。HTTP 504。                                         |
+| `wait_timeout`                             | `wait` 的条件在 `timeoutMs` 用完前没有成立，页面未变更。HTTP 408。                         |
 | `invalid_args`、`invalid_request`          | 参数在分派之前就被拒绝。HTTP 400。                                                         |
 | `http_error`                               | 回复不是 JSON，因此缺少 daemon 的错误对象。消息为 `HTTP <status>: <本文的前 200 个字符>`。 |
 
