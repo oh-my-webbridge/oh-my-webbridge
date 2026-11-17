@@ -112,7 +112,7 @@ systemctl --user disable --now oh-my-webbridge.service
 
 ## 安装 Agent 技能 [#install-the-agent-skill]
 
-`omw install-skill DIR` 会写入 `DIR/oh-my-webbridge/SKILL.md`，并复制内置于可执行文件的指南。它拒绝覆写既有文件，所以重新安装前请先删除旧文件。`omw skill` 会输出同一份指南。这份指南告诉 Agent 要运行哪些命令、会话与标签页拥有权如何运行，以及可能遇到哪些错误。
+`omw install-skill DIR` 将指南和同版本的参考文档安装到 `DIR/oh-my-webbridge/`。更新 CLI 后，运行 `omw install-skill --refresh DIR` 更新这些文件，其他文件会保留。`omw skill` 输出入口指南。
 
 ## 第一批命令 [#first-commands]
 
