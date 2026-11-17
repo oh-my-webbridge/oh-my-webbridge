@@ -10,6 +10,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 )
@@ -92,6 +93,23 @@ func (in *inlining) command(cmd *Command) error {
 	if json.Unmarshal(cmd.Args, &args) != nil || json.Unmarshal(args["steps"], &steps) != nil {
 		return nil
 	}
+	if len(steps) < 1 || len(steps) > 64 {
+		return nil
+	}
+	// Keep malformed batches unchanged for the browser's step diagnostics.
+	// In particular, do not read an earlier upload before checking later steps.
+	for _, step := range steps {
+		var action string
+		if json.Unmarshal(step["action"], &action) != nil || strings.TrimSpace(action) == "" {
+			return nil
+		}
+		if raw, ok := step["args"]; ok {
+			var object map[string]json.RawMessage
+			if json.Unmarshal(raw, &object) != nil || object == nil {
+				return nil
+			}
+		}
+	}
 	changed := false
 	for i, step := range steps {
 		var action string
@@ -105,7 +123,7 @@ func (in *inlining) command(cmd *Command) error {
 		out, err := in.files(raw)
 		if err != nil {
 			e := fault(err)
-			return &Fault{e.Code, fmt.Sprintf("batch step %d: %s", i, e.Message)}
+			return &Fault{e.Code, fmt.Sprintf("batch step %d of %d (upload): %s", i+1, len(steps), e.Message)}
 		}
 		step["args"] = out
 		changed = true
