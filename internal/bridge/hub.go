@@ -185,6 +185,7 @@ type BrowserStatus struct {
 	ExtensionVersion string `json:"extensionVersion,omitempty"`
 	Protocol         int    `json:"protocol,omitempty"`
 	Compatibility    string `json:"compatibility,omitempty"`
+	rejectedAt       time.Time
 }
 
 type Hub struct {
@@ -244,25 +245,30 @@ func (h *Hub) Browsers() []BrowserStatus {
 				compat = "compatible-skew"
 			}
 			out = append(out, BrowserStatus{Browser: browser, BrowserVersion: l.version, Connected: true, Protocol: Protocol, ExtensionVersion: l.extensionVersion, Compatibility: compat})
-		} else if status, ok := h.rejected[browser]; ok {
+		} else if status, ok := h.rejected[browser]; ok && time.Since(status.rejectedAt) < time.Minute {
 			out = append(out, status)
 		}
 	}
 	return out
 }
 
-// Attach registers one browser connection, answers its hello and serves it
-// until it closes. A second connection for an already connected browser is
-// refused; the other browser's connection is unaffected.
+// A rejected peer retries within 36 seconds. Expire the observation when
+// those retries stop so a closed browser returns to its offline status.
 func (h *Hub) rejectProtocol(browser string, peer Packet) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.links[browser] != nil {
+		return
+	}
 	if h.rejected == nil {
 		h.rejected = make(map[string]BrowserStatus)
 	}
-	h.rejected[browser] = BrowserStatus{Browser: browser, BrowserVersion: peer.BrowserVersion, Protocol: peer.Protocol, ExtensionVersion: peer.ExtensionVersion, Compatibility: "incompatible-protocol"}
+	h.rejected[browser] = BrowserStatus{Browser: browser, BrowserVersion: peer.BrowserVersion, Protocol: peer.Protocol, ExtensionVersion: peer.ExtensionVersion, Compatibility: "incompatible-protocol", rejectedAt: time.Now()}
 }
 
+// Attach registers one browser connection, answers its hello and serves it
+// until it closes. A second connection for an already connected browser is
+// refused; the other browser's connection is unaffected.
 func (h *Hub) Attach(ctx context.Context, c *websocket.Conn, browser string, peer Packet) error {
 	l := &link{browser: browser, version: peer.BrowserVersion, extensionVersion: peer.ExtensionVersion, conn: c, closed: make(chan struct{})}
 	h.mu.Lock()

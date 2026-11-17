@@ -1,4 +1,4 @@
-import { validToken, type PeerVersions } from "@ext/status.ts";
+import { peerMessage, validToken } from "@ext/status.ts";
 import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
@@ -109,20 +109,6 @@ function TokenRow(): React.ReactElement {
       </form>
     </div>
   );
-}
-
-function peerMessage(versions: PeerVersions) {
-  switch (versions.compatibility) {
-    case "same-release":
-      return "peerSame";
-    case "compatible-skew":
-      return "peerSkew";
-    case "unknown-release":
-      return "peerUnknown";
-    case "incompatible-protocol":
-      if (versions.protocol === undefined) return "peerMatchReleases";
-      return versions.protocol > 1 ? "peerUpdateExtension" : "peerUpdateDaemon";
-  }
 }
 
 export function Settings(): React.ReactElement {

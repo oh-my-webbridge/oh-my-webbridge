@@ -56,6 +56,17 @@ func TestReleaseCompatibilityPerBrowser(t *testing.T) {
 	}
 }
 
+func TestExpiredProtocolRejection(t *testing.T) {
+	h := &Hub{}
+	h.rejectProtocol(Firefox, Packet{Protocol: Protocol + 1})
+	last := h.rejected[Firefox]
+	last.rejectedAt = time.Now().Add(-2 * time.Minute)
+	h.rejected[Firefox] = last
+	if browsers := h.Browsers(); len(browsers) != 0 {
+		t.Fatalf("stale rejection still visible: %+v", browsers)
+	}
+}
+
 func newServer(t *testing.T, c config.Config) (*Server, *httptest.Server) {
 	t.Helper()
 	c.Token = strings.Repeat("a", 64)
