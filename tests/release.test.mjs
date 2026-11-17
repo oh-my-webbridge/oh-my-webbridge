@@ -385,6 +385,7 @@ test("published build inputs require fragments while internal docs do not", asyn
   for (const file of [
     "scripts/archive.mjs",
     "scripts/compile-filters.mjs",
+    "docs/content/docs/reference/actions.mdx",
     "scripts/release-assets.mjs",
     "go.mod",
     "go.sum",
