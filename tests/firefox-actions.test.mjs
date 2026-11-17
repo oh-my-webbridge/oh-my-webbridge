@@ -51,7 +51,12 @@ async function fixture(t, options = owned) {
 
 test("Firefox borrows only the designated public tab and leaves it open", async (t) => {
   const url = "https://example.test/form";
-  const f = await fixture(t, { tabs: [{ id: 5, url }, { id: 6, url, incognito: true }] });
+  const f = await fixture(t, {
+    tabs: [
+      { id: 5, url },
+      { id: 6, url, incognito: true },
+    ],
+  });
   await assert.rejects(f.run("borrow_tab", { tabId: 6 }), { code: "restricted_tab" });
   assert.equal((await f.run("borrow_tab", { url })).tabId, 5);
   await f.run("close_session", {});
