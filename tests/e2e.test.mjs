@@ -767,6 +767,20 @@ test(
         const external = await context.newPage();
         await external.goto(url);
         await external.bringToFront();
+        const background = await context.newPage();
+        const backgroundURL = `${url}?designated=1`;
+        await background.goto(backgroundURL);
+        await external.bringToFront();
+        const selected = await call("borrow_tab", { url: backgroundURL }, "designated");
+        assert.equal(selected.borrowed, true);
+        assert.equal(await value("location.href", "designated"), backgroundURL);
+        assert.equal(await external.evaluate(() => document.visibilityState), "visible");
+        await assert.rejects(call("borrow_tab", { tabId: selected.tabId }, "conflict"), {
+          code: "tab_busy",
+        });
+        await call("close_session", {}, "designated");
+        assert.equal(background.isClosed(), false);
+        await background.close();
         const borrowed = await call("find_tab", { url, active: true }, "borrowed");
         assert.equal(borrowed.borrowed, true);
         await call("close_session", {}, "borrowed");
