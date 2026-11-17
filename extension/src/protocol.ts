@@ -6,6 +6,8 @@ export type Args = {
   environment?: boolean;
   zen?: { images?: boolean; fonts?: boolean; css?: boolean; javascript?: boolean };
   url?: string;
+  offset?: number;
+  pageSize?: number;
   newTab?: boolean;
   group_title?: string;
   active?: boolean;

@@ -743,6 +743,7 @@ async function borrowFixture(t, { stored = {}, inherited = [] } = {}) {
     t,
     [
       'export { debuggerDetached, execute } from "./extension/src/actions.ts";',
+      'export { readChunk, readRange } from "./extension/src/page-read.ts";',
       'export { detached, refEvent } from "./extension/src/cdp.ts";',
       'export { frameEvent, resetScope } from "./extension/src/frames.ts";',
       'export { event as networkEvent } from "./extension/src/network.ts";',
@@ -1297,6 +1298,18 @@ test("a network recording stays in the session of the frame selected at start", 
   assert.equal(sessionOf("Network.getResponseBody"), "oopif-session");
   await f.run("task", "network", { cmd: "stop" });
   assert.equal(sessionOf("Network.disable"), "oopif-session");
+});
+
+test("bounded reads preserve surrogate pairs across the default response limit", async (t) => {
+  const { m: { readChunk, readRange } } = await borrowFixture(t);
+  const text = "a".repeat(191999) + "🌙z";
+  const first = readChunk(text, ...readRange({}));
+  assert.equal(first.nextOffset, 191999);
+  assert.equal(first.complete, false);
+  assert.deepEqual(readChunk(text, first.nextOffset, 2), { text: "🌙", complete: false, nextOffset: 192001 });
+  assert.deepEqual(readChunk(text, text.length + 1, 2), { text: "", complete: true, nextOffset: null });
+  for (const args of [{ pageSize: 1 }, { pageSize: 192001 }, { offset: -1 }])
+    assert.throws(() => readRange(args), { code: "invalid_args" });
 });
 
 test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {

@@ -40,6 +40,7 @@ import {
   type JsonObject,
 } from "./protocol.js";
 import { quadRect } from "./layer.js";
+import { readChunk, readRange } from "./page-read.js";
 import { snapshot } from "./snapshot.js";
 import {
   assertOwner,
@@ -769,11 +770,13 @@ async function run(command: Command, budget: Budget): Promise<object> {
         title: (await chrome.tabs.get(tabId)).title,
         ...(await snapshot(tabId, args)),
       };
-    case "read_page":
+    case "read_page": {
+      const [offset, size] = readRange(args);
       return evaluate(
         tabId,
-        "({url:location.href,title:document.title,text:document.body.innerText.slice(0,192000)})",
+        `({url:location.href,title:document.title,...(${readChunk.toString()})(document.body?.innerText ?? "",${offset},${size})})`,
       );
+    }
     case "find": {
       const query = stringArg(args.query, "query").toLocaleLowerCase();
       const snap = await snapshot(tabId, args);

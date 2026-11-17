@@ -399,6 +399,17 @@ test("snapshot derives roles, names, values and states in Chrome's line format",
   assert.equal(page.url, tab.url);
   assert.equal(page.title, "Snapshot fixture");
   assert.match(page.text, /Main heading/u);
+  assert.equal(page.complete, true);
+  assert.equal(page.nextOffset, null);
+  const part = await ok(tab, "read_page", { pageSize: 8 });
+  assert.equal(part.complete, false);
+  assert.equal(
+    part.text + (await ok(tab, "read_page", { offset: part.nextOffset })).text,
+    page.text,
+  );
+  const navigation = await ok(tab, "snapshot", { selector: "nav" });
+  assert.match(navigation.tree, /navigation "Primary"/u);
+  assert.doesNotMatch(navigation.tree, /Main heading/u);
   const found = await ok(tab, "find", { query: "BUTTON" });
   assert.equal(found.truncated, false);
   assert.deepEqual(

@@ -383,8 +383,17 @@ test(
       await call("wait", { selector: "#result" });
       await call("hover", { selector: "#submit" });
       assert.match((await call("read_page")).text, /Bridge fixture/);
+      const prefix = await call("read_page", { pageSize: 8 });
+      assert.equal(prefix.complete, false);
+      const rest = await call("read_page", { offset: prefix.nextOffset });
+      assert.equal(rest.complete, true);
+      assert.equal(prefix.text + rest.text, (await call("read_page")).text);
+      const scoped = await call("snapshot", { selector: "#submit" });
+      assert.match(scoped.tree, /button/);
+      assert.doesNotMatch(scoped.tree, /RootWebArea/);
       assert.ok((await call("find", { query: "Record click" })).matches.length);
       await call("navigate", { url: `${url}?again=1` });
+      assert.equal((await call("read_page", { offset: prefix.nextOffset })).url, `${url}?again=1`);
       await assert.rejects(call("click", { selector: ref }), { code: "stale_ref" });
     });
     await verify("controlled tabs show the activity layer, favicon and toolbar state", async () => {

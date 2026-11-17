@@ -1,5 +1,5 @@
-import { addRef, clearRefs, enablePageEvents, send } from "./cdp.js";
-import type { Args } from "./protocol.js";
+import { addRef, clearRefs, enablePageEvents, node, send } from "./cdp.js";
+import { fail, type Args } from "./protocol.js";
 import { scopes } from "./frames.js";
 import { snowflake } from "./id.js";
 
@@ -20,11 +20,17 @@ export async function snapshot(
   const scope = scopes.get(tabId);
   // The references expire on the main frame's Page.frameNavigated (refEvent).
   await enablePageEvents(tabId);
+  const selected = options.selector ? await node(tabId, options.selector) : undefined;
   const result = await send<{ nodes: AXNode[] }>(
     tabId,
     "Accessibility.getFullAXTree",
     scope ? { frameId: scope.frameId } : {},
   );
+  const root = selected
+    ? result.nodes.find((n) => n.backendDOMNodeId === selected.backendNodeId)
+    : result.nodes[0];
+  if (selected && !root)
+    fail("element_missing", "snapshot root is absent from the accessibility tree");
   clearRefs(tabId);
   const generation = snowflake();
   const byId = new Map(result.nodes.map((n) => [n.nodeId, n]));
@@ -71,6 +77,6 @@ export async function snapshot(
     }
     for (const child of n.childIds ?? []) visit(child, depth + (n.ignored ? 0 : 1));
   };
-  if (result.nodes[0]) visit(result.nodes[0].nodeId, 0);
+  if (root) visit(root.nodeId, 0);
   return { tree: lines.join("\n"), truncated };
 }
