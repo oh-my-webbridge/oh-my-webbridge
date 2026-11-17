@@ -84,7 +84,7 @@ description: oh-my-webbridge 與其他讓 Agent 使用瀏覽器的工具有哪�
 - **Agent 只透過 MCP 呼叫工具。** Playwright MCP、Browser MCP、Chrome DevTools MCP、agent-browser、PinchTab 與 Playwriter 可作為 MCP 伺服器執行。oh-my-webbridge 沒有 MCP 伺服器；Agent 依技能說明執行 `omw call`。
 - **Windows。** Kimi 瀏覽器擴充功能、Playwright MCP、Chrome DevTools MCP、agent-browser、Claude in Chrome 與 OpenCLI 桌面應用程式支援 Windows。Playwriter 支援 WSL，PinchTab 發布有限支援的 Windows 執行檔。oh-my-webbridge 在 macOS 與 Linux 上執行。
 - **Microsoft Edge。** Kimi 瀏覽器擴充功能、Browser MCP 與加上 `--extension` 的 Playwright MCP 可在 Edge 中使用。oh-my-webbridge 支援 Chrome 與 Firefox。
-- **從擴充功能商店安裝。** Kimi、Browser MCP、Playwright MCP、OpenCLI 與 Claude in Chrome 的擴充功能從 Chrome 線上應用程式商店安裝並自動更新。oh-my-webbridge 的擴充功能在 Chrome 中以未封裝資料夾載入，在 Firefox 中要經過簽署才會在重新啟動後保留。
+- **從擴充功能商店安裝。** oh-my-webbridge 已在 Chrome 線上應用程式商店和 Firefox 附加元件商店上架。兩個商店都會更新瀏覽器擴充功能。daemon 需另外安裝與更新。請參閱[開始使用](./getting-started.mdx#install-the-extension)。
 - **同時連接多個瀏覽器設定檔。** 一個 Browser MCP daemon 最多連接 8 個瀏覽器或 Chrome 設定檔。oh-my-webbridge 的 daemon 接受一個 Chrome 連線與一個 Firefox 連線。
 - **每個任務使用獨立的 cookie。** agent-browser 的工作階段、PinchTab 的設定檔、Playwright MCP 的 `--isolated` 與 `isolatedContext`，以及 Chrome DevTools MCP 的 `isolatedContext` 會分開 cookie。oh-my-webbridge 的所有工作階段共用瀏覽器設定檔。
 - **沒有桌面瀏覽器**，例如在 CI 中。agent-browser、Playwright MCP、Chrome DevTools MCP 與 PinchTab 會啟動自己的瀏覽器，需要時以無頭模式執行。oh-my-webbridge 需要一個已安裝擴充功能且正在執行的 Chrome 或 Firefox。

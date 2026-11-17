@@ -10,6 +10,18 @@ Firefox 版本是适用于 Firefox 153 以上的 MV3 扩展程序。它与同一
 
 ## 安装 [#install]
 
+<Card
+  title="从 Firefox 附加组件商店安装"
+  description="将已签章的扩展程序加到 Firefox。"
+  href="https://addons.mozilla.org/en-US/firefox/addon/oh-my-webbridge/"
+  external
+/>
+
+Firefox 打开初始设置页面后，请[与本机 daemon 配对](#pairing-and-permissions)。
+
+<Accordions>
+<Accordion title="开发或自行发布时手动安装" id="manual-installation">
+
 每个发布版本有两个 Firefox 文件。请都以 `SHA256SUMS` 核对。
 
 - `omw-<version>-firefox-mv3.tar.zst` 内含扩展程序目录。以 `zstd -dc archive.tar.zst | tar -xf - -C <directory>` 解开。
@@ -35,6 +47,9 @@ Firefox 正式版与 Beta 版只安装由 Mozilla 签章的扩展程序。已签
 AMO 会在签章前验证每次提交。签章最多可能需要 24 小时，而且每个版本都需要各自的签章。
 
 Firefox ESR、Developer Edition、Nightly 与未加品牌的构建版本，在 `about:config` 中 `xpinstall.signatures.required` 为 `false` 时，可安装未签章的 `.xpi`。
+
+</Accordion>
+</Accordions>
 
 ## 配对与权限 [#pairing-and-permissions]
 

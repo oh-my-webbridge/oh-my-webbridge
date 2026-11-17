@@ -8,6 +8,18 @@ The Firefox build is an MV3 extension for Firefox 153 and later. It pairs with t
 
 ## Install
 
+<Card
+  title="Install from Firefox Add-ons"
+  description="Add the signed extension to Firefox."
+  href="https://addons.mozilla.org/en-US/firefox/addon/oh-my-webbridge/"
+  external
+/>
+
+Once Firefox opens the setup page, [pair it with the local daemon](#pairing-and-permissions).
+
+<Accordions>
+<Accordion title="Manual installation for development or self-distribution" id="manual-installation">
+
 Each release has two Firefox files. Check both against `SHA256SUMS`.
 
 - `omw-<version>-firefox-mv3.tar.zst` holds the extension directory. Extract it with `zstd -dc archive.tar.zst | tar -xf - -C <directory>`.
@@ -33,6 +45,9 @@ Firefox Release and Beta install only extensions signed by Mozilla. A signed ext
 AMO validates each submission before it signs it. Signing can take up to 24 hours, and each version needs its own signature.
 
 Firefox ESR, Developer Edition, Nightly and unbranded builds install the unsigned `.xpi` when `xpinstall.signatures.required` is `false` in `about:config`.
+
+</Accordion>
+</Accordions>
 
 ## Pairing and permissions
 

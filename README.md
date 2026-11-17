@@ -49,8 +49,8 @@ A local daemon and a browser extension that let an agent work in the Chrome or F
 
 ## Install
 
-1. Download the daemon and the extension from [Releases](https://github.com/oh-my-webbridge/oh-my-webbridge/releases/latest).
-2. Load the extension in Chrome or Firefox. Its setup page shows the `omw start` and `omw pair` steps.
+1. Download the daemon from [Releases](https://github.com/oh-my-webbridge/oh-my-webbridge/releases/latest).
+2. Install the extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/gfhmonnkmdapbocacedanaplhgkofebi) or [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/oh-my-webbridge/). The setup page shows the `omw start` and `omw pair` steps.
 3. Install the agent skill with `omw install-skill ~/.agents/skills`, then give your agent a browser task.
 
 [Getting started](https://oh-my-webbridge.github.io/en/getting-started/) covers each step and building from source. Scripts can use `omw call` or the [JavaScript SDK](https://oh-my-webbridge.github.io/en/reference/sdk/).

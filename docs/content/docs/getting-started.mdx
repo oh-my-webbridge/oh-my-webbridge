@@ -44,18 +44,50 @@ go build -trimpath -ldflags='-s -w' -o dist/omw ./cmd/omw
 
 ## Install the extension
 
-<Tabs items={["Chrome", "Firefox"]}>
-<Tab value="Chrome">
+<Cards>
+  <Card
+    title="Chrome Web Store"
+    description="Add oh-my-webbridge to Chrome."
+    href="https://chromewebstore.google.com/detail/gfhmonnkmdapbocacedanaplhgkofebi"
+    external
+  />
+  <Card
+    title="Firefox Add-ons"
+    description="Add oh-my-webbridge to Firefox."
+    href="https://addons.mozilla.org/en-US/firefox/addon/oh-my-webbridge/"
+    external
+  />
+</Cards>
 
-Unpack `omw-<version>-chrome-mv3.tar.zst` into a folder. Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and select that folder; the manifest sits at the archive root. A source build loads `dist/extension` the same way.
+Store installs receive extension updates through the browser. Update the local `omw` daemon separately from the [GitHub release](https://github.com/oh-my-webbridge/oh-my-webbridge/releases).
 
-</Tab>
-<Tab value="Firefox">
+<Accordions>
+<Accordion title="Load a Chrome build manually">
 
-Unpack `omw-<version>-firefox-mv3.tar.zst`. Open `about:debugging`, choose **This Firefox** and **Load Temporary Add-on…**, then pick `manifest.json` in the unpacked folder. Firefox drops temporary extensions when it restarts. A permanent install needs a signature from addons.mozilla.org in self-distribution mode; submit `omw-<version>-firefox-mv3-unsigned.xpi` there. A source build loads `dist/extension-firefox`.
+<Steps>
+<Step>
 
-</Tab>
-</Tabs>
+#### Prepare the extension folder
+
+Extract `omw-<version>-chrome-mv3.tar.zst` after checking it against `SHA256SUMS`, or use `dist/extension` from a source build. The folder contains `manifest.json` at its root.
+
+</Step>
+<Step>
+
+#### Load the folder in Chrome
+
+Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, and select the extension folder.
+
+</Step>
+</Steps>
+
+</Accordion>
+<Accordion title="Load a Firefox build manually">
+
+Follow the [temporary or self-distributed installation steps](./firefox.mdx#manual-installation). Temporary add-ons are removed when Firefox exits.
+
+</Accordion>
+</Accordions>
 
 ## Set up the browser
 

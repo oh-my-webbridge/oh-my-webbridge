@@ -46,18 +46,50 @@ go build -trimpath -ldflags='-s -w' -o dist/omw ./cmd/omw
 
 ## 安装扩展程序 [#install-the-extension]
 
-<Tabs items={["Chrome", "Firefox"]}>
-<Tab value="Chrome">
+<Cards>
+  <Card
+    title="Chrome 在线应用程序商店"
+    description="将 oh-my-webbridge 加到 Chrome。"
+    href="https://chromewebstore.google.com/detail/gfhmonnkmdapbocacedanaplhgkofebi"
+    external
+  />
+  <Card
+    title="Firefox 附加组件"
+    description="将 oh-my-webbridge 加到 Firefox。"
+    href="https://addons.mozilla.org/en-US/firefox/addon/oh-my-webbridge/"
+    external
+  />
+</Cards>
 
-把 `omw-<version>-chrome-mv3.tar.zst` 解开到一个文件夹。打开 `chrome://extensions`，打开“开发人员模式”，选择**加载未封装项目**，再选取该文件夹；manifest 位于封存盘根目录。从源代码构建时，以同样方式加载 `dist/extension`。
+从商店安装的扩展程序由浏览器更新。本机的 `omw` daemon 请另外从 [GitHub 发布版本](https://github.com/oh-my-webbridge/oh-my-webbridge/releases)更新。
 
-</Tab>
-<Tab value="Firefox">
+<Accordions>
+<Accordion title="手动加载 Chrome 版本">
 
-解开 `omw-<version>-firefox-mv3.tar.zst`。打开 `about:debugging`，选择**这个 Firefox**，再选择**加载暂时性附加组件…**，然后选取解开后文件夹中的 `manifest.json`。Firefox 重新启动时会移除暂时性扩展程序。要永久安装，需要来自 addons.mozilla.org 的自行发布模式签章；请把 `omw-<version>-firefox-mv3-unsigned.xpi` 提交到该网站。从源代码构建时，加载 `dist/extension-firefox`。
+<Steps>
+<Step>
 
-</Tab>
-</Tabs>
+#### 准备扩展程序文件夹
+
+用 `SHA256SUMS` 核对并解开 `omw-<version>-chrome-mv3.tar.zst`，或使用从源代码构建的 `dist/extension`。文件夹根目录包含 `manifest.json`。
+
+</Step>
+<Step>
+
+#### 在 Chrome 加载文件夹
+
+打开 `chrome://extensions`，打开**开发人员模式**，选择**加载未封装项目**，再选取扩展程序文件夹。
+
+</Step>
+</Steps>
+
+</Accordion>
+<Accordion title="手动加载 Firefox 版本">
+
+请依照[暂时加载或自行发布的安装步骤](./firefox.mdx#manual-installation)操作。Firefox 结束时会移除暂时性附加组件。
+
+</Accordion>
+</Accordions>
 
 ## 设置浏览器 [#set-up-the-browser]
 
