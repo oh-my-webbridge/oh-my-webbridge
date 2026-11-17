@@ -6,7 +6,7 @@ export type PageFile = { name: string; mimeType: string; data: string };
 export type PageArgs = Omit<Args, "files"> & { files?: PageFile[] };
 export type PageFailure = { ok: false; code: string; message: string };
 export type PageResult = { ok: true; value: Json } | PageFailure;
-export type PageEntry = (op: string, args: PageArgs) => Promise<PageResult>;
+export type PageEntry = (op: string, args: PageArgs, owner?: string) => Promise<PageResult>;
 
 // The background checks these arguments before it runs page.js, and page.js
 // checks them again before it reads the page.

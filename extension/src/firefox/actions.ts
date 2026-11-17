@@ -33,6 +33,7 @@ import {
   clearRefs,
   evaluate,
   evaluateCondition,
+  forgetPage,
   resetScope,
   scopeOf,
   selectFrame,
@@ -122,7 +123,7 @@ export function forgetTab(tabId: number): void {
   forgetPreset(tabId);
   forgetNetwork(tabId);
   forgetHeaders(tabId);
-  resetScope(tabId);
+  forgetPage(tabId);
 }
 // The tab is read before its owner is checked, so a closed tab fails with
 // tab_missing also once its session has dropped it.

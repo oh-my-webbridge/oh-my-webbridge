@@ -31,9 +31,16 @@ export async function releaseTabs(
       skipped.push(id);
       continue;
     }
+    const wasCurrent = session.current === id;
     try {
       if (keep.includes(id)) {
-        await chrome.tabs.get(id);
+        const tab = await chrome.tabs.get(id);
+        if (
+          session.tabs.includes(id) &&
+          session.group !== undefined &&
+          tab.groupId === session.group
+        )
+          await chrome.tabs.ungroup(id);
         await releasePage(id);
         kept.push(id);
       } else {
@@ -48,7 +55,7 @@ export async function releaseTabs(
         continue;
       }
     }
-    leaveTab(session, id);
+    leaveTab(session, id, wasCurrent);
     session.tabs = session.tabs.filter((tab) => tab !== id);
     session.borrowed = session.borrowed.filter((tab) => tab !== id);
     if (!session.tabs.length) session.group = undefined;

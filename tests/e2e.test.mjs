@@ -910,6 +910,8 @@ test(
     await verify("session cleanup cancels queued work and removes a late-created tab", async () => {
       const selected = await call("navigate", { url: `${url}?deliverable=1` }, "handoff");
       const scratch = await call("navigate", { url, newTab: true }, "handoff");
+      const group = (id) => worker.evaluate(async (id) => (await chrome.tabs.get(id)).groupId, id);
+      assert.ok((await group(selected.tabId)) >= 0);
       const result = await call(
         "release_tabs",
         { keep: [selected.tabId], close: [scratch.tabId] },
@@ -918,6 +920,7 @@ test(
       assert.deepEqual(result.kept, [selected.tabId]);
       assert.deepEqual(result.closed, [scratch.tabId]);
       assert.deepEqual(result.failed, []);
+      assert.equal(await group(selected.tabId), -1);
       assert.equal((await call("close_session", {}, "handoff")).closed, 0);
       const delivered = context.pages().find((p) => p.url() === `${url}?deliverable=1`);
       assert.ok(delivered);

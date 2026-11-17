@@ -11,6 +11,13 @@ type Injected<T> = { documentId: string; frameId: number; result?: T };
 // calls fail instead of reaching a new document.
 type Scope = { frameId: number; documentId: string; url?: string };
 const scopes = new Map<number, Scope>();
+// Each owner uses a fresh key across all documents it reaches in the tab.
+const pageOwners = new Map<number, string>();
+
+export function forgetPage(tabId: number): void {
+  resetScope(tabId);
+  pageOwners.delete(tabId);
+}
 
 export function resetScope(tabId: number): void {
   scopes.delete(tabId);
@@ -125,12 +132,18 @@ async function inject<T>(
 // Runs one page.js operation in the selected frame. page.js is injected on
 // first use in each document and keeps its element references there.
 export async function callPage(tabId: number, op: string, args: PageArgs = {}): Promise<Json> {
+  let owner = pageOwners.get(tabId);
+  if (owner === undefined) {
+    owner = crypto.randomUUID();
+    pageOwners.set(tabId, owner);
+  }
   const call = (chosen: Target) =>
     chrome.scripting.executeScript({
       target: chosen,
       injectImmediately: true,
-      func: (name: string, values: PageArgs) => globalThis.__omwPage?.(name, values) ?? null,
-      args: [op, args],
+      func: (name: string, values: PageArgs, owner: string) =>
+        globalThis.__omwPage?.(name, values, owner) ?? null,
+      args: [op, args, owner],
     });
   let answer = (await inject(tabId, op, "browser_error", call)).result;
   if (answer === null) {

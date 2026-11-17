@@ -1779,6 +1779,63 @@ test("release_tabs preserves deliverables and borrowed pages through cleanup and
   assert.equal(f.m.owner(5), "next");
 });
 
+for (const eventFirst of [true, false]) {
+  const order = eventFirst ? "before" : "after";
+  test(`release_tabs keeps a current tab when removal fires ${order} the reply`, async (t) => {
+    const f = await borrowFixture(t, {
+      stored: {
+        sessions: { task: { tabs: [5, 6, 7], borrowed: [], current: 7, title: "task" } },
+      },
+    });
+    chrome.tabs.remove = async (id) => {
+      if (id === 6) throw Error("tab strip is busy");
+      if (eventFirst) await f.m.removed(id);
+    };
+    assert.deepEqual(await f.run("task", "release_tabs", { close: [7, 6] }), {
+      success: false,
+      closed: [7],
+      kept: [],
+      released: [7],
+      skipped: [],
+      failed: [{ tabId: 6, code: "browser_error", message: "tab strip is busy" }],
+    });
+    if (!eventFirst) await f.m.removed(7);
+    assert.equal(f.m.owner(6), "task");
+    assert.deepEqual(f.saved.at(-1).sessions.task.tabs, [5, 6]);
+    await f.run("task", "cdp", { method: "DOM.getDocument" });
+    assert.equal(f.calls.findLast((c) => c.method === "DOM.getDocument").tabId, 6);
+  });
+}
+
+test("release_tabs ungroups only kept pages owned in the session's task group", async (t) => {
+  const f = await borrowFixture(t, {
+    stored: {
+      sessions: {
+        task: { tabs: [5, 6, 7, 8], borrowed: [9], current: 5, group: 1, title: "task" },
+      },
+    },
+  });
+  const groups = new Map([[5, 1], [6, 2], [7, 1], [8, 1], [9, 1]]);
+  chrome.tabs.get = async (id) => ({ ...f.tab, id, groupId: groups.get(id) });
+  chrome.tabs.ungroup = async (id) => {
+    if (id === 5) throw Error("tab strip is busy");
+    groups.delete(id);
+  };
+  const result = await f.run("task", "release_tabs", { keep: [5, 6, 7, 9] });
+  assert.deepEqual(result.kept, [6, 7, 9]);
+  assert.deepEqual(result.failed, [
+    { tabId: 5, code: "browser_error", message: "tab strip is busy" },
+  ]);
+  assert.deepEqual([...groups], [[5, 1], [6, 2], [8, 1], [9, 1]]);
+  assert.deepEqual(f.saved.at(-1).sessions.task, {
+    tabs: [5, 8],
+    borrowed: [],
+    current: 5,
+    group: 1,
+    title: "task",
+  });
+});
+
 test("close_session counts a tab that closed meanwhile as closed, and another failure keeps the session", async (t) => {
   const f = await sessionFixture(t, {}, { hold: false });
   for (let n = 0; n < 2; n++)
