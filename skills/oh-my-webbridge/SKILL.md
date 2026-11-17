@@ -34,13 +34,13 @@ For shell-sensitive or multiline data, write valid JSON with a file tool and sen
 
 ## Tasks and ownership
 
-For a long page, continue `read_page` with the returned `nextOffset` as `offset` until `complete` is true. Restart after navigation or a frame change. To inspect one region, pass its selector or current reference to `snapshot`; subsequent actions use the new references.
-
 Use distinct sessions for independent parallel tasks. Same-session commands execute in order. `list_tabs` lists only the session's tabs. When the user asks to use the active tab, borrow it explicitly with `find_tab {"url":"exact URL or hostname","active":true}`. Do not borrow unrelated tabs or fight another session's ownership.
 
 Keep task tabs for review. Call `close_session` only when the user asks to close the task tabs. It closes only owned tabs and releases borrowed ones. Do not stop or restart the shared daemon to clean up a task.
 
 ## Other operations
+
+For a long page, continue `read_page` with the returned `nextOffset` as `offset` until `complete` is true. Restart after navigation or a frame change. To inspect one region, pass its selector or current reference to `snapshot`; subsequent actions use the new references.
 
 Use `screenshot` and `save_as_pdf`, then open the returned path to inspect the artifact. Use unique absolute output paths; existing files are never overwritten. Upload paths are absolute on the machine running the daemon and browser; Firefox uploads total at most 16 MiB per command. Use user-provided or clearly task-authorized files.
 

@@ -1300,6 +1300,23 @@ test("a network recording stays in the session of the frame selected at start", 
   assert.equal(sessionOf("Network.disable"), "oopif-session");
 });
 
+test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {
+  const f = await borrowFixture(t);
+  // Chrome reports an empty url until the tab commits its first document.
+  Object.assign(f.tab, { url: "", pendingUrl: "https://example.test/" });
+  assert.deepEqual(await f.run("task", "list_targets"), [
+    { tabId: 5, url: "https://example.test/", title: "user tab" },
+  ]);
+  assert.deepEqual(await f.run("task", "find_tab", { url: "example.test", active: true }), {
+    success: true,
+    tabId: 5,
+    url: "https://example.test/",
+    borrowed: true,
+  });
+  await f.run("task", "evaluate", { code: "document.title" });
+  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
+});
+
 test("bounded reads preserve surrogate pairs across the default response limit", async (t) => {
   const {
     m: { readChunk, readRange },
@@ -1320,23 +1337,6 @@ test("bounded reads preserve surrogate pairs across the default response limit",
   });
   for (const args of [{ pageSize: 1 }, { pageSize: 192001 }, { offset: -1 }])
     assert.throws(() => readRange(args), { code: "invalid_args" });
-});
-
-test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {
-  const f = await borrowFixture(t);
-  // Chrome reports an empty url until the tab commits its first document.
-  Object.assign(f.tab, { url: "", pendingUrl: "https://example.test/" });
-  assert.deepEqual(await f.run("task", "list_targets"), [
-    { tabId: 5, url: "https://example.test/", title: "user tab" },
-  ]);
-  assert.deepEqual(await f.run("task", "find_tab", { url: "example.test", active: true }), {
-    success: true,
-    tabId: 5,
-    url: "https://example.test/",
-    borrowed: true,
-  });
-  await f.run("task", "evaluate", { code: "document.title" });
-  assert.deepEqual(lastEvaluate(f), { sessionId: undefined, contextId: undefined });
 });
 
 test("upload fails with file_access_required until file URL access is on", async (t) => {
