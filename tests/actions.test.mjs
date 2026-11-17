@@ -516,6 +516,18 @@ test("navigation reconfigures a tab whose root target failed open", async (t) =>
   assert.deepEqual(restored.fallback, []);
 });
 
+test("navigate reports a failed normal-window lookup before creating a task tab", async (t) => {
+  const f = await sessionFixture(t, {}, { hold: false });
+  globalThis.chrome.windows.getLastFocused = async () => {
+    throw Error("No last focused window");
+  };
+  await assert.rejects(f.run("navigate", { url: "https://example.test/" }), {
+    code: "window_failed",
+    message: "chrome.windows.getLastFocused (normal windows): No last focused window",
+  });
+  assert.deepEqual(f.saved.at(-1)?.sessions?.task?.tabs ?? [], []);
+});
+
 test("window_new persists the new tab before attaching the debugger", async (t) => {
   const f = await sessionFixture(t, {}, { hold: false });
   const attach = globalThis.chrome.debugger.attach;

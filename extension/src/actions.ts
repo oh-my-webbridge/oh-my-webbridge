@@ -536,10 +536,17 @@ async function run(command: Command, budget: Budget): Promise<object> {
     if (args.newTab || !s.current) {
       if (s.tabs.length + s.borrowed.length >= 32) fail("busy", "32 tabs per session maximum");
       const groupId = s.group;
-      const windowId =
+      const targetWindow =
         groupId === undefined
-          ? (await chrome.windows.getLastFocused({ windowTypes: ["normal"] }))?.id
-          : (await chrome.tabGroups.get(groupId)).windowId;
+          ? chrome.windows.getLastFocused({ windowTypes: ["normal"] }).then((window) => window?.id)
+          : chrome.tabGroups.get(groupId).then((group) => group.windowId);
+      const windowId = await targetWindow.catch((error: Error) => {
+        const operation =
+          groupId === undefined
+            ? "chrome.windows.getLastFocused (normal windows)"
+            : "chrome.tabGroups.get";
+        fail("window_failed", `${operation}: ${error.message}`);
+      });
       if (windowId === undefined) fail("window_failed", "no normal Chrome window for a task tab");
       budget.check();
       const tab = await chrome.tabs
