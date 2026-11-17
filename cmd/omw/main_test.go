@@ -18,6 +18,7 @@ func TestPrintResponseKeepsStdoutAndReportsFaultCode(t *testing.T) {
 	}{
 		{502, `{"error":{"code":"tab_missing","message":"private detail"}}`, "HTTP 502 (tab_missing)"},
 		{502, `{"error":{"code":"evaluation_failed","message":"private detail"}}`, "HTTP 502 (evaluation_failed)"},
+		{502, `{"error":{"code":"evaluation_failed","message":"` + strings.Repeat("x", 8192) + `"}}`, "HTTP 502 (evaluation_failed)"},
 		{502, `{"error":{"code":"unsafe\ncode"}}`, "HTTP 502"},
 		{401, "unauthorized\n", "HTTP 401"},
 		{502, strings.Repeat("x", 8192), "HTTP 502"},
