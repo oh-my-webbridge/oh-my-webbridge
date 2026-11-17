@@ -48,7 +48,7 @@ Firefox ESR、Developer Edition、Nightly 与未加品牌的构建版本，在 `
 - **访问所有网站**是 `<all_urls>` 主机权限，在安装时请求。你可以在 `about:addons` 的“权限”中关闭它。关闭后，页面动作、`screenshot`、`cookies`、带有 `cmd: "start"` 的 `network` 与带有 `data` 的 `emulate` 会返回 `restricted_tab`，预设也会停止过滤请求。此时 `navigate` 到响应 204 No Content 或 205 Reset Content 的 URL，会一直等到命令的期限。重新打开这项权限即可恢复过滤。Firefox 不让扩展程序访问的页面（例如 `about:` 页面与 addons.mozilla.org），即使打开这项权限也会返回 `restricted_tab`。页面动作遇到标签页正在导航时返回 `outcome_unknown`，`wait` 则在新页面上继续检查。
 - **用户脚本**是选用的 `userScripts` 权限。请在步骤 3 选择**允许脚本**，或到**设置**，再到**网页**，并确认 Firefox 的提示。Firefox 只接受来自用户操作的请求，所以这些按钮是授予权限的唯一入口。在授予之前，`evaluate` 与带有 `expression` 的 `wait` 会返回 `unsupported`。
 
-`borrow_tab` 把标签页分配给会话。运行页面动作时，Firefox 仍会检查网站权限和浏览器策略。如果这些检查阻止访问，借用标签页上的页面动作也会返回 `restricted_tab`。
+`borrow_tab` 把标签页分配给会话。运行页面动作时，Firefox 仍会检查网站权限和浏览器政策。如果这些检查阻止访问，借用标签页上的页面动作也会返回 `restricted_tab`。
 
 弹出式窗口中的**暂停**会让扩展程序与 daemon 中断连接，直到你选择**继续**。
 
