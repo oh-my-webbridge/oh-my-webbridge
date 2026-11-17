@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -43,7 +44,9 @@ func TestReleaseCompatibilityPerBrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := c.Read(ctx)
-	if websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
+	var reason websocket.CloseError
+	if !errors.As(err, &reason) || reason.Code != websocket.StatusPolicyViolation ||
+		reason.Reason != fmt.Sprintf("protocol mismatch: daemon %s protocol %d", Version, Protocol) {
 		t.Fatal(err)
 	}
 	browsers = s.Hub.Browsers()

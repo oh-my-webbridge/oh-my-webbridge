@@ -323,7 +323,7 @@ func (s *Server) extension(w http.ResponseWriter, r *http.Request) {
 	err = wsjson.Read(helloCtx, c, &hello)
 	helloCancel()
 	if err != nil || hello.Type != "hello" {
-		_ = c.Close(websocket.StatusPolicyViolation, "protocol mismatch")
+		_ = c.Close(websocket.StatusPolicyViolation, "invalid hello")
 		return
 	}
 	if reason := checkHello(hello, browser); reason != "" {

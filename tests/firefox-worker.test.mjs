@@ -173,6 +173,25 @@ test("connection settings distinguish release skew, legacy and incompatible daem
   assert.equal(states.at(-1).versions.protocol, 2);
 });
 
+for (const [reason, daemon, protocol] of [
+  ["protocol mismatch: daemon 1.2.0+build protocol 2", "1.2.0+build", 2],
+  ["protocol mismatch", undefined, undefined],
+]) {
+  test(`connection settings record the daemon's close reason: ${reason}`, async (t) => {
+    const f = await start(t);
+    const set = t.mock.method(chrome.storage.session, "set");
+    f.sockets[0].socket.onclose({ code: 1008, reason });
+    const { connection } = set.mock.calls.at(-1).arguments[0];
+    assert.equal(connection.state, "rejected");
+    assert.deepEqual(connection.versions, {
+      extension: manifest.version,
+      compatibility: "incompatible-protocol",
+      daemon,
+      protocol,
+    });
+  });
+}
+
 test("every heartbeat calls an extension API so the event page stays awake", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval", "Date"] });
   const f = await start(t);

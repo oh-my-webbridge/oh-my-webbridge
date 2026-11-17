@@ -359,7 +359,7 @@ async function connect(): Promise<void> {
       if (socket === connection) {
         socket = undefined;
         if (event?.reason?.startsWith("protocol mismatch")) {
-          const peer = /^protocol mismatch: daemon ([\w.-]+) protocol (\d+)$/u.exec(event.reason);
+          const peer = /^protocol mismatch: daemon ([\w.+-]+) protocol (\d+)$/u.exec(event.reason);
           mismatch ??= {
             extension: extensionVersion,
             daemon: peer?.[1],
