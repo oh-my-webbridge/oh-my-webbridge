@@ -467,6 +467,43 @@ test(
       }
       await call("close_session", {}, "no-document");
     });
+    await verify("task tabs use normal windows while a popup is focused", async () => {
+      const session = "popup-window-fixture";
+      const first = await call("navigate", { url, preset: "none" }, session);
+      const normalWindow = await worker.evaluate(
+        async (id) => (await chrome.tabs.get(id)).windowId,
+        first.tabId,
+      );
+      const popup = await worker.evaluate(async (url) => {
+        const window = await chrome.windows.create({ url, type: "popup", focused: true });
+        return window.id;
+      }, url);
+      try {
+        await until(
+          () =>
+            worker.evaluate(async (id) => (await chrome.windows.getLastFocused()).id === id, popup),
+          "popup is last focused",
+        );
+        const next = await call("navigate", { url, newTab: true }, session);
+        assert.equal(
+          await worker.evaluate(async (id) => (await chrome.tabs.get(id)).windowId, next.tabId),
+          normalWindow,
+        );
+        const opened = await call("window_new", { url, preset: "none" }, session);
+        assert.equal(
+          await worker.evaluate(async (id) => (await chrome.windows.get(id)).type, opened.windowId),
+          "normal",
+        );
+        assert.equal(
+          await worker.evaluate(async (id) => (await chrome.windows.get(id)).type, popup),
+          "popup",
+        );
+      } finally {
+        await worker.evaluate((id) => chrome.windows.remove(id), popup);
+        await call("close_session", {}, session);
+      }
+    });
+
     await verify("upload, bounded network capture, screenshot and streamed PDF", async () => {
       const upload = join(dir, "upload.txt");
       await writeFile(upload, "bridge upload");

@@ -185,7 +185,10 @@ async function sessionFixture(
         set: async (value) => saved.push(structuredClone(value)),
       },
     },
-    windows: { create: async () => ({ id: 1, tabs: [{ id: nextTab++ }] }) },
+    windows: {
+      create: async () => ({ id: 1, tabs: [{ id: nextTab++ }] }),
+      getLastFocused: async () => ({ id: 1, type: "normal" }),
+    },
     tabs: {
       create: async () => ({ id: nextTab++ }),
       get: async (id) => ({ id, url: "https://example.test/", status: "complete" }),
@@ -194,7 +197,7 @@ async function sessionFixture(
       remove: async (id) => removed.push(id),
       group: async () => 1,
     },
-    tabGroups: { update: async () => {} },
+    tabGroups: { get: async () => ({ windowId: 1 }), update: async () => {} },
     debugger: {
       onEvent: {
         addListener: (listener) => debuggerListeners.add(listener),
