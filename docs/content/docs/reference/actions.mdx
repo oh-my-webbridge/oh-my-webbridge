@@ -197,6 +197,8 @@ Append ` >>nth=0` to take the first match or ` >>nth=-1` to take the last. Text,
 
 ## Errors
 
+`command_not_sent` (HTTP 408) means the request ended before its transport write started. A request that ends while waiting for a browser reply after a completed write still returns `outcome_unknown`. The CLI writes the fault code to stderr and preserves the JSON reply on stdout.
+
 Every fault carries `code` and `message`. The HTTP status is shown below; a code not listed here returns 502.
 
 | Code                    | HTTP | Meaning                                                                                                                                                                                                                                                                          | What to do                                                                                                                                 |

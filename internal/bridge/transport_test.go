@@ -170,7 +170,7 @@ func TestCancelDuringRequestWriteKeepsConnection(t *testing.T) {
 	waitCtx, cancelWait := context.WithCancel(ctx)
 	waiting := tr.run(waitCtx, "waiting", `{}`)
 	cancelWait()
-	if out := <-waiting; codeOf(out.err) != "outcome_unknown" {
+	if out := <-waiting; codeOf(out.err) != "command_not_sent" {
 		t.Fatalf("command cancelled while waiting to be written: %v", out.err)
 	}
 	cancelBig()
@@ -188,7 +188,7 @@ func TestCancelDuringRequestWriteKeepsConnection(t *testing.T) {
 	// A command whose deadline has already passed is not sent.
 	expired, expire := context.WithCancel(ctx)
 	expire()
-	if out := <-tr.run(expired, "expired", `{}`); codeOf(out.err) != "outcome_unknown" {
+	if out := <-tr.run(expired, "expired", `{}`); codeOf(out.err) != "command_not_sent" {
 		t.Fatalf("expired command: %v", out.err)
 	}
 	// The connection still carries commands, and held gets its reply.
@@ -214,7 +214,8 @@ func TestCancelFrameWaitsBehindALargeFrame(t *testing.T) {
 	big := tr.run(ctx, "big", largeArgs)
 	rest := tr.start(big)
 	cancelSmall()
-	if out := <-small; codeOf(out.err) != "outcome_unknown" {
+	if out := <-small; codeOf(out.err) != "outcome_unknown" ||
+		fault(out.err).Message != "request deadline/cancellation reached while waiting for a browser reply after the transport write completed; observe before retrying" {
 		t.Fatalf("cancelled command: %v", out.err)
 	}
 	// next is queued after the cancel frame.

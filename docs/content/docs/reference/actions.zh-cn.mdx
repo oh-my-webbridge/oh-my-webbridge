@@ -199,6 +199,8 @@ daemon 在内部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 
 ## 错误 [#errors]
 
+`command_not_sent`（HTTP 408）表示请求在开始写入传输连接前就已结束。若已写入、仍在等待浏览器回复时请求结束，则返回 `outcome_unknown`。CLI 把错误码写到 stderr，并在 stdout 保留 JSON 回复。
+
 每个错误都带有 `code` 与 `message`。HTTP 状态码列于下方；这里未列出的错误码返回 502。
 
 | 错误码                  | HTTP | 意义                                                                                                                                                                         | 处理方式                                                                                                         |

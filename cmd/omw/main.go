@@ -187,14 +187,32 @@ func request(c config.Config, method, path string, body []byte) error {
 		return err
 	}
 	defer res.Body.Close()
-	_, err = io.Copy(os.Stdout, res.Body)
-	if err != nil {
-		return err
-	}
+	return printResponse(os.Stdout, res)
+}
+
+func printResponse(out io.Writer, res *http.Response) error {
 	if res.StatusCode >= 400 {
+		const diagnosticLimit = 4096
+		prefix, err := io.ReadAll(io.LimitReader(res.Body, diagnosticLimit+1))
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(out, io.MultiReader(bytes.NewReader(prefix), res.Body)); err != nil {
+			return err
+		}
+		var reply bridge.Reply
+		if len(prefix) <= diagnosticLimit && json.Unmarshal(prefix, &reply) == nil && reply.Error != nil {
+			code := reply.Error.Code
+			if code != "" && len(code) <= 64 && strings.IndexFunc(code, func(r rune) bool {
+				return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_')
+			}) == -1 {
+				return fmt.Errorf("HTTP %d (%s)", res.StatusCode, code)
+			}
+		}
 		return fmt.Errorf("HTTP %d", res.StatusCode)
 	}
-	return nil
+	_, err := io.Copy(out, res.Body)
+	return err
 }
 
 // decode reads one JSON reply of an authenticated request.

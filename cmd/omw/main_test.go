@@ -1,12 +1,39 @@
 package main
 
 import (
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/oh-my-webbridge/oh-my-webbridge/internal/config"
 )
+
+func TestPrintResponseKeepsStdoutAndReportsFaultCode(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		body   string
+		want   string
+	}{
+		{502, `{"error":{"code":"tab_missing","message":"private detail"}}`, "HTTP 502 (tab_missing)"},
+		{502, `{"error":{"code":"evaluation_failed","message":"private detail"}}`, "HTTP 502 (evaluation_failed)"},
+		{502, `{"error":{"code":"unsafe\ncode"}}`, "HTTP 502"},
+		{401, "unauthorized\n", "HTTP 401"},
+		{502, strings.Repeat("x", 8192), "HTTP 502"},
+		{200, `{"result":{}}`, ""},
+	} {
+		var out strings.Builder
+		response := &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body))}
+		err := printResponse(&out, response)
+		if tc.want == "" && err != nil || tc.want != "" && (err == nil || err.Error() != tc.want) {
+			t.Errorf("HTTP %d: got %v, want %q", tc.status, err, tc.want)
+		}
+		if out.String() != tc.body {
+			t.Errorf("HTTP %d: response body changed", tc.status)
+		}
+	}
+}
 
 func TestCallCommandFlags(t *testing.T) {
 	cmd, err := callCommand([]string{"--timeout-ms", "5000", "repro", "wait", `{"url":"*nomatch*"}`}, nil)
