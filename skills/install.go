@@ -30,10 +30,8 @@ func Install(parent string, refresh bool) error {
 	if !refresh {
 		return os.Rename(stage, target)
 	}
-	if err := os.MkdirAll(target, 0700); err != nil {
-		return err
-	}
-	return filepath.WalkDir(stage, func(path string, entry fs.DirEntry, err error) error {
+	var dirs, files []string
+	if err := filepath.WalkDir(stage, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -42,19 +40,43 @@ func Install(parent string, refresh bool) error {
 			return err
 		}
 		dst := filepath.Join(target, rel)
+		info, err := os.Lstat(dst)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		if entry.IsDir() {
-			if err := os.Mkdir(dst, 0700); err != nil && !os.IsExist(err) {
+			if info != nil && !info.IsDir() {
+				return fmt.Errorf("expected a directory at %s", dst)
+			}
+			dirs = append(dirs, dst)
+		} else {
+			if info != nil && !info.Mode().IsRegular() {
+				return fmt.Errorf("expected a regular file at %s", dst)
+			}
+			files = append(files, rel)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			if !os.IsExist(err) {
 				return err
 			}
-			info, err := os.Lstat(dst)
+			info, err := os.Lstat(dir)
 			if err != nil {
 				return err
 			}
 			if !info.IsDir() {
-				return fmt.Errorf("expected a directory at %s", dst)
+				return fmt.Errorf("expected a directory at %s", dir)
 			}
-			return nil
 		}
-		return os.Rename(path, dst)
-	})
+	}
+	for _, rel := range files {
+		if err := os.Rename(filepath.Join(stage, rel), filepath.Join(target, rel)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

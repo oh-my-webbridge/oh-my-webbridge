@@ -4,4 +4,4 @@
 
 # Read the installed action reference offline
 
-The agent kit and `omw install-skill` include the matching CLI, SDK, browser, and error references. Run `omw install-skill --refresh DIRECTORY` after upgrading to refresh the bundled pages and keep your other files. ([#50](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/50))
+The agent kit and `omw install-skill` include the matching CLI, SDK, browser, and error references. Run `omw install-skill --refresh DIRECTORY` after upgrading to refresh the bundled pages and keep your other files. If a bundled path has the wrong type, refresh reports it before replacing any bundled files. ([#50](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/50))
