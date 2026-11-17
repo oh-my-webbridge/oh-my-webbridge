@@ -51,16 +51,17 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 ## 导航与标签页 [#navigation-and-tabs]
 
-| 动作            | 参数                                       | 备注                                                                                                         |
-| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `navigate`      | `url`、`newTab`、`group_title`、预设字段   | 除非会话已有目前标签页，或设置了 `newTab`，否则打开一个背景任务标签页。URL 必须是 HTTP(S) 或 `about:blank`。 |
-| `find_tab`      | `url`（完整 URL 或主机名称）、`active`     | 为会话认领既有标签页。`active: true` 借用浏览器的使用中标签页。返回 `tabId`、`url`、`borrowed`。             |
-| `list_tabs`     | 无                                         | 列出这个会话拥有或借用的标签页，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。             |
-| `switch_tab`    | `tabId`                                    | 让该标签页成为目前标签页。已被丢弃的标签页会先重新加载；结果会回报 `revived`。                               |
-| `window_new`    | `url`、预设字段                            | 打开独立的窗口，认领其标签页，并返回 `tabId` 与 `windowId`。                                                 |
-| `close_tab`     | `tabId`                                    | 关闭会话创建的标签页。借用的标签页不会被关闭。                                                               |
-| `close_session` | 无                                         | 关闭任务标签页、释放借用的标签页，并移除浏览器绑定。返回已关闭的标签页数量。                                 |
-| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 返回导航项目。每次 `history` 调用都会丢弃该标签页的引用与框架选择。                                   |
+| 动作            | 参数                                       | 备注                                                                                                                    |
+| --------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `navigate`      | `url`、`newTab`、`group_title`、预设字段   | 除非会话已有目前标签页，或设置了 `newTab`，否则打开一个背景任务标签页。URL 必须是 HTTP(S) 或 `about:blank`。            |
+| `find_tab`      | `url`（完整 URL 或主机名称）、`active`     | 为会话认领既有标签页。`active: true` 借用浏览器的使用中标签页。返回 `tabId`、`url`、`borrowed`。                        |
+| `borrow_tab`    | 指定完整的 `url` 或 `tabId`，两者择一      | 借用指定标签页并保留窗口焦点。网址符合多个标签页时返回 `ambiguous_tab`。运行 `close_session` 后，借用的标签页仍会打开。 |
+| `list_tabs`     | 无                                         | 列出这个会话拥有或借用的标签页，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。                        |
+| `switch_tab`    | `tabId`                                    | 让该标签页成为目前标签页。已被丢弃的标签页会先重新加载；结果会回报 `revived`。                                          |
+| `window_new`    | `url`、预设字段                            | 打开独立的窗口，认领其标签页，并返回 `tabId` 与 `windowId`。                                                            |
+| `close_tab`     | `tabId`                                    | 关闭会话创建的标签页。借用的标签页不会被关闭。                                                                          |
+| `close_session` | 无                                         | 关闭任务标签页、释放借用的标签页，并移除浏览器绑定。返回已关闭的标签页数量。                                            |
+| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 返回导航项目。每次 `history` 调用都会丢弃该标签页的引用与框架选择。                                              |
 
 一个会话最多持有 32 个标签页，任务标签页与借用的标签页合计。
 

@@ -1299,6 +1299,17 @@ test("a network recording stays in the session of the frame selected at start", 
   assert.equal(sessionOf("Network.disable"), "oopif-session");
 });
 
+test("a designated background tab can be borrowed without changing focus", async (t) => {
+  const f = await borrowFixture(t);
+  chrome.tabs.query = async () => [f.tab, { ...f.tab, id: 6, windowId: 2 }];
+  chrome.tabs.update = () => assert.fail("borrowing activated a tab");
+  await assert.rejects(f.run("task", "borrow_tab", { url: f.tab.url }), { code: "ambiguous_tab" });
+  assert.equal((await f.run("task", "borrow_tab", { tabId: 6 })).borrowed, true);
+  await assert.rejects(f.run("other", "borrow_tab", { tabId: 6 }), { code: "tab_busy" });
+  await f.run("task", "close_session");
+  assert.equal((await f.run("other", "borrow_tab", { tabId: 6 })).tabId, 6);
+});
+
 test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {
   const f = await borrowFixture(t);
   // Chrome reports an empty url until the tab commits its first document.

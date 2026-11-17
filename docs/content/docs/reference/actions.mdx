@@ -49,16 +49,17 @@ Page actions run in the session's current tab. Pass `tabId` (or `tab`) to addres
 
 ## Navigation and tabs
 
-| Action          | Arguments                                     | Notes                                                                                                                               |
-| --------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `navigate`      | `url`, `newTab`, `group_title`, preset fields | Opens a background task tab unless the session already has a current tab or `newTab` is set. URLs must be HTTP(S) or `about:blank`. |
-| `find_tab`      | `url` (exact URL or hostname), `active`       | Claims an existing tab for the session. `active: true` borrows the browser's active tab. Returns `tabId`, `url`, `borrowed`.        |
-| `list_tabs`     | none                                          | Lists the tabs this session owns or borrowed, with `tabId`, `url`, `title`, `active`, `borrowed`, `groupTitle`.                     |
-| `switch_tab`    | `tabId`                                       | Makes the tab current. A discarded tab is reloaded first; the result reports `revived`.                                             |
-| `window_new`    | `url`, preset fields                          | Opens a separate window, claims its tab, and returns `tabId` and `windowId`.                                                        |
-| `close_tab`     | `tabId`                                       | Closes a tab the session created. Borrowed tabs are not closed.                                                                     |
-| `close_session` | none                                          | Closes task tabs, releases borrowed ones and drops the browser binding. Returns the number of closed tabs.                          |
-| `history`       | `cmd`: `list`, `back`, `forward`, `reload`    | `list` returns the navigation entries. Every `history` call drops the tab's references and frame selection.                         |
+| Action          | Arguments                                     | Notes                                                                                                                                   |
+| --------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `navigate`      | `url`, `newTab`, `group_title`, preset fields | Opens a background task tab unless the session already has a current tab or `newTab` is set. URLs must be HTTP(S) or `about:blank`.     |
+| `find_tab`      | `url` (exact URL or hostname), `active`       | Claims an existing tab for the session. `active: true` borrows the browser's active tab. Returns `tabId`, `url`, `borrowed`.            |
+| `borrow_tab`    | Exactly one of `url` (full URL) or `tabId`    | Borrows a designated page without focusing it. Duplicate URLs return `ambiguous_tab`. A borrowed page stays open after `close_session`. |
+| `list_tabs`     | none                                          | Lists the tabs this session owns or borrowed, with `tabId`, `url`, `title`, `active`, `borrowed`, `groupTitle`.                         |
+| `switch_tab`    | `tabId`                                       | Makes the tab current. A discarded tab is reloaded first; the result reports `revived`.                                                 |
+| `window_new`    | `url`, preset fields                          | Opens a separate window, claims its tab, and returns `tabId` and `windowId`.                                                            |
+| `close_tab`     | `tabId`                                       | Closes a tab the session created. Borrowed tabs are not closed.                                                                         |
+| `close_session` | none                                          | Closes task tabs, releases borrowed ones and drops the browser binding. Returns the number of closed tabs.                              |
+| `history`       | `cmd`: `list`, `back`, `forward`, `reload`    | `list` returns the navigation entries. Every `history` call drops the tab's references and frame selection.                             |
 
 A session holds at most 32 tabs across task and borrowed ones.
 

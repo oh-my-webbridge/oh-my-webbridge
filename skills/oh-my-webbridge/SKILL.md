@@ -34,6 +34,8 @@ For shell-sensitive or multiline data, write valid JSON with a file tool and sen
 
 ## Tasks and ownership
 
+When the user designates an existing background page, use `borrow_tab` with its exact URL or tab ID. It keeps the current window and tab focused. On `ambiguous_tab`, ask which tab to borrow.
+
 Use distinct sessions for independent parallel tasks. Same-session commands execute in order. `list_tabs` lists only the session's tabs. When the user asks to use the active tab, borrow it explicitly with `find_tab {"url":"exact URL or hostname","active":true}`. Do not borrow unrelated tabs or fight another session's ownership.
 
 Keep task tabs for review. Call `close_session` only when the user asks to close the task tabs. It closes only owned tabs and releases borrowed ones. Do not stop or restart the shared daemon to clean up a task.

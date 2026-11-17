@@ -49,16 +49,17 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 導覽與分頁 [#navigation-and-tabs]
 
-| 動作            | 引數                                       | 備註                                                                                                         |
-| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `navigate`      | `url`、`newTab`、`group_title`、預設集欄位 | 除非工作階段已有目前分頁，或設定了 `newTab`，否則開啟一個背景任務分頁。URL 必須是 HTTP(S) 或 `about:blank`。 |
-| `find_tab`      | `url`（完整 URL 或主機名稱）、`active`     | 為工作階段認領既有分頁。`active: true` 借用瀏覽器的使用中分頁。回傳 `tabId`、`url`、`borrowed`。             |
-| `list_tabs`     | 無                                         | 列出這個工作階段擁有或借用的分頁，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。           |
-| `switch_tab`    | `tabId`                                    | 讓該分頁成為目前分頁。已被丟棄的分頁會先重新載入；結果會回報 `revived`。                                     |
-| `window_new`    | `url`、預設集欄位                          | 開啟獨立的視窗，認領其分頁，並回傳 `tabId` 與 `windowId`。                                                   |
-| `close_tab`     | `tabId`                                    | 關閉工作階段建立的分頁。借用的分頁不會被關閉。                                                               |
-| `close_session` | 無                                         | 關閉任務分頁、釋放借用的分頁，並移除瀏覽器綁定。回傳已關閉的分頁數量。                                       |
-| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 回傳導覽項目。每次 `history` 呼叫都會丟棄該分頁的參照與框架選擇。                                     |
+| 動作            | 引數                                       | 備註                                                                                                              |
+| --------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `navigate`      | `url`、`newTab`、`group_title`、預設集欄位 | 除非工作階段已有目前分頁，或設定了 `newTab`，否則開啟一個背景任務分頁。URL 必須是 HTTP(S) 或 `about:blank`。      |
+| `find_tab`      | `url`（完整 URL 或主機名稱）、`active`     | 為工作階段認領既有分頁。`active: true` 借用瀏覽器的使用中分頁。回傳 `tabId`、`url`、`borrowed`。                  |
+| `borrow_tab`    | 指定完整的 `url` 或 `tabId`，兩者擇一      | 借用指定分頁並保留視窗焦點。網址符合多個分頁時回傳 `ambiguous_tab`。執行 `close_session` 後，借用的分頁仍會開啟。 |
+| `list_tabs`     | 無                                         | 列出這個工作階段擁有或借用的分頁，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。                |
+| `switch_tab`    | `tabId`                                    | 讓該分頁成為目前分頁。已被丟棄的分頁會先重新載入；結果會回報 `revived`。                                          |
+| `window_new`    | `url`、預設集欄位                          | 開啟獨立的視窗，認領其分頁，並回傳 `tabId` 與 `windowId`。                                                        |
+| `close_tab`     | `tabId`                                    | 關閉工作階段建立的分頁。借用的分頁不會被關閉。                                                                    |
+| `close_session` | 無                                         | 關閉任務分頁、釋放借用的分頁，並移除瀏覽器綁定。回傳已關閉的分頁數量。                                            |
+| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 回傳導覽項目。每次 `history` 呼叫都會丟棄該分頁的參照與框架選擇。                                          |
 
 一個工作階段最多持有 32 個分頁，任務分頁與借用的分頁合計。
 
