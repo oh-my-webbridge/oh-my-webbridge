@@ -322,7 +322,7 @@ func (s *Server) extension(w http.ResponseWriter, r *http.Request) {
 	var hello Packet
 	err = wsjson.Read(helloCtx, c, &hello)
 	helloCancel()
-	if err != nil || hello.Type != "hello" || hello.Protocol != Protocol {
+	if err != nil || hello.Type != "hello" {
 		_ = c.Close(websocket.StatusPolicyViolation, "protocol mismatch")
 		return
 	}
@@ -330,7 +330,12 @@ func (s *Server) extension(w http.ResponseWriter, r *http.Request) {
 		_ = c.Close(websocket.StatusPolicyViolation, reason)
 		return
 	}
-	if err = s.Hub.Attach(ctx, c, browser, hello.BrowserVersion, hello.Sessions); err != nil {
+	if hello.Protocol != Protocol {
+		s.Hub.rejectProtocol(browser, hello)
+		_ = c.Close(websocket.StatusPolicyViolation, fmt.Sprintf("protocol mismatch: daemon %s protocol %d", Version, Protocol))
+		return
+	}
+	if err = s.Hub.Attach(ctx, c, browser, hello); err != nil {
 		if e := fault(err); e.Code == "browser_busy" {
 			_ = c.Close(websocket.StatusPolicyViolation, e.Message)
 		}
@@ -347,6 +352,8 @@ const maxHello = MaxSessions*(96*utf8.UTFMax+3) + 128 + 4<<10
 
 // checkHello validates the extension's hello against its Origin. Extensions
 // without a browser field are Chrome extensions from before Firefox support.
+var extensionRelease = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$`)
+
 func checkHello(hello Packet, browser string) string {
 	claimed := hello.Browser
 	if claimed == "" {
@@ -357,6 +364,9 @@ func checkHello(hello Packet, browser string) string {
 	}
 	if len(hello.BrowserVersion) > 128 {
 		return "hello browserVersion exceeds 128 bytes"
+	}
+	if hello.ExtensionVersion != "" && !extensionRelease.MatchString(hello.ExtensionVersion) {
+		return "invalid extensionVersion"
 	}
 	if len(hello.Sessions) > MaxSessions {
 		return "hello lists more than 128 sessions"

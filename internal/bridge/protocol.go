@@ -41,9 +41,11 @@ type Packet struct {
 	Data      string          `json:"data,omitempty"`
 	MIME      string          `json:"mimeType,omitempty"`
 	// hello fields
-	Browser        string   `json:"browser,omitempty"`
-	BrowserVersion string   `json:"browserVersion,omitempty"`
-	Sessions       []string `json:"sessions,omitempty"`
+	Browser          string   `json:"browser,omitempty"`
+	BrowserVersion   string   `json:"browserVersion,omitempty"`
+	ExtensionVersion string   `json:"extensionVersion,omitempty"`
+	DaemonVersion    string   `json:"daemonVersion,omitempty"`
+	Sessions         []string `json:"sessions,omitempty"`
 }
 
 type Reply struct {

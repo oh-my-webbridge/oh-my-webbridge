@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import manifest from "../package.json" with { type: "json" };
 import { mock, test } from "node:test";
 import { setImmediate, setTimeout as delay } from "node:timers/promises";
 import { build } from "esbuild";
@@ -443,6 +444,7 @@ test("Chrome hello reports the browser, its version and the persisted sessions",
       type: "hello",
       protocol: 1,
       browser: "chrome",
+      extensionVersion: manifest.version,
       browserVersion: "156.0.8078.80",
       sessions: ["task", "研究"],
     },

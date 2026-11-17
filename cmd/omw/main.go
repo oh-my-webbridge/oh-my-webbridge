@@ -270,6 +270,8 @@ func status(c config.Config) error {
 		return fmt.Errorf("HTTP %d", res.StatusCode)
 	}
 	var report struct {
+		Version  string                 `json:"version"`
+		Protocol int                    `json:"protocol"`
 		Browsers []bridge.BrowserStatus `json:"browsers"`
 	}
 	if err = json.Unmarshal(body, &report); err != nil {
@@ -283,6 +285,21 @@ func status(c config.Config) error {
 				if b.BrowserVersion != "" {
 					line += " (" + b.BrowserVersion + ")"
 				}
+				compat := b.Compatibility
+				if compat == "" {
+					compat = "unknown-release"
+				}
+				ext := b.ExtensionVersion
+				if ext == "" {
+					ext = "unknown"
+				}
+				line += fmt.Sprintf(" extension %s, daemon %s (%s)", ext, report.Version, compat)
+			} else if b.Browser == browser && b.Compatibility == "incompatible-protocol" {
+				component := "extension"
+				if b.Protocol > report.Protocol {
+					component = "daemon"
+				}
+				line = fmt.Sprintf("%s: incompatible extension protocol %d, daemon protocol %d; update the %s and reconnect", browser, b.Protocol, report.Protocol, component)
 			}
 		}
 		fmt.Fprintln(os.Stderr, line)

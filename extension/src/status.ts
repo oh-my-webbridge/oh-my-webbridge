@@ -15,7 +15,13 @@ export type ConnectionState =
   | "offline"
   | "rejected"
   | "connected";
-export type Connection = { state: ConnectionState; since: number };
+export type PeerVersions = {
+  extension: string;
+  daemon?: string;
+  protocol?: number;
+  compatibility: "same-release" | "compatible-skew" | "unknown-release" | "incompatible-protocol";
+};
+export type Connection = { state: ConnectionState; since: number; versions?: PeerVersions };
 
 // A tab that a session owns or borrowed. `busy` is true while an action runs.
 export type Control = { session: string; borrowed: boolean; busy: boolean };

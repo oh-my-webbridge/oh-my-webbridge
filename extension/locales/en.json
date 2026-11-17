@@ -1,4 +1,11 @@
 {
+  "peerVersions": "Extension / daemon",
+  "peerSame": "Both components use the same release.",
+  "peerSkew": "Both releases support the same wire protocol.",
+  "peerUnknown": "Connected peer did not report its release.",
+  "peerUpdateExtension": "Update the browser extension and reconnect.",
+  "peerUpdateDaemon": "Update the daemon binary and restart its service.",
+  "peerMatchReleases": "Install matching releases of the extension and daemon, then reconnect.",
   "extensionName": "oh-my-webbridge",
   "extensionDescription": "Connects this browser to the omw daemon on this computer. Agents can then open tabs, read pages and act on them.",
   "state_connected": "Connected",

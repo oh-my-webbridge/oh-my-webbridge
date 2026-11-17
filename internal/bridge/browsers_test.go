@@ -27,6 +27,35 @@ var (
 	firefoxExtension = "moz-extension://0c0ffee0-0000-4000-8000-000000000001"
 )
 
+func TestReleaseCompatibilityPerBrowser(t *testing.T) {
+	s, server := newServer(t, config.Config{})
+	connect(t, s, server, chromeExtension, Packet{ExtensionVersion: Version})
+	fx, _ := connect(t, s, server, firefoxExtension, Packet{Browser: Firefox, ExtensionVersion: "0.1.0"})
+	browsers := s.Hub.Browsers()
+	if len(browsers) != 2 || browsers[0].Compatibility != "same-release" || browsers[1].Compatibility != "compatible-skew" {
+		t.Fatalf("mixed peers: %+v", browsers)
+	}
+	disconnect(t, s, fx, Firefox)
+	c, _ := dial(t, s, server, firefoxExtension)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := wsjson.Write(ctx, c, Packet{Type: "hello", Protocol: Protocol + 1, Browser: Firefox, ExtensionVersion: "1.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := c.Read(ctx)
+	if websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
+		t.Fatal(err)
+	}
+	browsers = s.Hub.Browsers()
+	if !browsers[0].Connected || browsers[1].Connected || browsers[1].Compatibility != "incompatible-protocol" || browsers[1].Protocol != Protocol+1 {
+		t.Fatalf("rejected peer: %+v", browsers)
+	}
+	connect(t, s, server, firefoxExtension, Packet{Browser: Firefox})
+	if b := s.Hub.Browsers()[1]; !b.Connected || b.Compatibility != "unknown-release" {
+		t.Fatalf("legacy peer: %+v", b)
+	}
+}
+
 func newServer(t *testing.T, c config.Config) (*Server, *httptest.Server) {
 	t.Helper()
 	c.Token = strings.Repeat("a", 64)
@@ -308,16 +337,16 @@ func TestBrowsersCoexistAndSameBrowserIsRefused(t *testing.T) {
 		return out
 	}
 	got := status()
-	if string(got["extension_connected"]) != "true" || string(got["browsers"]) != `[{"browser":"chrome","browserVersion":"156.0.8078.80","connected":true},{"browser":"firefox","browserVersion":"159.0","connected":true}]` {
+	if string(got["extension_connected"]) != "true" || string(got["browsers"]) != `[{"browser":"chrome","browserVersion":"156.0.8078.80","connected":true,"protocol":1,"compatibility":"unknown-release"},{"browser":"firefox","browserVersion":"159.0","connected":true,"protocol":1,"compatibility":"unknown-release"}]` {
 		t.Fatalf("status: %s %s", got["extension_connected"], got["browsers"])
 	}
 	disconnect(t, s, firefox, Firefox)
-	if got = status(); string(got["browsers"]) != `[{"browser":"chrome","browserVersion":"156.0.8078.80","connected":true}]` {
+	if got = status(); string(got["browsers"]) != `[{"browser":"chrome","browserVersion":"156.0.8078.80","connected":true,"protocol":1,"compatibility":"unknown-release"}]` {
 		t.Fatalf("status after Firefox left: %s", got["browsers"])
 	}
 	connect(t, s, server, firefoxExtension, Packet{Browser: Firefox})
 	disconnect(t, s, chrome, Chrome)
-	if got = status(); string(got["extension_connected"]) != "true" || string(got["browsers"]) != `[{"browser":"firefox","connected":true}]` {
+	if got = status(); string(got["extension_connected"]) != "true" || string(got["browsers"]) != `[{"browser":"firefox","connected":true,"protocol":1,"compatibility":"unknown-release"}]` {
 		t.Fatalf("status with Firefox only: %s %s", got["extension_connected"], got["browsers"])
 	}
 }

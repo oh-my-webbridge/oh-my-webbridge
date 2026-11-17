@@ -9,13 +9,17 @@ import {
   type Request,
 } from "./protocol.js";
 import { pageClient } from "./state.js";
+import manifest from "../../package.json" with { type: "json" };
 import {
   daemonRunning,
   validToken,
   type Connection,
   type ConnectionState,
+  type PeerVersions,
   type Settings,
 } from "./status.js";
+
+const extensionVersion = manifest.version;
 
 export type Bridge = {
   hello: () => Promise<Hello>;
@@ -157,8 +161,8 @@ function respond(
   }
   transmit(connection, wire, size);
 }
-function publish(state: ConnectionState): void {
-  const connection: Connection = { state, since: Date.now() };
+function publish(state: ConnectionState, versions?: PeerVersions): void {
+  const connection: Connection = { state, since: Date.now(), ...(versions ? { versions } : {}) };
   void chrome.storage.session
     .set({ connection })
     .catch((cause: Error) => console.error("save connection state", cause.message));
@@ -240,7 +244,7 @@ function enqueue(request: Request, connection: WebSocket, execute: Bridge["execu
 // reports, the connection closes and the next attempt starts over.
 async function greet(connection: WebSocket, hello: Bridge["hello"]): Promise<void> {
   try {
-    emit(await hello(), connection);
+    emit({ ...(await hello()), extensionVersion }, connection);
   } catch (error) {
     console.error("prepare hello", fault(error as Error).message);
     connection.close(closeInternal, "session state unavailable");
@@ -267,6 +271,7 @@ async function connect(): Promise<void> {
       return;
     }
     let opened = false;
+    let mismatch: PeerVersions | undefined;
     const connection = new WebSocket("ws://127.0.0.1:17373/extension", [
       "omw.v1",
       `omw-token.${settings.token}`,
@@ -285,15 +290,35 @@ async function connect(): Promise<void> {
       try {
         const message = JSON.parse(event.data) as
           | Request
-          | { type: "hello" | "cancel" | "pong"; protocol?: number; id?: string };
+          | {
+              type: "hello" | "cancel" | "pong";
+              protocol?: number;
+              daemonVersion?: string;
+              id?: string;
+            };
         if (message.type === "hello") {
           if (message.protocol !== 1) {
+            mismatch = {
+              extension: extensionVersion,
+              daemon: message.daemonVersion,
+              protocol: message.protocol,
+              compatibility: "incompatible-protocol",
+            };
             connection.close(closeProtocol, "protocol mismatch");
             return;
           }
           attempt = 0;
           opened = true;
-          publish("connected");
+          publish("connected", {
+            extension: extensionVersion,
+            daemon: message.daemonVersion,
+            protocol: message.protocol,
+            compatibility: !message.daemonVersion
+              ? "unknown-release"
+              : message.daemonVersion === extensionVersion
+                ? "same-release"
+                : "compatible-skew",
+          });
           clearInterval(heartbeat);
           heartbeat = setInterval(() => {
             if (Date.now() - lastTraffic > 45000) {
@@ -323,7 +348,7 @@ async function connect(): Promise<void> {
         connection.close(closeProtocol, "invalid frame");
       }
     };
-    connection.onclose = (): void => {
+    connection.onclose = (event): void => {
       clearTimeout(opening);
       clearInterval(heartbeat);
       backlogs.delete(connection);
@@ -333,9 +358,20 @@ async function connect(): Promise<void> {
       );
       if (socket === connection) {
         socket = undefined;
-        void closed(opened).catch((error: Error) =>
-          console.error("classify closed connection", error.message),
-        );
+        if (event?.reason?.startsWith("protocol mismatch")) {
+          const peer = /^protocol mismatch: daemon ([\w.-]+) protocol (\d+)$/u.exec(event.reason);
+          mismatch ??= {
+            extension: extensionVersion,
+            daemon: peer?.[1],
+            protocol: peer ? Number(peer[2]) : undefined,
+            compatibility: "incompatible-protocol",
+          };
+        }
+        if (mismatch) publish("rejected", mismatch);
+        else
+          void closed(opened).catch((error: Error) =>
+            console.error("classify closed connection", error.message),
+          );
         schedule();
       }
     };
