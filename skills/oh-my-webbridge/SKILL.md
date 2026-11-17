@@ -34,6 +34,8 @@ For shell-sensitive or multiline data, write valid JSON with a file tool and sen
 
 ## Tasks and ownership
 
+When asked to hand off selected results and clean up, use `release_tabs {"keep":[7],"close":[8]}` with the task's actual tab IDs. Kept pages remain open and are released from ownership. Inspect `failed` before finishing. Unlisted tabs remain in the session.
+
 Use distinct sessions for independent parallel tasks. Same-session commands execute in order. `list_tabs` lists only the session's tabs. When the user asks to use the active tab, borrow it explicitly with `find_tab {"url":"exact URL or hostname","active":true}`. Do not borrow unrelated tabs or fight another session's ownership.
 
 Keep task tabs for review. Call `close_session` only when the user asks to close the task tabs. It closes only owned tabs and releases borrowed ones. Do not stop or restart the shared daemon to clean up a task.

@@ -10,6 +10,8 @@ export type Args = {
   group_title?: string;
   active?: boolean;
   tabId?: number;
+  keep?: number[];
+  close?: number[];
   tab?: number;
   selector?: string;
   value?: string;

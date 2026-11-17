@@ -1748,6 +1748,37 @@ test("arguments are checked before page scripts run, and page errors keep their 
   );
 });
 
+test("release_tabs preserves deliverables and borrowed pages through cleanup and retry", async (t) => {
+  const f = await borrowFixture(t, {
+    stored: {
+      sessions: { task: { tabs: [5, 6, 7, 8], borrowed: [9], current: 5, title: "task" } },
+    },
+  });
+  const removed = [];
+  chrome.tabs.remove = async (id) => {
+    if (id === 6) throw Error("tab strip is busy");
+    if (id === 7) throw Error("No tab with id: 7.");
+    removed.push(id);
+  };
+  await assert.rejects(f.run("task", "release_tabs", { close: [9] }), { code: "borrowed_tab" });
+  const first = await f.run("task", "release_tabs", { keep: [5, 9], close: [6, 7] });
+  assert.deepEqual(first.kept, [5, 9]);
+  assert.deepEqual(first.closed, [7]);
+  assert.deepEqual(
+    first.failed.map((failure) => failure.tabId),
+    [6],
+  );
+  assert.equal(f.m.owner(8), "task");
+  await f.borrow("next");
+  chrome.tabs.remove = async (id) => removed.push(id);
+  const retry = await f.run("task", "release_tabs", { keep: [5, 9], close: [6, 7] });
+  assert.deepEqual(retry.skipped, [5, 9, 7]);
+  assert.deepEqual(retry.closed, [6]);
+  await f.run("task", "close_session");
+  assert.deepEqual(removed, [6, 8]);
+  assert.equal(f.m.owner(5), "next");
+});
+
 test("close_session counts a tab that closed meanwhile as closed, and another failure keeps the session", async (t) => {
   const f = await sessionFixture(t, {}, { hold: false });
   for (let n = 0; n < 2; n++)

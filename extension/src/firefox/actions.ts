@@ -1,3 +1,4 @@
+import { releaseTabs } from "../release-tabs.js";
 import { releaseLayer } from "../activity.js";
 import { presetConfig, type Preset } from "../filters.js";
 import {
@@ -431,6 +432,18 @@ async function act(command: Command, budget: Budget): Promise<object> {
         groupTitle: s.title,
       })),
     };
+  }
+  if (action === "release_tabs") {
+    return await releaseTabs(
+      s,
+      args,
+      budget,
+      async (id) => {
+        await releaseLayer(id);
+        forgetTab(id);
+      },
+      closedTabId,
+    );
   }
   if (action === "close_session") {
     const owned = [...s.tabs];
