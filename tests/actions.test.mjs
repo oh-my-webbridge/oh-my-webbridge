@@ -1310,6 +1310,44 @@ test("a designated background tab can be borrowed without changing focus", async
   assert.equal((await f.run("other", "borrow_tab", { tabId: 6 })).tabId, 6);
 });
 
+test("an expired borrow does not claim a tab found after the deadline", async (t) => {
+  const f = await borrowFixture(t);
+  const started = Promise.withResolvers();
+  const query = Promise.withResolvers();
+  chrome.tabs.query = () => {
+    started.resolve();
+    return query.promise;
+  };
+  const { abort, budget } = deadlineBudget(t, 30_000);
+  const borrow = f.m.execute(
+    { session: "task", action: "borrow_tab", args: { url: f.tab.url } },
+    budget,
+  );
+  await started.promise;
+  abort.abort();
+  query.resolve([f.tab]);
+  await assert.rejects(borrow, { code: "outcome_unknown" });
+  assert.equal(f.m.owner(f.tab.id), undefined);
+  assert.deepEqual(f.saved, []);
+});
+
+test("a pending borrow cannot claim a tab after its session is replaced", async (t) => {
+  const f = await borrowFixture(t);
+  const started = Promise.withResolvers();
+  const lookup = Promise.withResolvers();
+  chrome.tabs.get = () => {
+    started.resolve();
+    return lookup.promise;
+  };
+  const borrow = f.run("task", "borrow_tab", { tabId: f.tab.id });
+  await started.promise;
+  await f.run("task", "close_session");
+  assert.deepEqual((await f.run("task", "list_tabs")).tabs, []);
+  lookup.resolve(f.tab);
+  await assert.rejects(borrow, { code: "outcome_unknown" });
+  assert.equal(f.m.owner(f.tab.id), undefined);
+});
+
 test("a tab that has not committed a document yet is matched by its pending URL", async (t) => {
   const f = await borrowFixture(t);
   // Chrome reports an empty url until the tab commits its first document.

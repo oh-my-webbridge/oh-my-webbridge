@@ -55,9 +55,11 @@ test("Firefox borrows only the designated public tab and leaves it open", async 
     tabs: [
       { id: 5, url },
       { id: 6, url, incognito: true },
+      { id: 7, url: "https://addons.mozilla.org/" },
     ],
   });
   await assert.rejects(f.run("borrow_tab", { tabId: 6 }), { code: "restricted_tab" });
+  await assert.rejects(f.run("borrow_tab", { tabId: 7 }), { code: "restricted_tab" });
   assert.equal((await f.run("borrow_tab", { url })).tabId, 5);
   await f.run("close_session", {});
   assert.ok(f.state.tabs.has(5));

@@ -1,5 +1,5 @@
 import type { Preset } from "./presets.js";
-import { fail, type Args } from "./protocol.js";
+import { expired, fail, type Args, type Budget } from "./protocol.js";
 
 export type Session = {
   tabs: number[];
@@ -176,6 +176,7 @@ export async function borrowTab(
   session: Session,
   args: Args,
   browser: "chrome" | "firefox",
+  budget: Budget,
 ): Promise<object> {
   if ((args.url === undefined) === (args.tabId === undefined))
     fail("invalid_args", "borrow_tab requires either an exact URL or a tabId");
@@ -207,6 +208,8 @@ export async function borrowTab(
     (browser === "firefox" && address.hostname === "addons.mozilla.org")
   )
     fail("restricted_tab", "this browser store page cannot be borrowed");
+  budget.check();
+  if (sessions.get(name) !== session) expired("the session was closed");
   claim(name, session, tab.id, !session.tabs.includes(tab.id));
   await persist();
   return { success: true, tabId: tab.id, url, borrowed: session.borrowed.includes(tab.id) };
