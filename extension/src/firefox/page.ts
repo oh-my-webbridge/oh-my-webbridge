@@ -499,6 +499,15 @@ function walkTree(
   visit: (entry: Entry, depth: number) => boolean,
   root?: Node,
 ): void {
+  // Follow the selected node's composed ancestors through the same visibility
+  // and child filters as a full snapshot. Siblings need no traversal.
+  const path = new Set<Node>();
+  for (let node = root; node;) {
+    const slot: HTMLSlotElement | null =
+      node instanceof Element || node instanceof Text ? node.assignedSlot : null;
+    node = slot ?? composedParent(node) ?? undefined;
+    if (node) path.add(node);
+  }
   let stopped = false;
   const step = (node: Node, depth: number, shown: boolean): void => {
     if (stopped || depth > maxDepth) return;
@@ -513,7 +522,8 @@ function walkTree(
     const style = getComputedStyle(node);
     if (style.display === "none") return;
     const nodeShown = style.visibility !== "hidden" && style.visibility !== "collapse";
-    const role = roleOf(node);
+    const ancestor = path.has(node);
+    const role = ancestor ? undefined : roleOf(node);
     let next = depth;
     if (nodeShown && role && !(style.display === "contents" && role === "generic")) {
       stopped = !visit({ node, role }, depth);
@@ -527,10 +537,12 @@ function walkTree(
             .filter((child) => child.localName === "summary")
             .slice(0, 1)
         : flatChildren(node);
-    for (const child of children) step(child, next, nodeShown);
+    for (const child of children)
+      if (!ancestor || child === root || path.has(child)) step(child, next, nodeShown);
   };
   if (root) {
-    step(root, 0, true);
+    if (root === document.documentElement || path.has(document.documentElement))
+      step(document.documentElement, 0, true);
     return;
   }
   if (maxDepth < 0 || !visit({ node: document.documentElement, role: "RootWebArea" }, 0)) return;

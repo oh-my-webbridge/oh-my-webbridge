@@ -410,6 +410,13 @@ test("snapshot derives roles, names, values and states in Chrome's line format",
   const navigation = await ok(tab, "snapshot", { selector: "nav" });
   assert.match(navigation.tree, /navigation "Primary"/u);
   assert.doesNotMatch(navigation.tree, /Main heading/u);
+  for (const selector of [
+    '[aria-hidden="true"] button',
+    '[style="display:none"] button',
+    "details p",
+  ]) {
+    assert.equal((await ok(tab, "snapshot", { selector })).tree, "");
+  }
   const found = await ok(tab, "find", { query: "BUTTON" });
   assert.equal(found.truncated, false);
   assert.deepEqual(
