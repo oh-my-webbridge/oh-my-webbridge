@@ -286,7 +286,7 @@ func statusOf(code string) int {
 		return 408
 	case "invalid_request", "invalid_args":
 		return 400
-	case "stale_ref", "tab_busy", "session_browser":
+	case "stale_ref", "tab_busy", "ambiguous_tab", "session_browser":
 		return 409
 	case "unsupported":
 		return 501
