@@ -60,6 +60,10 @@ test("Firefox borrows only the designated public tab and leaves it open", async 
   });
   await assert.rejects(f.run("borrow_tab", { tabId: 6 }), { code: "restricted_tab" });
   await assert.rejects(f.run("borrow_tab", { tabId: 7 }), { code: "restricted_tab" });
+  f.state.permissions.delete("<all_urls>");
+  await assert.rejects(f.run("borrow_tab", { tabId: 5 }), { code: "restricted_tab" });
+  assert.deepEqual((await f.run("list_tabs", {})).tabs, []);
+  f.state.permissions.add("<all_urls>");
   assert.equal((await f.run("borrow_tab", { url })).tabId, 5);
   await f.run("close_session", {});
   assert.ok(f.state.tabs.has(5));
