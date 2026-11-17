@@ -116,6 +116,10 @@ export function owner(tabId: number): string | undefined {
 export function assertOwner(name: string, tabId: number): void {
   if (owner(tabId) !== name) fail("tab_busy", `tab ${tabId} is not owned by session ${name}`);
 }
+export function ownerSession(tabId: number): Session | undefined {
+  const name = owner(tabId);
+  return name === undefined ? undefined : sessions.get(name);
+}
 export function claim(name: string, s: Session, tabId: number, borrowed: boolean): void {
   const existing = owner(tabId);
   if (existing && existing !== name) fail("tab_busy", `tab ${tabId} belongs to ${existing}`);

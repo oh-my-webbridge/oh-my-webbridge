@@ -685,10 +685,13 @@ async function run(command: Command, budget: Budget): Promise<object> {
       s,
       args,
       budget,
-      async (id) => {
+      async (id, check) => {
         await clearPreset(id);
+        check();
         await releaseLayer(id);
+        check();
         await detachIfAttached(id, "release tab");
+        check();
         forgetTab(id);
       },
       closedTabId,

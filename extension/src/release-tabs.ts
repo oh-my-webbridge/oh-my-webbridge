@@ -1,11 +1,11 @@
-import { fail, fault, type Args, type Budget, type Fault } from "./protocol.js";
-import { leaveTab, persist, type Session } from "./state.js";
+import { expired, fail, fault, type Args, type Budget, type Fault } from "./protocol.js";
+import { closedTab, leaveTab, ownerSession, persist, type Session } from "./state.js";
 
 export async function releaseTabs(
   session: Session,
   args: Args,
   budget: Budget,
-  releasePage: (id: number) => Promise<void>,
+  releasePage: (id: number, check: () => void) => Promise<void>,
   closedId: (error: Error) => number | undefined,
 ) {
   const { keep = [], close = [] } = args;
@@ -32,26 +32,40 @@ export async function releaseTabs(
       continue;
     }
     const wasCurrent = session.current === id;
+    // close_session can cancel this command and release the same tab while
+    // the browser is answering. Check before operating on it again.
+    const check = (): void => {
+      budget.check();
+      const currentOwner = ownerSession(id);
+      if (!currentOwner) closedTab(id);
+      if (currentOwner !== session) expired(`tab ${id} changed sessions`);
+    };
     try {
       if (keep.includes(id)) {
         const tab = await chrome.tabs.get(id);
+        check();
         if (
           session.tabs.includes(id) &&
           session.group !== undefined &&
           tab.groupId === session.group
-        )
+        ) {
           await chrome.tabs.ungroup(id);
-        await releasePage(id);
+          check();
+        }
+        await releasePage(id, check);
+        check();
         kept.push(id);
       } else {
         await chrome.tabs.remove(id);
         closed.push(id);
       }
     } catch (error) {
-      if (closedId(error as Error) === id || fault(error as Error).code === "tab_missing")
-        closed.push(id);
+      budget.check();
+      const failure = fault(error as Error);
+      if (failure.code === "outcome_unknown") throw error;
+      if (closedId(error as Error) === id || failure.code === "tab_missing") closed.push(id);
       else {
-        failed.push({ tabId: id, ...fault(error as Error) });
+        failed.push({ tabId: id, ...failure });
         continue;
       }
     }

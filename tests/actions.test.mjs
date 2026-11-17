@@ -1779,6 +1779,39 @@ test("release_tabs preserves deliverables and borrowed pages through cleanup and
   assert.equal(f.m.owner(5), "next");
 });
 
+for (const cancel of [true, false]) {
+  const reason = cancel ? "cancelled request" : "replaced session";
+  test(`release_tabs preserves the next owner's debugger after a ${reason}`, async (t) => {
+    const f = await borrowFixture(t);
+    await f.borrow("first");
+    await f.run("first", "cdp", { method: "DOM.getDocument" });
+    const started = Promise.withResolvers();
+    const lookup = Promise.withResolvers();
+    const get = chrome.tabs.get;
+    chrome.tabs.get = () => {
+      started.resolve();
+      return lookup.promise;
+    };
+    const { abort, budget } = deadlineBudget(t, 30000);
+    const release = f.m.execute(
+      { session: "first", action: "release_tabs", args: { keep: [f.tab.id] } },
+      budget,
+    );
+    await started.promise;
+    if (cancel) abort.abort("the session was closed");
+    chrome.tabs.get = get;
+    await f.run("first", "close_session");
+    const next = cancel ? "next" : "first";
+    await f.borrow(next);
+    await f.run(next, "cdp", { method: "DOM.getDocument" });
+    const before = f.calls.slice();
+    lookup.resolve(f.tab);
+    await assert.rejects(release, { code: "outcome_unknown" });
+    assert.equal(f.m.owner(f.tab.id), next);
+    assert.deepEqual(f.calls, before);
+  });
+}
+
 for (const eventFirst of [true, false]) {
   const order = eventFirst ? "before" : "after";
   test(`release_tabs keeps a current tab when removal fires ${order} the reply`, async (t) => {
@@ -1815,7 +1848,13 @@ test("release_tabs ungroups only kept pages owned in the session's task group", 
       },
     },
   });
-  const groups = new Map([[5, 1], [6, 2], [7, 1], [8, 1], [9, 1]]);
+  const groups = new Map([
+    [5, 1],
+    [6, 2],
+    [7, 1],
+    [8, 1],
+    [9, 1],
+  ]);
   chrome.tabs.get = async (id) => ({ ...f.tab, id, groupId: groups.get(id) });
   chrome.tabs.ungroup = async (id) => {
     if (id === 5) throw Error("tab strip is busy");
@@ -1826,7 +1865,15 @@ test("release_tabs ungroups only kept pages owned in the session's task group", 
   assert.deepEqual(result.failed, [
     { tabId: 5, code: "browser_error", message: "tab strip is busy" },
   ]);
-  assert.deepEqual([...groups], [[5, 1], [6, 2], [8, 1], [9, 1]]);
+  assert.deepEqual(
+    [...groups],
+    [
+      [5, 1],
+      [6, 2],
+      [8, 1],
+      [9, 1],
+    ],
+  );
   assert.deepEqual(f.saved.at(-1).sessions.task, {
     tabs: [5, 8],
     borrowed: [],

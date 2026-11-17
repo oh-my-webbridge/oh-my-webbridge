@@ -439,8 +439,9 @@ async function act(command: Command, budget: Budget): Promise<object> {
       s,
       args,
       budget,
-      async (id) => {
+      async (id, check) => {
         await releaseLayer(id);
+        check();
         forgetTab(id);
       },
       closedTabId,
