@@ -1784,6 +1784,48 @@ test("close_session releases a borrowed tab that closed meanwhile", async (t) =>
   assert.equal(f.m.owner(5), undefined);
 });
 
+test("Chrome validates all batch step fields before executing commands", async (t) => {
+  const f = await borrowFixture(t);
+  for (const [step, message] of [
+    [null, "batch step 2 of 2 must be an object with an action field"],
+    [{ args: {} }, "batch step 2 of 2: action must be a non-empty string"],
+    [{ action: "list_tabs", args: [] }, "batch step 2 of 2: args must be an object"],
+  ]) {
+    await assert.rejects(f.run("task", "batch", { steps: [{ action: "read_page" }, step] }), {
+      code: "invalid_args",
+      message,
+    });
+  }
+});
+
+test("Chrome tab lookup reports the requested scope", async (t) => {
+  const f = await borrowFixture(t);
+  for (const active of [false, true]) {
+    await assert.rejects(f.run("task", "find_tab", { url: "missing.example", active }), {
+      code: "tab_missing",
+      message: active ? "the active tab does not match" : "no matching tab in this session",
+    });
+  }
+});
+
+test("Chrome protected-page refusals retain their reason and use restricted_tab", async (t) => {
+  const f = await borrowFixture(t);
+  await f.borrow("task");
+  for (const message of [
+    "The extensions gallery cannot be scripted.",
+    "Cannot access a chrome-extension:// URL of different extension",
+  ]) {
+    globalThis.chrome.debugger.attach = async () => {
+      throw Error(message);
+    };
+    await assert.rejects(f.run("task", "read_page"), { code: "restricted_tab", message });
+  }
+  globalThis.chrome.debugger.attach = async () => {
+    throw Error("Another debugger is already attached");
+  };
+  await assert.rejects(f.run("task", "read_page"), { code: "debugger_unavailable" });
+});
+
 test("a failed batch step keeps its code and names the step", async (t) => {
   const f = await borrowFixture(t);
   await f.borrow("task");

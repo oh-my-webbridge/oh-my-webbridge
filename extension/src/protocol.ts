@@ -102,6 +102,34 @@ export function stringArg(value: string | undefined, name: string): string {
   if (typeof value !== "string" || !value) fail("invalid_args", `${name} is required`);
   return value;
 }
+const separateBatchActions = [
+  "batch",
+  "close_session",
+  "screenshot",
+  "save_as_pdf",
+  "artifact_read",
+  "artifact_close",
+];
+
+export function batchSteps(steps: Args["steps"]): NonNullable<Args["steps"]> {
+  if (!Array.isArray(steps) || steps.length < 1 || steps.length > 64)
+    fail("invalid_args", "batch needs an array of 1–64 steps");
+  for (const [index, step] of steps.entries()) {
+    const field = `batch step ${index + 1} of ${steps.length}`;
+    if (!step || typeof step !== "object" || Array.isArray(step))
+      fail("invalid_args", `${field} must be an object with an action field`);
+    if (typeof step.action !== "string" || !step.action.trim())
+      fail("invalid_args", `${field}: action must be a non-empty string`);
+    if (
+      step.args !== undefined &&
+      (step.args === null || typeof step.args !== "object" || Array.isArray(step.args))
+    )
+      fail("invalid_args", `${field}: args must be an object`);
+    if (separateBatchActions.includes(step.action))
+      fail("invalid_args", `${field}: run ${step.action} as a separate call`);
+  }
+  return steps;
+}
 // The deadline or a cancellation ended the command, and the browser may already
 // have acted. reason is the abort reason that bridge.ts gives the request's
 // signal, such as "the session was closed".

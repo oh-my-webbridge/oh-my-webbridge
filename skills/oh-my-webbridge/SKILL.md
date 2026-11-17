@@ -40,6 +40,8 @@ Keep task tabs for review. Call `close_session` only when the user asks to close
 
 ## Other operations
 
+For a read-only batch, pass `{"steps":[{"action":"read_page"},{"action":"list_tabs","args":{}}]}`. The daemon reports the step number and field when an entry is malformed.
+
 Use `screenshot` and `save_as_pdf`, then open the returned path to inspect the artifact. Use unique absolute output paths; existing files are never overwritten. Upload paths are absolute on the machine running the daemon and browser; Firefox uploads total at most 16 MiB per command. Use user-provided or clearly task-authorized files.
 
 Use `wait` with selector/text/url/expression/load (`omw call --timeout-ms N` sets its deadline, default 30000), `scroll`, `hover`, `select_option`, `dialog`, `send_keys`, and `drag` for ordinary interactions. `cdp` accepts `{method,params,sessionId}` for advanced cases in Chrome. Use `frame` with selector/name/frameId/url to select a same-origin or cross-origin iframe, and `frame {"cmd":"main"}` to return. Take a new snapshot after changing frame. Commands then run in the selected frame. Other iframes that load or navigate do not change the selection or the references from its snapshot. When the selected frame navigates, reloads or is removed, the next command for it returns `frame_unavailable`, and later commands use the main frame. Select the frame again if the task continues there. In Chrome, a command with a reference from that frame's snapshot returns `stale_ref` instead. In Chrome, `dialog` answers dialogs from the page or any iframe, whichever frame is selected.
