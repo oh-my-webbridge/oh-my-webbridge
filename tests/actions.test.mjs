@@ -1325,6 +1325,7 @@ test("bounded reads preserve surrogate pairs across the default response limit",
   const first = readChunk(text, ...readRange({}));
   assert.equal(first.nextOffset, 191999);
   assert.equal(first.complete, false);
+  assert.deepEqual(readChunk(text, 192000, 2), readChunk(text, 191999, 2));
   assert.deepEqual(readChunk(text, first.nextOffset, 2), {
     text: "🌙",
     complete: false,

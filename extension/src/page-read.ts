@@ -12,15 +12,15 @@ export function readRange(args: Args): [number, number] {
 // Also serialized into the selected Chrome execution context. Slice there so
 // the complete document never crosses the debugger connection.
 export function readChunk(text: string, offset: number, size: number) {
-  let end = Math.min(text.length, offset + size);
-  if (
-    end < text.length &&
-    text.charCodeAt(end - 1) >= 0xd800 &&
-    text.charCodeAt(end - 1) <= 0xdbff &&
-    text.charCodeAt(end) >= 0xdc00 &&
-    text.charCodeAt(end) <= 0xdfff
-  )
-    end--;
+  const boundary = (index: number): number => {
+    const left = text.charCodeAt(index - 1);
+    const right = text.charCodeAt(index);
+    return left >= 0xd800 && left <= 0xdbff && right >= 0xdc00 && right <= 0xdfff
+      ? index - 1
+      : index;
+  };
+  const start = boundary(offset);
+  const end = boundary(Math.min(text.length, start + size));
   const complete = end === text.length;
-  return { text: text.slice(offset, end), complete, nextOffset: complete ? null : end };
+  return { text: text.slice(start, end), complete, nextOffset: complete ? null : end };
 }

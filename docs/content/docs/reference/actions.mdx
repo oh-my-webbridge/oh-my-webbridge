@@ -64,7 +64,7 @@ A session holds at most 32 tabs across task and borrowed ones.
 
 ## Reading
 
-`read_page` accepts a UTF-16 `offset` and a `pageSize` from 2 to 192000 code units (default 192000). Continue with the returned `nextOffset` until `complete` is true and `nextOffset` is null. Returned boundaries preserve surrogate pairs. Each call reads the current document in the selected frame. Edits can shift offsets; after navigation or frame replacement, restart at zero for the new page.
+`read_page` accepts a UTF-16 `offset` and a `pageSize` from 2 to 192000 code units (default 192000). Continue with the returned `nextOffset` until `complete` is true and `nextOffset` is null. Returned boundaries preserve surrogate pairs. Each call reads the current document in the selected frame. Edits can shift offsets; after navigation or frame replacement, restart at zero for the new page. An offset inside a surrogate pair starts at the beginning of that pair.
 
 Pass a `selector` to `snapshot` for the accessibility subtree rooted at a matching element. You can pass a reference from the previous snapshot. The scoped snapshot issues fresh references and has the same limits and lifetime as a full snapshot.
 
