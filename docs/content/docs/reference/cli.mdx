@@ -157,7 +157,7 @@ omw install-skill DIRECTORY
 omw skill
 ```
 
-`install-skill` writes the bundled agent guide to `DIRECTORY/oh-my-webbridge/SKILL.md` with mode 0600, and creates the directory with mode 0700. It refuses to overwrite an existing file.
+`install-skill` installs the guide and its offline references under `DIRECTORY/oh-my-webbridge/`. Use `omw install-skill --refresh DIRECTORY` after updating the binary to replace the bundled paths while preserving other files.
 
 `skill` prints the same guide to stdout.
 

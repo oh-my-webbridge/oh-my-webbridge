@@ -69,7 +69,7 @@ await zipExtension(firefox, join(directory, `omw-${version}-firefox-mv3-unsigned
 const kit = join(staging, "agent-kit");
 await mkdir(kit, { recursive: true });
 await cp("dist/sdk.mjs", join(kit, "sdk.mjs"));
-await cp("skills/oh-my-webbridge", join(kit, "skills", "oh-my-webbridge"), { recursive: true });
+await exec("go", ["run", "./cmd/omw", "install-skill", join(kit, "skills")]);
 await packTarZst(join(directory, `omw-${version}-agent-kit.tar.zst`), kit, ["."]);
 const benchmark = process.env.OMW_RELEASE_BENCHMARK;
 if (benchmark) {

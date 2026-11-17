@@ -818,6 +818,16 @@ async function auditFixture(t, prefix) {
     "sdk.mjs": "",
     "skills/oh-my-webbridge/SKILL.md": "",
   };
+  for (const page of [
+    "firefox",
+    "presets",
+    "sessions",
+    "reference/actions",
+    "reference/cdp",
+    "reference/cli",
+    "reference/sdk",
+  ])
+    kit[`skills/oh-my-webbridge/references/${page}.mdx`] = "";
   const pack = async (name, files) =>
     packTarZst(join(release, `omw-0.2.0-${name}.tar.zst`), await stage(name, files), ["."]);
   const zip = (name, files) =>

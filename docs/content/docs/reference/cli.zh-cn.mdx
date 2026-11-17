@@ -159,7 +159,7 @@ omw install-skill DIRECTORY
 omw skill
 ```
 
-`install-skill` 把内附的 Agent 指南以 0600 权限写入 `DIRECTORY/oh-my-webbridge/SKILL.md`，并以 0700 权限创建目录。它拒绝覆写既有文件。
+`install-skill` 会将指南和脱机参考文档安装到 `DIRECTORY/oh-my-webbridge/`。更新可执行文件后，使用 `omw install-skill --refresh DIRECTORY` 更新内附文档，并保留其他文件。
 
 `skill` 把同一份指南印到 stdout。
 

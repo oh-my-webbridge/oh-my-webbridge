@@ -49,11 +49,22 @@ omw call [--browser chrome|firefox] [--timeout-ms N] SESSION ACTION [JSON|-]
                                 run one action (read JSON from stdin with -)
 omw service install             install a launchd/systemd user service
 omw skill                       print the bundled agent guide
-omw install-skill DIRECTORY      install the guide below an explicit skills directory
+omw install-skill [--refresh] DIRECTORY  install the guide and offline references
 
 Use OMW_HOME for a separate configuration directory. The browser endpoint is
 fixed at 127.0.0.1:17373; no network-facing bind is supported.`)
 		return nil
+	}
+	if args[0] == "install-skill" {
+		flags := flag.NewFlagSet("install-skill", flag.ContinueOnError)
+		refresh := flags.Bool("refresh", false, "replace bundled files in an existing installation")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 1 {
+			return errors.New("usage: omw install-skill [--refresh] DIRECTORY")
+		}
+		return skills.Install(flags.Arg(0), *refresh)
 	}
 	c, err := config.Load()
 	if err != nil {
@@ -63,24 +74,6 @@ fixed at 127.0.0.1:17373; no network-facing bind is supported.`)
 	case "skill":
 		fmt.Print(skills.Guide)
 		return nil
-	case "install-skill":
-		if len(args) != 2 {
-			return errors.New("usage: omw install-skill DIRECTORY")
-		}
-		dir := filepath.Join(args[1], "oh-my-webbridge")
-		if err = os.MkdirAll(dir, 0700); err != nil {
-			return err
-		}
-		f, err := os.OpenFile(filepath.Join(dir, "SKILL.md"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
-		_, err = f.WriteString(skills.Guide)
-		closeErr := f.Close()
-		if err != nil {
-			return err
-		}
-		return closeErr
 	case "serve":
 		if len(args) > 1 {
 			if len(args) != 3 || args[1] != "--cdp" {
