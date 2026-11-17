@@ -1301,13 +1301,23 @@ test("a network recording stays in the session of the frame selected at start", 
 });
 
 test("bounded reads preserve surrogate pairs across the default response limit", async (t) => {
-  const { m: { readChunk, readRange } } = await borrowFixture(t);
+  const {
+    m: { readChunk, readRange },
+  } = await borrowFixture(t);
   const text = "a".repeat(191999) + "🌙z";
   const first = readChunk(text, ...readRange({}));
   assert.equal(first.nextOffset, 191999);
   assert.equal(first.complete, false);
-  assert.deepEqual(readChunk(text, first.nextOffset, 2), { text: "🌙", complete: false, nextOffset: 192001 });
-  assert.deepEqual(readChunk(text, text.length + 1, 2), { text: "", complete: true, nextOffset: null });
+  assert.deepEqual(readChunk(text, first.nextOffset, 2), {
+    text: "🌙",
+    complete: false,
+    nextOffset: 192001,
+  });
+  assert.deepEqual(readChunk(text, text.length + 1, 2), {
+    text: "",
+    complete: true,
+    nextOffset: null,
+  });
   for (const args of [{ pageSize: 1 }, { pageSize: 192001 }, { offset: -1 }])
     assert.throws(() => readRange(args), { code: "invalid_args" });
 });
