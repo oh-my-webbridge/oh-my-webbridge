@@ -155,7 +155,9 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 批次 [#batch]
 
-`batch` 接受 `steps`，這是由 `{ action, args }` 物件組成的陣列，含 1 到 64 項。步驟在同一個請求中依序執行，並在第一個錯誤時停止。錯誤保留失敗步驟的錯誤碼，訊息以 `batch step N of M (action):` 開頭，表示第 1 到第 N-1 步已經完成。已完成的步驟不會還原。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 與 `artifact_close` 不能出現在批次內。
+`batch` 接受含 1 到 64 個物件的 `steps` 陣列。每個步驟都要有 `action` 字串，可選擇提供 `args` 物件。步驟的欄位有誤時，會在任何瀏覽器動作開始前回傳 `invalid_args` 並指出步驟編號。使用 Firefox 時，daemon 也會在瀏覽器開始執行批次前準備上傳檔案。
+
+開始執行後，步驟會依序進行，遇到第一個錯誤便停止。回覆保留失敗動作的錯誤碼，訊息以 `batch step N of M (action):` 開頭。前面已執行的動作仍會生效。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 與 `artifact_close` 要分開呼叫。
 
 ## 預設集 [#presets]
 

@@ -153,7 +153,9 @@ Settings persist for the session and apply to new tabs before they navigate. Chr
 
 ## Batch
 
-`batch` takes `steps`, an array of `{ action, args }` objects, 1 to 64 entries. Steps run in order in one request and stop at the first error. The error keeps the code of the failed step, and its message starts with `batch step N of M (action):`, so steps 1 to N-1 completed. Completed steps are not rolled back. `batch`, `close_session`, `screenshot`, `save_as_pdf`, `artifact_read` and `artifact_close` cannot appear inside a batch.
+`batch` takes `steps`, an array of 1 to 64 objects. Each step requires an `action` string and accepts an optional `args` object. Invalid step fields return `invalid_args` with the step number before any browser action starts. On Firefox, the daemon also prepares uploads before the browser starts executing the batch.
+
+Once execution starts, steps run in order and stop at the first failure. The response keeps the failed action's code and prefixes the message with `batch step N of M (action):`. Earlier actions keep their effects. `batch`, `close_session`, `screenshot`, `save_as_pdf`, `artifact_read` and `artifact_close` must run as separate calls.
 
 ## Presets
 
