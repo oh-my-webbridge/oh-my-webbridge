@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import workspace from "../package.json" with { type: "json" };
+import tools from "../benchmarks/tools/package.json" with { type: "json" };
+import { registry } from "../benchmarks/registry.mjs";
 import { mcpValue, observed, output } from "../benchmarks/results.mjs";
+
+test("benchmark registry reports the pinned comparator versions", () => {
+  const versions = new Map(registry.map(({ name, version }) => [name, version]));
+  assert.equal(versions.get("playwright"), workspace.devDependencies["playwright-core"]);
+  assert.equal(versions.get("puppeteer"), tools.dependencies["puppeteer-core"]);
+  assert.equal(versions.get("playwright-mcp"), tools.dependencies["@playwright/mcp"]);
+  assert.equal(versions.get("chrome-devtools-mcp"), tools.dependencies["chrome-devtools-mcp"]);
+});
+
 const packet = (text) => ({ content: [{ type: "text", text }] });
 test("benchmark reads MCP result sections, excluding echoed source code", () => {
   const pw = packet(
@@ -92,6 +104,7 @@ async function runBenchmarks(t, prefix, { tools, crash = "", unavailable = [], p
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const { dir, write, run, env } = await benchmarkFixture(t, prefix, [
+    "package.json",
     "benchmarks/run.mjs",
     "benchmarks/registry.mjs",
     "benchmarks/tools/package.json",

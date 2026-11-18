@@ -1,30 +1,43 @@
+import workspace from "../package.json" with { type: "json" };
+import tools from "./tools/package.json" with { type: "json" };
+
 export const registry = [
   { name: "oh-my-webbridge", interface: "HTTP + MV3", version: "workspace", automatic: true },
-  { name: "playwright", interface: "Node library / CDP", version: "1.64.1", automatic: true },
-  { name: "puppeteer", interface: "Node library / CDP", version: "25.16.0", automatic: true },
+  {
+    name: "playwright",
+    interface: "Node library / CDP",
+    version: workspace.devDependencies["playwright-core"],
+    automatic: true,
+  },
+  {
+    name: "puppeteer",
+    interface: "Node library / CDP",
+    version: tools.dependencies["puppeteer-core"],
+    automatic: true,
+  },
   { name: "agent-browser", interface: "native CLI / CDP", version: "0.40.0", automatic: true },
   {
     name: "playwright-mcp",
     interface: "MCP stdio / CDP",
-    version: "package-lock",
+    version: tools.dependencies["@playwright/mcp"],
     automatic: true,
   },
   {
     name: "chrome-devtools-mcp",
     interface: "MCP stdio / CDP",
-    version: "package-lock",
+    version: tools.dependencies["chrome-devtools-mcp"],
     automatic: true,
   },
   {
     name: "pi-chrome-use",
     interface: "Pi execution core / CDP (no model)",
-    version: "1.1.1",
+    version: tools.dependencies["pi-chrome-use"],
     automatic: true,
   },
   {
     name: "selenium",
     interface: "WebDriver / attached Chrome",
-    version: "4.52.0",
+    version: tools.dependencies["selenium-webdriver"],
     automatic: true,
   },
   {

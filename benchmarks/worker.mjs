@@ -362,13 +362,10 @@ try {
     const { StdioClientTransport } =
       await import("./tools/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js");
     const isPW = name === "playwright-mcp";
-    const file = isPW
-      ? "@playwright/mcp/cli.js"
-      : "chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js";
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [
-        resolve("benchmarks/tools/node_modules", file),
+        resolve("benchmarks/tools/node_modules/.bin", name),
         ...(isPW
           ? ["--cdp-endpoint", endpoint]
           : ["--browserUrl", endpoint, "--no-usage-statistics", "--no-performance-crux"]),
