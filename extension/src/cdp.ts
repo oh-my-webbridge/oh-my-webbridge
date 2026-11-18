@@ -17,6 +17,10 @@ import { closedTab } from "./state.js";
 const causes = {
   // chrome.tabs: "No tab with id: 5."; chrome.debugger: "No tab with given id 5."
   tab: ["No tab with id: ", "No tab with given id "],
+  restricted: [
+    "The extensions gallery cannot be scripted",
+    "Cannot access a chrome-extension:// URL of different extension",
+  ],
   // chrome.debugger once Chrome has ended the tab's debugger session.
   detached: ["Debugger is not attached to the tab with id: "],
   // The command ended without a reply after it may have reached the page.
@@ -85,7 +89,9 @@ export async function attach(tabId: number): Promise<void> {
         });
       } catch (error) {
         attachments.delete(tabId);
-        if (cause(error as Error) === "tab") closedTab(tabId);
+        const reason = cause(error as Error);
+        if (reason === "tab") closedTab(tabId);
+        if (reason === "restricted") fail("restricted_tab", chromeMessage(error as Error));
         fail("debugger_unavailable", `attach tab ${tabId}: ${String(error)}`);
       }
     })();

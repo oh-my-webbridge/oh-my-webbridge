@@ -946,6 +946,27 @@ func TestFirefoxUploadSendsFileBytes(t *testing.T) {
 	}
 }
 
+func TestFirefoxMalformedBatchReachesBrowserBeforeReadingUploads(t *testing.T) {
+	s, server := newServer(t, config.Config{})
+	_, firefoxSeen := connect(t, s, server, firefoxExtension, Packet{Browser: Firefox})
+	upload := map[string]any{"action": "upload", "args": map[string]any{
+		"files": []string{filepath.Join(t.TempDir(), "missing.txt")},
+	}}
+	for _, malformed := range []any{nil, map[string]any{"args": map[string]any{}}, map[string]any{"action": "upload", "args": []any{}}} {
+		args := map[string]any{"steps": []any{upload, malformed}}
+		want, err := json.Marshal(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code, reply := post(t, s, server, map[string]any{"session": "fx", "browser": "firefox", "action": "batch", "args": args}); code != 200 {
+			t.Fatalf("daemon rejected the batch before the browser could validate it: %d %+v", code, reply.Error)
+		}
+		if cmd := <-firefoxSeen; string(cmd.Args) != string(want) {
+			t.Fatalf("Firefox received %s, want %s", cmd.Args, want)
+		}
+	}
+}
+
 func TestFirefoxUploadRejectsUnreadableFiles(t *testing.T) {
 	s, server := newServer(t, config.Config{})
 	_, firefoxSeen := connect(t, s, server, firefoxExtension, Packet{Browser: Firefox})
@@ -984,7 +1005,7 @@ func TestFirefoxUploadRejectsUnreadableFiles(t *testing.T) {
 		{"total over the limit", "upload", map[string]any{"files": []string{first, second}}, second},
 		{"files not an array", "upload", map[string]any{"files": first}, "array"},
 		{"files missing", "upload", map[string]any{"selector": "#file"}, "array"},
-		{"batch step", "batch", map[string]any{"steps": []map[string]any{{"action": "click"}, {"action": "upload", "args": map[string]any{"files": []string{missing}}}}}, "batch step 1: read upload file " + missing},
+		{"batch step", "batch", map[string]any{"steps": []map[string]any{{"action": "click"}, {"action": "upload", "args": map[string]any{"files": []string{missing}}}}}, "batch step 2 of 2 (upload): read upload file " + missing},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

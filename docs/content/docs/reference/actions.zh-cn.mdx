@@ -155,7 +155,9 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 ## 批量 [#batch]
 
-`batch` 接受 `steps`，这是由 `{ action, args }` 对象组成的数组，含 1 到 64 项。步骤在同一个请求中依序运行，并在第一个错误时停止。错误保留失败步骤的错误码，消息以 `batch step N of M (action):` 开头，表示第 1 到第 N-1 步已经完成。已完成的步骤不会还原。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 与 `artifact_close` 不能出现在批量内。
+`batch` 接受含 1 到 64 个对象的 `steps` 数组。每个步骤都要有 `action` 字符串，可选择提供 `args` 对象。步骤的字段有误时，会在任何浏览器动作开始前返回 `invalid_args` 并指出步骤编号。使用 Firefox 时，daemon 也会在浏览器开始运行批量前准备上传文件。
+
+开始运行后，步骤会依序进行，遇到第一个错误便停止。回复保留失败动作的错误码，消息以 `batch step N of M (action):` 开头。前面已运行的动作仍会生效。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 与 `artifact_close` 要分开调用。
 
 ## 预设 [#presets]
 

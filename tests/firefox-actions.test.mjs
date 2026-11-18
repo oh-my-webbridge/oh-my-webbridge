@@ -960,6 +960,25 @@ test("close_session keeps the session when closing a tab fails", async (t) => {
   assert.deepEqual(Object.keys(f.state.sessions), ["task"]);
 });
 
+test("Firefox validates batch step fields and reports tab lookup scope", async (t) => {
+  const f = await fixture(t);
+  for (const [step, message] of [
+    [null, "batch step 2 of 2 must be an object with an action field"],
+    [{ args: {} }, "batch step 2 of 2: action must be a non-empty string"],
+  ]) {
+    await assert.rejects(f.run("batch", { steps: [{ action: "read_page" }, step] }), {
+      code: "invalid_args",
+      message,
+    });
+  }
+  for (const active of [false, true]) {
+    await assert.rejects(f.run("find_tab", { url: "missing.example", active }), {
+      code: "tab_missing",
+      message: active ? "the active tab does not match" : "no matching tab in this session",
+    });
+  }
+});
+
 test("a failed batch step keeps its code and names its position", async (t) => {
   const f = await fixture(t, {
     ...owned,

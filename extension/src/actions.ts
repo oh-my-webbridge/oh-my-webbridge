@@ -29,6 +29,7 @@ import { forgetFrames, resetScope, runtimeDisabled, sessionEnded, topDocument } 
 import { snowflake } from "./id.js";
 import { forget as forgetNetwork, network } from "./network.js";
 import {
+  batchSteps,
   fail,
   fault,
   nextPoll,
@@ -362,27 +363,10 @@ async function run(command: Command, budget: Budget): Promise<object> {
   const { action, session: name } = command;
   const args = command.args ?? {};
   if (action === "batch") {
-    if (
-      !args.steps?.length ||
-      args.steps.length > 64 ||
-      args.steps.some((step) =>
-        [
-          "batch",
-          "close_session",
-          "screenshot",
-          "save_as_pdf",
-          "artifact_read",
-          "artifact_close",
-        ].includes(step.action),
-      )
-    )
-      fail(
-        "invalid_args",
-        "batch needs 1–64 non-nested steps; close sessions and create artifacts separately",
-      );
+    const steps = batchSteps(args.steps);
     const results: object[] = [];
-    const count = args.steps.length;
-    for (const [index, step] of args.steps.entries()) {
+    const count = steps.length;
+    for (const [index, step] of steps.entries()) {
       // A failed step keeps its code; the message says which step it was, so
       // the steps before it completed.
       try {
@@ -601,7 +585,7 @@ async function run(command: Command, budget: Budget): Promise<object> {
     if (!match?.id)
       fail(
         "tab_missing",
-        "no matching tab in this session (active:true explicitly borrows the user's active tab)",
+        args.active ? "the active tab does not match" : "no matching tab in this session",
       );
     claim(name, s, match.id, !s.tabs.includes(match.id));
     await persist();
