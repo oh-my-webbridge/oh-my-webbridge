@@ -73,7 +73,7 @@ export function startReleaseCheck(): void {
         releaseCache &&
         attemptedAt >= releaseCache.attemptedAt &&
         attemptedAt - releaseCache.attemptedAt < interval;
-      // Re-enabling can resume an unfinished first lookup once in this window.
+      // Startup and re-enabling can resume an unfinished first lookup once.
       if (
         recent &&
         (!resumeIncomplete ||
@@ -115,5 +115,5 @@ export function startReleaseCheck(): void {
     if (name === "check-release") run();
   });
   void chrome.alarms.create("check-release", { periodInMinutes: 60 });
-  run();
+  run(true);
 }

@@ -106,6 +106,25 @@ test("offline and invalid replies keep the last stable release and wait before r
   assert.equal(settings.releaseCache.unavailable, true);
 });
 
+test("worker startup resumes an interrupted first check once", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 2 * day });
+  const { settings, requests, alarm, reply } = background(t, {
+    releaseCache: { attemptedAt: 2 * day - 1000 },
+  });
+  const response = Promise.withResolvers();
+  reply(() => response.promise);
+  await setImmediate();
+  assert.equal(requests.length, 1);
+  assert.equal(settings.releaseCache.resumed, true);
+  startReleaseCheck();
+  alarm();
+  await setImmediate();
+  assert.equal(requests.length, 1);
+  response.resolve(Response.json({ tag_name: "v2.2.0", draft: false, prerelease: false }));
+  await setImmediate();
+  assert.equal(settings.releaseCache.latest, "2.2.0");
+});
+
 test("turning off release checks stops new requests and aborts the current one", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 2 * day });
   const { settings, requests, alarm, reply, toggle } = background(t, {
