@@ -282,7 +282,7 @@ func statusOf(code string) int {
 		return 503
 	case "outcome_unknown":
 		return 504
-	case "wait_timeout":
+	case "wait_timeout", "command_not_sent":
 		return 408
 	case "invalid_request", "invalid_args":
 		return 400

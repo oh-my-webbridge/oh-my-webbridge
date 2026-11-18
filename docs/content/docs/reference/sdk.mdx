@@ -78,7 +78,7 @@ const result = await task.call(
 | `timeoutMs` | `number`      | `30000` | Deadline for the command, including its time in the queue, 1 to 120000. Another value rejects with `invalid_request` before the request is sent. |
 | `signal`    | `AbortSignal` | none    | Cancels the request. It is combined with an internal timeout of `timeoutMs + 5000`.                                                              |
 
-The request is aborted locally 5 seconds after the daemon deadline. That gives the daemon time to answer with `outcome_unknown` when the page did not finish. A request aborted through `signal` rejects with an `AbortError`; a request aborted by the internal timeout rejects with a `TimeoutError`.
+The request is aborted locally 5 seconds after the daemon deadline. This gives the daemon time to report `command_not_sent` (HTTP 408) if it stopped before writing, or `outcome_unknown` (HTTP 504) if the command may have run. A request aborted through `signal` rejects with an `AbortError`; a request aborted by the internal timeout rejects with a `TimeoutError`.
 
 ```js
 const controller = new AbortController();
@@ -114,6 +114,7 @@ try {
 | `busy`                                     | Command capacity is full. HTTP 429. Retry after a running command finishes.                                                          |
 | `outcome_unknown`                          | The command may have taken effect. Read the page before retrying. HTTP 504.                                                          |
 | `wait_timeout`                             | The `wait` condition did not hold before `timeoutMs` ran out. The page is unchanged. HTTP 408.                                       |
+| `command_not_sent`                         | The daemon stopped before writing the request to the browser. HTTP 408.                                                              |
 | `invalid_args`, `invalid_request`          | The arguments were rejected before dispatch. HTTP 400.                                                                               |
 | `http_error`                               | The reply was not JSON, so the daemon's error object is missing. The message is `HTTP <status>: <first 200 characters of the body>`. |
 

@@ -197,6 +197,8 @@ daemon 在內部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 
 ## 錯誤 [#errors]
 
+`command_not_sent`（HTTP 408）表示請求在開始寫入傳輸連線前就已結束。若已寫入、仍在等待瀏覽器回覆時請求結束，則回傳 `outcome_unknown`。CLI 把錯誤碼寫到 stderr，並在 stdout 保留 JSON 回覆。
+
 每個錯誤都帶有 `code` 與 `message`。HTTP 狀態碼列於下方；這裡未列出的錯誤碼回傳 502。
 
 | 錯誤碼                  | HTTP | 意義                                                                                                                                                                         | 處理方式                                                                                                       |
@@ -209,6 +211,7 @@ daemon 在內部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 | `session_browser`       | 409  | 工作階段綁定到另一個瀏覽器，而請求指定了這個瀏覽器。                                                                                                                         | 移除 `browser`，或關閉該工作階段並開始新的工作階段。                                                           |
 | `outcome_unknown`       | 504  | 指令可能已經執行：期限、取消、傳輸寫入或斷線切斷了回覆，或指令執行期間頁面導覽或偵錯器中斷連線。訊息會指出原因。                                                             | 重複之前，先觀察頁面或網路狀態。切勿盲目重送提交、付款或發布操作。                                             |
 | `wait_timeout`          | 408  | `wait` 的條件在期限前沒有成立。`wait` 不會變更頁面。                                                                                                                         | 以更長的期限再次送出 `wait`，或檢查條件。                                                                      |
+| `command_not_sent`      | 408  | 請求在開始寫入傳輸連線前就已結束。                                                                                                                                           | 如果仍須執行該動作，可以重新送出指令。                                                                         |
 | `tab_busy`              | 409  | 該分頁屬於另一個工作階段。                                                                                                                                                   | 使用這個工作階段持有的分頁，或使用另一個工作階段。                                                             |
 | `stale_ref`             | 409  | `@e` 參照比它所屬的文件存活得更久。                                                                                                                                          | 重新取得 `snapshot`。                                                                                          |
 | `no_tab`                | 502  | 頁面動作在工作階段還沒有分頁時執行，或在目前分頁以 `close_tab` 以外的方式關閉之後執行。                                                                                      | 執行 `navigate` 或 `find_tab`，或傳入工作階段另一個分頁的 `tabId`。                                            |

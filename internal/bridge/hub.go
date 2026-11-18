@@ -164,16 +164,12 @@ func (l *link) send(ctx context.Context, packet Packet) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, errStopped):
-		return expired()
+		return &Fault{"command_not_sent", "request deadline/cancellation reached before the transport write started"}
 	case errors.Is(err, errClosed):
 		return &Fault{"browser_offline", l.browser + " disconnected before the command was sent; the command did not run"}
 	default:
 		return &Fault{"outcome_unknown", "browser transport write failed: " + err.Error()}
 	}
-}
-
-func expired() *Fault {
-	return &Fault{"outcome_unknown", "request deadline/cancellation reached; observe before retrying"}
 }
 
 // BrowserStatus describes one connected extension in /status.
@@ -563,7 +559,7 @@ func (h *Hub) call(ctx context.Context, cmd Command, reserve bool, pick func() (
 		// not wait for it, and it is not sent once the connection has ended.
 		data, turn := encode(Packet{Type: "cancel", ID: id}), l.queue.enter()
 		go func() { _ = l.write(turn, nil, data) }()
-		return nil, expired()
+		return nil, &Fault{"outcome_unknown", "request deadline/cancellation reached while waiting for a browser reply after the transport write completed; observe before retrying"}
 	}
 }
 

@@ -80,7 +80,7 @@ const result = await task.call(
 | `timeoutMs` | `number`      | `30000` | 指令的期限，包括它在佇列中的時間，範圍 1 到 120000。其他值會在送出請求之前以 `invalid_request` 拒絕。 |
 | `signal`    | `AbortSignal` | 無      | 取消請求。它會與 `timeoutMs + 5000` 的內部逾時合併。                                                  |
 
-請求在 daemon 期限之後 5 秒於本機中止。這讓 daemon 有時間在頁面沒有完成時，以 `outcome_unknown` 回應。經由 `signal` 中止的請求以 `AbortError` 拒絕；由內部逾時中止的請求以 `TimeoutError` 拒絕。
+請求在 daemon 期限之後 5 秒於本機中止。這讓 daemon 有時間回應：若在寫入前就已停止，回傳 `command_not_sent`（HTTP 408）；若指令可能已執行，回傳 `outcome_unknown`（HTTP 504）。經由 `signal` 中止的請求以 `AbortError` 拒絕；由內部逾時中止的請求以 `TimeoutError` 拒絕。
 
 ```js
 const controller = new AbortController();
@@ -116,6 +116,7 @@ try {
 | `busy`                                     | 指令容量已滿。HTTP 429。等執行中的指令完成後重試。                                         |
 | `outcome_unknown`                          | 指令可能已經生效。重試之前，先讀取頁面。HTTP 504。                                         |
 | `wait_timeout`                             | `wait` 的條件在 `timeoutMs` 用完前沒有成立，頁面未變更。HTTP 408。                         |
+| `command_not_sent`                         | daemon 在開始向瀏覽器寫入請求前就已停止處理。HTTP 408。                                    |
 | `invalid_args`、`invalid_request`          | 引數在分派之前就被拒絕。HTTP 400。                                                         |
 | `http_error`                               | 回覆不是 JSON，因此缺少 daemon 的錯誤物件。訊息為 `HTTP <status>: <本文的前 200 個字元>`。 |
 
