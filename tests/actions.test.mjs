@@ -1812,6 +1812,141 @@ test("arguments are checked before page scripts run, and page errors keep their 
   );
 });
 
+test("release_tabs preserves deliverables and borrowed pages through cleanup and retry", async (t) => {
+  const f = await borrowFixture(t, {
+    stored: {
+      sessions: { task: { tabs: [5, 6, 7, 8], borrowed: [9], current: 5, title: "task" } },
+    },
+  });
+  const removed = [];
+  chrome.tabs.remove = async (id) => {
+    if (id === 6) throw Error("tab strip is busy");
+    if (id === 7) throw Error("No tab with id: 7.");
+    removed.push(id);
+  };
+  await assert.rejects(f.run("task", "release_tabs", { close: [9] }), { code: "borrowed_tab" });
+  const first = await f.run("task", "release_tabs", { keep: [5, 9], close: [6, 7] });
+  assert.deepEqual(first.kept, [5, 9]);
+  assert.deepEqual(first.closed, [7]);
+  assert.deepEqual(
+    first.failed.map((failure) => failure.tabId),
+    [6],
+  );
+  assert.equal(f.m.owner(8), "task");
+  await f.borrow("next");
+  chrome.tabs.remove = async (id) => removed.push(id);
+  const retry = await f.run("task", "release_tabs", { keep: [5, 9], close: [6, 7] });
+  assert.deepEqual(retry.skipped, [5, 9, 7]);
+  assert.deepEqual(retry.closed, [6]);
+  await f.run("task", "close_session");
+  assert.deepEqual(removed, [6, 8]);
+  assert.equal(f.m.owner(5), "next");
+});
+
+for (const cancel of [true, false]) {
+  const reason = cancel ? "cancelled request" : "replaced session";
+  test(`release_tabs preserves the next owner's debugger after a ${reason}`, async (t) => {
+    const f = await borrowFixture(t);
+    await f.borrow("first");
+    await f.run("first", "cdp", { method: "DOM.getDocument" });
+    const started = Promise.withResolvers();
+    const lookup = Promise.withResolvers();
+    const get = chrome.tabs.get;
+    chrome.tabs.get = () => {
+      started.resolve();
+      return lookup.promise;
+    };
+    const { abort, budget } = deadlineBudget(t, 30000);
+    const release = f.m.execute(
+      { session: "first", action: "release_tabs", args: { keep: [f.tab.id] } },
+      budget,
+    );
+    await started.promise;
+    if (cancel) abort.abort("the session was closed");
+    chrome.tabs.get = get;
+    await f.run("first", "close_session");
+    const next = cancel ? "next" : "first";
+    await f.borrow(next);
+    await f.run(next, "cdp", { method: "DOM.getDocument" });
+    const before = f.calls.slice();
+    lookup.resolve(f.tab);
+    await assert.rejects(release, { code: "outcome_unknown" });
+    assert.equal(f.m.owner(f.tab.id), next);
+    assert.deepEqual(f.calls, before);
+  });
+}
+
+for (const eventFirst of [true, false]) {
+  const order = eventFirst ? "before" : "after";
+  test(`release_tabs keeps a current tab when removal fires ${order} the reply`, async (t) => {
+    const f = await borrowFixture(t, {
+      stored: {
+        sessions: { task: { tabs: [5, 6, 7], borrowed: [], current: 7, title: "task" } },
+      },
+    });
+    chrome.tabs.remove = async (id) => {
+      if (id === 6) throw Error("tab strip is busy");
+      if (eventFirst) await f.m.removed(id);
+    };
+    assert.deepEqual(await f.run("task", "release_tabs", { close: [7, 6] }), {
+      success: false,
+      closed: [7],
+      kept: [],
+      released: [7],
+      skipped: [],
+      failed: [{ tabId: 6, code: "browser_error", message: "tab strip is busy" }],
+    });
+    if (!eventFirst) await f.m.removed(7);
+    assert.equal(f.m.owner(6), "task");
+    assert.deepEqual(f.saved.at(-1).sessions.task.tabs, [5, 6]);
+    await f.run("task", "cdp", { method: "DOM.getDocument" });
+    assert.equal(f.calls.findLast((c) => c.method === "DOM.getDocument").tabId, 6);
+  });
+}
+
+test("release_tabs ungroups only kept pages owned in the session's task group", async (t) => {
+  const f = await borrowFixture(t, {
+    stored: {
+      sessions: {
+        task: { tabs: [5, 6, 7, 8], borrowed: [9], current: 5, group: 1, title: "task" },
+      },
+    },
+  });
+  const groups = new Map([
+    [5, 1],
+    [6, 2],
+    [7, 1],
+    [8, 1],
+    [9, 1],
+  ]);
+  chrome.tabs.get = async (id) => ({ ...f.tab, id, groupId: groups.get(id) });
+  chrome.tabs.ungroup = async (id) => {
+    if (id === 5) throw Error("tab strip is busy");
+    groups.delete(id);
+  };
+  const result = await f.run("task", "release_tabs", { keep: [5, 6, 7, 9] });
+  assert.deepEqual(result.kept, [6, 7, 9]);
+  assert.deepEqual(result.failed, [
+    { tabId: 5, code: "browser_error", message: "tab strip is busy" },
+  ]);
+  assert.deepEqual(
+    [...groups],
+    [
+      [5, 1],
+      [6, 2],
+      [8, 1],
+      [9, 1],
+    ],
+  );
+  assert.deepEqual(f.saved.at(-1).sessions.task, {
+    tabs: [5, 8],
+    borrowed: [],
+    current: 5,
+    group: 1,
+    title: "task",
+  });
+});
+
 test("close_session counts a tab that closed meanwhile as closed, and another failure keeps the session", async (t) => {
   const f = await sessionFixture(t, {}, { hold: false });
   for (let n = 0; n < 2; n++)

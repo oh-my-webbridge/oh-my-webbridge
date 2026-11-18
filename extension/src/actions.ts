@@ -40,6 +40,7 @@ import {
   type Command,
   type JsonObject,
 } from "./protocol.js";
+import { releaseTabs } from "./release-tabs.js";
 import { quadRect } from "./layer.js";
 import { snapshot } from "./snapshot.js";
 import {
@@ -698,6 +699,23 @@ async function run(command: Command, budget: Budget): Promise<object> {
         groupTitle: s.title,
       })),
     };
+  }
+  if (action === "release_tabs") {
+    return await releaseTabs(
+      s,
+      args,
+      budget,
+      async (id, check) => {
+        await clearPreset(id);
+        check();
+        await releaseLayer(id);
+        check();
+        await detachIfAttached(id, "release tab");
+        check();
+        forgetTab(id);
+      },
+      closedTabId,
+    );
   }
   if (action === "close_session") {
     const owned = [...s.tabs];

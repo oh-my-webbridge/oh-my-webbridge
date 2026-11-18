@@ -1,3 +1,4 @@
+import { releaseTabs } from "../release-tabs.js";
 import { releaseLayer } from "../activity.js";
 import { presetConfig, type Preset } from "../filters.js";
 import {
@@ -34,6 +35,7 @@ import {
   clearRefs,
   evaluate,
   evaluateCondition,
+  forgetPage,
   resetScope,
   scopeOf,
   selectFrame,
@@ -123,7 +125,7 @@ export function forgetTab(tabId: number): void {
   forgetPreset(tabId);
   forgetNetwork(tabId);
   forgetHeaders(tabId);
-  resetScope(tabId);
+  forgetPage(tabId);
 }
 // The tab is read before its owner is checked, so a closed tab fails with
 // tab_missing also once its session has dropped it.
@@ -420,6 +422,19 @@ async function act(command: Command, budget: Budget): Promise<object> {
         groupTitle: s.title,
       })),
     };
+  }
+  if (action === "release_tabs") {
+    return await releaseTabs(
+      s,
+      args,
+      budget,
+      async (id, check) => {
+        await releaseLayer(id);
+        check();
+        forgetTab(id);
+      },
+      closedTabId,
+    );
   }
   if (action === "close_session") {
     const owned = [...s.tabs];

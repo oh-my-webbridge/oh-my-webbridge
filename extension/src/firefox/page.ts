@@ -258,6 +258,7 @@ type Pointer = {
 let generation = "";
 let refs = new Map<string, Node>();
 let hovered: Element | undefined;
+let owner: string | undefined;
 
 function clearRefs(): void {
   generation = "";
@@ -1447,7 +1448,12 @@ function run(op: string, args: PageArgs): Json {
   }
   fail("invalid_args", "unknown page operation: " + op);
 }
-async function page(op: string, args: PageArgs): Promise<PageResult> {
+async function page(op: string, args: PageArgs, nextOwner?: string): Promise<PageResult> {
+  if (nextOwner !== undefined && nextOwner !== owner) {
+    clearRefs();
+    hovered = undefined;
+    owner = nextOwner;
+  }
   try {
     return { ok: true, value: run(op, args) };
   } catch (error) {

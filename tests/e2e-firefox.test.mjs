@@ -382,6 +382,31 @@ test(
       await call("close_session", {}, "other-site");
     });
 
+    await step("releasing a Firefox page expires references in its iframe", async () => {
+      const url = `${site.url}frames`;
+      const { tabId } = await call("navigate", { url }, "deliver");
+      await call("frame", { selector: "#cross" }, "deliver");
+      const refForButton = async (session) =>
+        (await call("snapshot", {}, session)).tree.match(/(@e\S+) button "Frame button"/u)[1];
+      const ref = await refForButton("deliver");
+      const get = (selector, session) => call("get", { selector }, session);
+      assert.equal((await get(ref, "deliver")).value, "Frame button");
+      assert.deepEqual((await call("release_tabs", { keep: [tabId] }, "deliver")).kept, [tabId]);
+      await call("close_session", {}, "deliver");
+      await firefox.evaluate(popup, `chrome.tabs.update(${tabId}, { active: true })`);
+      const claimed = await call("find_tab", { url, active: true }, "receive");
+      assert.equal(claimed.tabId, tabId);
+      assert.equal(claimed.borrowed, true);
+      try {
+        await call("frame", { selector: "#cross" }, "receive");
+        await assert.rejects(get(ref, "receive"), { code: "stale_ref" });
+        assert.equal((await get(await refForButton("receive"), "receive")).value, "Frame button");
+      } finally {
+        await call("close_session", {}, "receive");
+        await firefox.evaluate(popup, `chrome.tabs.remove(${tabId})`);
+      }
+    });
+
     await step("actions Firefox cannot perform return unsupported with HTTP 501", async () => {
       for (const [action, args] of unsupported) await rejectsUnsupported(action, args);
       // The session still works after rejected actions.

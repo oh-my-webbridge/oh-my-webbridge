@@ -8,6 +8,24 @@ const owned = {
   sessions: { task: { tabs: [5], borrowed: [], current: 5, title: "task" } },
   tabs: [{ id: 5, url: "https://example.test/", title: "Example" }],
 };
+
+test("Firefox releases the selected result and preserves borrowed pages", async (t) => {
+  const f = await fixture(t, {
+    sessions: { task: { tabs: [5, 6], borrowed: [7], current: 6, title: "task" } },
+    tabs: [5, 6, 7].map((id) => ({ id, url: "https://example.test/" })),
+  });
+  const result = await f.run("release_tabs", { keep: [5], close: [6] });
+  assert.deepEqual(result, {
+    success: true,
+    closed: [6],
+    kept: [5],
+    released: [5, 6],
+    failed: [],
+    skipped: [],
+  });
+  await f.run("close_session", {});
+  assert.deepEqual([...f.state.tabs.keys()], [5, 7]);
+});
 async function fixture(t, options = owned) {
   const original = {
     chrome: globalThis.chrome,

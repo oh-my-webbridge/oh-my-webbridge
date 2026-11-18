@@ -40,6 +40,8 @@ Use distinct sessions for independent parallel tasks. Same-session commands exec
 
 Keep task tabs for review. Call `close_session` only when the user asks to close the task tabs. It closes only owned tabs and releases borrowed ones. Do not stop or restart the shared daemon to clean up a task.
 
+When asked to hand off selected results and clean up, use `release_tabs {"keep":[7],"close":[8]}` with the task's actual tab IDs. Kept pages remain open and are released from ownership. Inspect `failed` before finishing. Unlisted tabs remain in the session.
+
 ## Other operations
 
 For a read-only batch, pass `{"steps":[{"action":"read_page"},{"action":"list_tabs","args":{}}]}`. The daemon reports the step number and field when an entry is malformed.

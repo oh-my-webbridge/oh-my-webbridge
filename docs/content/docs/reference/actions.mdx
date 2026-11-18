@@ -63,6 +63,8 @@ Page actions run in the session's current tab. Pass `tabId` (or `tab`) to addres
 
 A session holds at most 32 tabs across task and borrowed ones.
 
+`release_tabs` takes explicit `keep` and `close` arrays of tab IDs. Kept pages are released and stay open. Only owned pages may be closed. The result lists `kept`, `closed`, `released`, `skipped` (no longer held) and `failed` (tab ID, code and message). Retry the failed IDs. Unlisted pages remain in the session. Use `close_session` to end it when the remaining owned tabs may be closed.
+
 ## Reading
 
 | Action          | Arguments                                               | Notes                                                                                                                                                                    |

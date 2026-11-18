@@ -116,6 +116,10 @@ export function owner(tabId: number): string | undefined {
 export function assertOwner(name: string, tabId: number): void {
   if (owner(tabId) !== name) fail("tab_busy", `tab ${tabId} is not owned by session ${name}`);
 }
+export function ownerSession(tabId: number): Session | undefined {
+  const name = owner(tabId);
+  return name === undefined ? undefined : sessions.get(name);
+}
 export function claim(name: string, s: Session, tabId: number, borrowed: boolean): void {
   const existing = owner(tabId);
   if (existing && existing !== name) fail("tab_busy", `tab ${tabId} belongs to ${existing}`);
@@ -142,12 +146,11 @@ export async function removed(tabId: number): Promise<void> {
   }
   await persist();
 }
-// The session lets go of tabId through close_tab or the end of a page CDP
-// client. When it was the current tab, the session continues in its last other
-// task tab, else its last other borrowed tab. close_tab calls this before it
-// closes the tab, since removed() can run before chrome.tabs.remove resolves.
-export function leaveTab(s: Session, tabId: number): void {
-  if (s.current !== tabId) return;
+// Continue in the last other task tab, else the last other borrowed tab.
+// For release_tabs, wasCurrent covers removed() clearing the selection before
+// the browser reports success. A newer selection takes precedence.
+export function leaveTab(s: Session, tabId: number, wasCurrent = false): void {
+  if (s.current !== tabId && !(wasCurrent && s.current === undefined)) return;
   const others = (ids: number[]): number[] => ids.filter((id) => id !== tabId);
   s.current = others(s.tabs).at(-1) ?? others(s.borrowed).at(-1);
 }
