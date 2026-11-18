@@ -60,10 +60,11 @@ type subscription struct {
 // until it closes and becomes ready, and so routable, once the daemon's hello
 // reply holds the connection's first write turn.
 type link struct {
-	browser string
-	version string
-	conn    *websocket.Conn
-	ready   bool
+	browser          string
+	version          string
+	extensionVersion string
+	conn             *websocket.Conn
+	ready            bool
 	// pending counts the commands in flight on this connection; h.mu guards it.
 	pending int
 	// Every frame to the extension is written at its turn in queue.
@@ -174,14 +175,19 @@ func (l *link) send(ctx context.Context, packet Packet) error {
 
 // BrowserStatus describes one connected extension in /status.
 type BrowserStatus struct {
-	Browser        string `json:"browser"`
-	BrowserVersion string `json:"browserVersion,omitempty"`
-	Connected      bool   `json:"connected"`
+	Browser          string `json:"browser"`
+	BrowserVersion   string `json:"browserVersion,omitempty"`
+	Connected        bool   `json:"connected"`
+	ExtensionVersion string `json:"extensionVersion,omitempty"`
+	Protocol         int    `json:"protocol,omitempty"`
+	Compatibility    string `json:"compatibility,omitempty"`
+	rejectedAt       time.Time
 }
 
 type Hub struct {
 	mu       sync.Mutex
 	links    map[string]*link
+	rejected map[string]BrowserStatus
 	pending  map[string]*pending
 	subs     map[*subscription]struct{}
 	bindings map[string]string
@@ -228,24 +234,47 @@ func (h *Hub) Browsers() []BrowserStatus {
 	out := []BrowserStatus{}
 	for _, browser := range []string{Chrome, Firefox} {
 		if l := h.live(browser); l != nil {
-			out = append(out, BrowserStatus{Browser: browser, BrowserVersion: l.version, Connected: true})
+			compat := "same-release"
+			if l.extensionVersion == "" {
+				compat = "unknown-release"
+			} else if l.extensionVersion != Version {
+				compat = "compatible-skew"
+			}
+			out = append(out, BrowserStatus{Browser: browser, BrowserVersion: l.version, Connected: true, Protocol: Protocol, ExtensionVersion: l.extensionVersion, Compatibility: compat})
+		} else if status, ok := h.rejected[browser]; ok && time.Since(status.rejectedAt) < time.Minute {
+			out = append(out, status)
 		}
 	}
 	return out
 }
 
+// A rejected peer retries within 36 seconds. Expire the observation when
+// those retries stop so a closed browser returns to its offline status.
+func (h *Hub) rejectProtocol(browser string, peer Packet) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.links[browser] != nil {
+		return
+	}
+	if h.rejected == nil {
+		h.rejected = make(map[string]BrowserStatus)
+	}
+	h.rejected[browser] = BrowserStatus{Browser: browser, BrowserVersion: peer.BrowserVersion, Protocol: peer.Protocol, ExtensionVersion: peer.ExtensionVersion, Compatibility: "incompatible-protocol", rejectedAt: time.Now()}
+}
+
 // Attach registers one browser connection, answers its hello and serves it
 // until it closes. A second connection for an already connected browser is
 // refused; the other browser's connection is unaffected.
-func (h *Hub) Attach(ctx context.Context, c *websocket.Conn, browser, version string, sessions []string) error {
-	l := &link{browser: browser, version: version, conn: c, closed: make(chan struct{})}
+func (h *Hub) Attach(ctx context.Context, c *websocket.Conn, browser string, peer Packet) error {
+	l := &link{browser: browser, version: peer.BrowserVersion, extensionVersion: peer.ExtensionVersion, conn: c, closed: make(chan struct{})}
 	h.mu.Lock()
 	if h.links[browser] != nil {
 		h.mu.Unlock()
 		return &Fault{"browser_busy", browser + " is already connected"}
 	}
 	h.links[browser] = l
-	conflicts := h.restore(browser, sessions)
+	delete(h.rejected, browser)
+	conflicts := h.restore(browser, peer.Sessions)
 	h.mu.Unlock()
 	defer h.detach(l)
 	h.save()
@@ -261,7 +290,7 @@ func (h *Hub) Attach(ctx context.Context, c *websocket.Conn, browser, version st
 	h.mu.Lock()
 	l.ready = true
 	h.mu.Unlock()
-	if err := l.write(hello, ctx.Done(), encode(Packet{Type: "hello", Protocol: Protocol})); err != nil {
+	if err := l.write(hello, ctx.Done(), encode(Packet{Type: "hello", Protocol: Protocol, DaemonVersion: Version})); err != nil {
 		return err
 	}
 	c.SetReadLimit(MaxMessage)

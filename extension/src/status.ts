@@ -15,7 +15,27 @@ export type ConnectionState =
   | "offline"
   | "rejected"
   | "connected";
-export type Connection = { state: ConnectionState; since: number };
+export type PeerVersions = {
+  extension: string;
+  daemon?: string;
+  protocol?: number;
+  compatibility: "same-release" | "compatible-skew" | "unknown-release" | "incompatible-protocol";
+};
+export type Connection = { state: ConnectionState; since: number; versions?: PeerVersions };
+
+export function peerMessage(versions: PeerVersions) {
+  switch (versions.compatibility) {
+    case "same-release":
+      return "peerSame";
+    case "compatible-skew":
+      return "peerSkew";
+    case "unknown-release":
+      return "peerUnknown";
+    case "incompatible-protocol":
+      if (versions.protocol === undefined) return "peerMatchReleases";
+      return versions.protocol > 1 ? "peerUpdateExtension" : "peerUpdateDaemon";
+  }
+}
 
 // A tab that a session owns or borrowed. `busy` is true while an action runs.
 export type Control = { session: string; borrowed: boolean; busy: boolean };

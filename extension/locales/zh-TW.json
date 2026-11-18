@@ -1,4 +1,11 @@
 {
+  "peerVersions": "擴充功能 / daemon",
+  "peerSame": "兩個元件使用相同版本。",
+  "peerSkew": "兩個版本支援相同的通訊協定。",
+  "peerUnknown": "已連線的元件未提供發行版本。",
+  "peerUpdateExtension": "請更新瀏覽器擴充功能並重新連線。",
+  "peerUpdateDaemon": "請更新 daemon 執行檔並重新啟動服務。",
+  "peerMatchReleases": "請安裝相符版本的擴充功能與 daemon，然後重新連線。",
   "extensionName": "oh-my-webbridge",
   "extensionDescription": "將這個瀏覽器連接到本機的 omw daemon，讓 Agent 能開啟分頁、讀取網頁並操作頁面。",
   "state_connected": "已連線",

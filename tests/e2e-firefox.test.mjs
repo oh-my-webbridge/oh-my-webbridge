@@ -114,7 +114,14 @@ test(
       const status = await daemon.status();
       assert.equal(status.extension_connected, true);
       assert.deepEqual(status.browsers, [
-        { browser: "firefox", browserVersion: firefox.version, connected: true },
+        {
+          browser: "firefox",
+          browserVersion: firefox.version,
+          connected: true,
+          extensionVersion: status.version,
+          protocol: status.protocol,
+          compatibility: "same-release",
+        },
       ]);
       for (const path of ["/json/version", "/json/list"]) {
         const res = await daemon.get(path);

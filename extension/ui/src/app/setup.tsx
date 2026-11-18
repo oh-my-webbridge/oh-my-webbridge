@@ -1,4 +1,4 @@
-import { pair } from "@ext/status.ts";
+import { pair, peerMessage } from "@ext/status.ts";
 import { CheckIcon } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
@@ -125,7 +125,9 @@ export function Setup(): React.ReactElement {
           <CommandRow command="omw pair" />
           <PairForm />
           {connection?.state === "rejected" && (
-            <p className="text-destructive text-sm">{t("pairRejected")}</p>
+            <p className="text-destructive text-sm">
+              {t(connection.versions ? peerMessage(connection.versions) : "pairRejected")}
+            </p>
           )}
         </Step>
         {isFirefox && (

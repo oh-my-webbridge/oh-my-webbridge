@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import manifest from "../package.json" with { type: "json" };
 import { test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { bundle, firefoxApi } from "./fixtures/firefox-api.mjs";
@@ -131,10 +132,65 @@ test("Firefox hello reports the browser, its version and the persisted sessions"
     type: "hello",
     protocol: 1,
     browser: "firefox",
+    extensionVersion: manifest.version,
     browserVersion: "159.0",
     sessions: ["task", "研究"],
   });
 });
+
+test("connection settings distinguish release skew, legacy and incompatible daemons", async (t) => {
+  const states = [];
+  const f = await start(
+    t,
+    {},
+    {
+      prepare(api) {
+        const save = api.chrome.storage.session.set;
+        api.chrome.storage.session.set = async (value) => {
+          if (value.connection) states.push(value.connection);
+          return save(value);
+        };
+      },
+    },
+  );
+  assert.equal(states.at(-1).versions.compatibility, "unknown-release");
+  const { socket } = f.sockets[0];
+  for (const [release, compatibility] of [
+    [manifest.version, "same-release"],
+    ["0.1.0", "compatible-skew"],
+  ]) {
+    socket.onmessage({
+      data: JSON.stringify({ type: "hello", protocol: 1, daemonVersion: release }),
+    });
+    assert.equal(states.at(-1).versions.compatibility, compatibility);
+    assert.equal(states.at(-1).versions.daemon, release);
+  }
+  socket.onmessage({
+    data: JSON.stringify({ type: "hello", protocol: 2, daemonVersion: "1.0.0" }),
+  });
+  assert.equal(states.at(-1).state, "rejected");
+  assert.equal(states.at(-1).versions.compatibility, "incompatible-protocol");
+  assert.equal(states.at(-1).versions.protocol, 2);
+});
+
+for (const [reason, daemon, protocol] of [
+  ["protocol mismatch: daemon 1.2.0+build protocol 2", "1.2.0+build", 2],
+  ["protocol mismatch", undefined, undefined],
+]) {
+  test(`connection settings record the daemon's close reason: ${reason}`, async (t) => {
+    const f = await start(t);
+    const set = t.mock.method(chrome.storage.session, "set");
+    f.sockets[0].socket.onclose({ code: 1008, reason });
+    const { connection } = set.mock.calls.at(-1).arguments[0];
+    assert.equal(connection.state, "rejected");
+    assert.deepEqual(connection.versions, {
+      extension: manifest.version,
+      compatibility: "incompatible-protocol",
+      daemon,
+      protocol,
+    });
+  });
+}
 
 test("every heartbeat calls an extension API so the event page stays awake", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval", "Date"] });

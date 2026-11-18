@@ -975,6 +975,11 @@ test(
       assert.ok(suggestions.includes(await prompt.inputValue()));
       await mkdir("dist/qa", { recursive: true });
       await page.screenshot({ path: "dist/qa/extension.png" });
+      await page.goto(worker.url().replace(/worker\.js$/u, "app.html#settings"));
+      await page.getByText(await message("peerSame"), { exact: true }).waitFor();
+      const release = await worker.evaluate(() => chrome.runtime.getManifest().version);
+      assert.equal(await page.getByText(`${release} / ${release}`, { exact: true }).count(), 1);
+      await page.screenshot({ path: "dist/qa/connection-versions.png" });
       await page.close();
     });
     await verify("session cleanup cancels queued work and removes a late-created tab", async () => {

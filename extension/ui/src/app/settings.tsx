@@ -1,4 +1,4 @@
-import { validToken } from "@ext/status.ts";
+import { peerMessage, validToken } from "@ext/status.ts";
 import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
@@ -114,6 +114,7 @@ function TokenRow(): React.ReactElement {
 export function Settings(): React.ReactElement {
   const { t } = useI18n();
   const connection = useConnection();
+  const versions = connection?.versions;
   const preferences = usePreferences();
   const token = useToken();
   const [scripts, requestScripts] = useUserScripts();
@@ -126,6 +127,13 @@ export function Settings(): React.ReactElement {
           <Row label={t("status")}>
             {connection && <ConnectionLabel state={connection.state} />}
           </Row>
+          {versions && (
+            <Row label={t("peerVersions")} description={t(peerMessage(versions))}>
+              <span>
+                {versions.extension} / {versions.daemon ?? "?"}
+              </span>
+            </Row>
+          )}
           <Row description={t("pauseDescription")} htmlFor="paused" label={t("pauseLabel")}>
             <Switch
               checked={connection?.state === "paused"}

@@ -11,6 +11,8 @@ Use `omw` from `PATH`, or `dist/omw` in the project checkout. Read `omw help` wh
 
 ## Start and observe
 
+Use `omw doctor` to check each browser's extension release and wire protocol. Compatible release skew permits a connection. For a protocol mismatch, update the indicated component, restart the daemon if its binary changed, and refresh this Skill from the matching agent kit.
+
 Run `omw status`. If the daemon is absent, run `omw start` once and retry. If a browser is not connected, ask the user to open the extension's setup page and pair it. `omw pair` prints a six-digit pairing code, and the user types it there. Never print the daemon token from `omw connection` or include it in output or on a website.
 
 `omw status` reports Chrome and Firefox separately. Commands go to the browser bound to the session. Otherwise they go to the only connected browser, or to Chrome when both are connected. When the user names a browser, put `--browser chrome` or `--browser firefox` right after `omw call` (SDK: `connect(session, {browser})`). A session stays in the browser that first ran it until `close_session`. On `session_browser`, keep that browser or use another session name.

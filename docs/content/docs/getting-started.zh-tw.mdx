@@ -8,6 +8,10 @@ Chrome 與 Firefox 可以並行使用，且各自獨立配對。
 
 ## 系統需求 [#requirements]
 
+擴充功能和 daemon 使用相同的通訊協定即可連線；新動作可能需要更新。`omw doctor` 會分別顯示每個瀏覽器的擴充功能版本和相容狀態。連線設定會列出雙方版本。舊元件若未提供版本，會顯示為未知。
+
+更新時請安裝對應的 daemon 執行檔與瀏覽器商店版本。透過服務管理員重新啟動使用者服務；手動啟動的 daemon 可用 `omw stop` 和 `omw start` 重新啟動。保留設定和配對，並從同一發行版本的 agent kit 更新 Skill。兩個瀏覽器重新連線後，執行 `omw doctor` 確認。
+
 - Chrome 156 或更新版本，或 Firefox 153 或更新版本。
 - macOS 或 Linux，且與瀏覽器在同一台電腦上。
 - 解開發行版本封存檔需要 `zstd`。
