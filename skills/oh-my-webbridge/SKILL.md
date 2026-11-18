@@ -24,6 +24,8 @@ omw call research snapshot
 
 Use snapshot `@e...` references for click/fill, CSS selectors, or semantic selectors such as `role=button[name="Submit"]`, `label=Email`, and `testid=search`. CSS, text and attribute locators (`label=`, `placeholder=`, `alt=`, `title=`, `testid=`) traverse open shadow roots. Snapshot again after navigation or `stale_ref`. Read compact content with `read_page`. Use `evaluate` for specific structured extraction. Verify the page state after changes.
 
+For a long page, continue `read_page` with the returned `nextOffset` as `offset` until `complete` is true. Restart after navigation or a frame change. To inspect one region, pass its selector or current reference to `snapshot`; subsequent actions use the new references.
+
 ```sh
 omw call research fill '{"selector":"#search","value":"query"}'
 omw call research click '{"selector":"button[type=submit]"}'
@@ -39,8 +41,6 @@ Use distinct sessions for independent parallel tasks. Same-session commands exec
 Keep task tabs for review. Call `close_session` only when the user asks to close the task tabs. It closes only owned tabs and releases borrowed ones. Do not stop or restart the shared daemon to clean up a task.
 
 ## Other operations
-
-For a long page, continue `read_page` with the returned `nextOffset` as `offset` until `complete` is true. Restart after navigation or a frame change. To inspect one region, pass its selector or current reference to `snapshot`; subsequent actions use the new references.
 
 Use `screenshot` and `save_as_pdf`, then open the returned path to inspect the artifact. Use unique absolute output paths; existing files are never overwritten. Upload paths are absolute on the machine running the daemon and browser; Firefox uploads total at most 16 MiB per command. Use user-provided or clearly task-authorized files.
 
