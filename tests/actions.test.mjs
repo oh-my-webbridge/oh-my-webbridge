@@ -185,7 +185,10 @@ async function sessionFixture(
         set: async (value) => saved.push(structuredClone(value)),
       },
     },
-    windows: { create: async () => ({ id: 1, tabs: [{ id: nextTab++ }] }) },
+    windows: {
+      create: async () => ({ id: 1, tabs: [{ id: nextTab++ }] }),
+      getLastFocused: async () => ({ id: 1, type: "normal" }),
+    },
     tabs: {
       create: async () => ({ id: nextTab++ }),
       get: async (id) => ({ id, url: "https://example.test/", status: "complete" }),
@@ -194,7 +197,7 @@ async function sessionFixture(
       remove: async (id) => removed.push(id),
       group: async () => 1,
     },
-    tabGroups: { update: async () => {} },
+    tabGroups: { get: async () => ({ windowId: 1 }), update: async () => {} },
     debugger: {
       onEvent: {
         addListener: (listener) => debuggerListeners.add(listener),
@@ -511,6 +514,18 @@ test("navigation reconfigures a tab whose root target failed open", async (t) =>
   const restored = await f.run("preset", { cmd: "status" });
   assert.equal(restored.network, true);
   assert.deepEqual(restored.fallback, []);
+});
+
+test("navigate reports a failed normal-window lookup before creating a task tab", async (t) => {
+  const f = await sessionFixture(t, {}, { hold: false });
+  globalThis.chrome.windows.getLastFocused = async () => {
+    throw Error("No last focused window");
+  };
+  await assert.rejects(f.run("navigate", { url: "https://example.test/" }), {
+    code: "window_failed",
+    message: "chrome.windows.getLastFocused (normal windows): No last focused window",
+  });
+  assert.deepEqual(f.saved.at(-1)?.sessions?.task?.tabs ?? [], []);
 });
 
 test("window_new persists the new tab before attaching the debugger", async (t) => {

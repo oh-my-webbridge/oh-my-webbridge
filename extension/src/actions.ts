@@ -103,6 +103,16 @@ async function detachIfAttached(tabId: number, label: string): Promise<void> {
     console.warn(`${label} tab ${tabId}: ${(error as Error).message}`);
   }
 }
+
+async function groupTaskTab(options: chrome.tabs.GroupOptions): Promise<number> {
+  try {
+    return await chrome.tabs.group(options);
+  } catch (error) {
+    const tabId = closedTabId(error as Error);
+    if (tabId !== undefined) closedTab(tabId);
+    fail("window_failed", `chrome.tabs.group: ${(error as Error).message}`);
+  }
+}
 // Lets a step on a tab that has closed count as done; other failures propagate.
 function unlessClosed(error: Error): void {
   if (closedTabId(error) === undefined && fault(error).code !== "tab_missing") throw error;
@@ -460,12 +470,17 @@ async function run(command: Command, budget: Budget): Promise<object> {
     if (s.tabs.length + s.borrowed.length >= 32) fail("busy", "32 tabs per session maximum");
     const url = validURL(args.url ?? "about:blank");
     const config = presetConfig(args, s.preset);
-    const window = await chrome.windows.create({
-      url: "about:blank",
-      focused: false,
-    });
+    const window = await chrome.windows
+      .create({
+        url: "about:blank",
+        focused: false,
+        type: "normal",
+      })
+      .catch((error: Error) => {
+        fail("window_failed", `chrome.windows.create: ${error.message}`);
+      });
     const tabId = window?.tabs?.[0]?.id;
-    if (!tabId) fail("window_failed", "new window has no tab");
+    if (!tabId || window?.id === undefined) fail("window_failed", "new window has no tab or ID");
     try {
       budget.check();
       claim(name, s, tabId, false);
@@ -485,7 +500,7 @@ async function run(command: Command, budget: Budget): Promise<object> {
       } finally {
         navigation.stop();
       }
-      s.group = await chrome.tabs.group({ tabIds: [tabId] });
+      s.group = await groupTaskTab({ tabIds: [tabId], createProperties: { windowId: window.id } });
       await chrome.tabGroups.update(s.group, { title: s.title, collapsed: true });
       await persist();
       await waitReady(tabId, budget);
@@ -504,10 +519,29 @@ async function run(command: Command, budget: Budget): Promise<object> {
     let navigation: Navigation | undefined;
     if (args.newTab || !s.current) {
       if (s.tabs.length + s.borrowed.length >= 32) fail("busy", "32 tabs per session maximum");
-      const tab = await chrome.tabs.create({
-        url: "about:blank",
-        active: false,
+      const groupId = s.group;
+      const targetWindow =
+        groupId === undefined
+          ? chrome.windows.getLastFocused({ windowTypes: ["normal"] }).then((window) => window?.id)
+          : chrome.tabGroups.get(groupId).then((group) => group.windowId);
+      const windowId = await targetWindow.catch((error: Error) => {
+        const operation =
+          groupId === undefined
+            ? "chrome.windows.getLastFocused (normal windows)"
+            : "chrome.tabGroups.get";
+        fail("window_failed", `${operation}: ${error.message}`);
       });
+      if (windowId === undefined) fail("window_failed", "no normal Chrome window for a task tab");
+      budget.check();
+      const tab = await chrome.tabs
+        .create({
+          url: "about:blank",
+          active: false,
+          windowId,
+        })
+        .catch((error: Error) => {
+          fail("window_failed", `chrome.tabs.create: ${error.message}`);
+        });
       tabId = tab.id!;
       try {
         budget.check();
@@ -529,9 +563,9 @@ async function run(command: Command, budget: Budget): Promise<object> {
         } finally {
           opened.stop();
         }
-        s.group = await chrome.tabs.group({
+        s.group = await groupTaskTab({
           tabIds: [tabId],
-          ...(s.group === undefined ? {} : { groupId: s.group }),
+          ...(groupId === undefined ? { createProperties: { windowId } } : { groupId }),
         });
         s.title = args.group_title ?? s.title;
         await chrome.tabGroups.update(s.group, { title: s.title, collapsed: true });
