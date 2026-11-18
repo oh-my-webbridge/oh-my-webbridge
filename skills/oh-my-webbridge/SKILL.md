@@ -62,4 +62,4 @@ Zen is optional and meant for static or old Web 2 archives: `preset {preset:"zen
 
 ## Reference
 
-The full action list, arguments, limits and error codes are at https://oh-my-webbridge.github.io/en/reference/actions/ and, as plain text for agents, https://oh-my-webbridge.github.io/md/en/llms-full.txt.
+Use the installed [actions and error recovery](references/reference/actions.mdx), [CLI](references/reference/cli.mdx), [SDK](references/reference/sdk.mdx), and [Firefox differences](references/firefox.mdx) for this release. The [documentation site](https://oh-my-webbridge.github.io/en/reference/actions/) tracks the current release.

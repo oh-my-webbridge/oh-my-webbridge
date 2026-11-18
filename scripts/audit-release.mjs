@@ -139,6 +139,16 @@ for (const [browser, label] of [
 }
 const kit = await archiveFiles(`omw-${version}-agent-kit.tar.zst`);
 const expectedKit = ["./sdk.mjs", "./skills/oh-my-webbridge/SKILL.md"];
+for (const page of [
+  "firefox",
+  "presets",
+  "sessions",
+  "reference/actions",
+  "reference/cdp",
+  "reference/cli",
+  "reference/sdk",
+])
+  expectedKit.push(`./skills/oh-my-webbridge/references/${page}.mdx`);
 const missingKit = expectedKit.filter((path) => !kit.includes(path));
 const unexpectedKit = kit.filter((path) => !expectedKit.includes(path));
 if (missingKit.length || unexpectedKit.length)
