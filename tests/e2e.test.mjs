@@ -980,6 +980,37 @@ test(
       const release = await worker.evaluate(() => chrome.runtime.getManifest().version);
       assert.equal(await page.getByText(`${release} / ${release}`, { exact: true }).count(), 1);
       await page.screenshot({ path: "dist/qa/connection-versions.png" });
+      const updateSwitch = page.getByRole("switch", { name: await message("releaseCheckLabel") });
+      await until(() => updateSwitch.isChecked(), "automatic release checks are enabled");
+      await updateSwitch.click();
+      await until(
+        async () => !(await updateSwitch.isChecked()),
+        "automatic release checks disabled",
+      );
+      const connected = await worker.evaluate(async () => {
+        const { connection } = await chrome.storage.session.get("connection");
+        await chrome.storage.local.set({
+          releaseCache: { latest: "999.0.0", attemptedAt: Date.now() },
+        });
+        await chrome.storage.session.set({
+          connection: {
+            ...connection,
+            versions: { ...connection.versions, daemon: "0.1.0", compatibility: "compatible-skew" },
+          },
+        });
+        return connection;
+      });
+      await updateSwitch.click();
+      await page.goto(worker.url().replace(/worker\.js$/u, "popup.html"));
+      const skew = await message("peerSkewPopup", { extension: release, daemon: "0.1.0" });
+      await page.getByText(skew, { exact: true }).waitFor();
+      await page.getByText(await message("state_connected"), { exact: true }).waitFor();
+      assert.equal(
+        await page.getByRole("link", { name: await message("releaseLink") }).getAttribute("href"),
+        "https://github.com/oh-my-webbridge/oh-my-webbridge/releases/tag/v999.0.0",
+      );
+      await worker.evaluate((connection) => chrome.storage.session.set({ connection }), connected);
+      await worker.evaluate(() => chrome.storage.local.set({ checkForReleases: false }));
       await page.close();
     });
     await verify("session cleanup cancels queued work and removes a late-created tab", async () => {

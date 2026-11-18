@@ -10,6 +10,7 @@ import { startBridge } from "../bridge.js";
 import { startIndicator } from "../indicator.js";
 import type { Rect } from "../overlay.js";
 import { fault, type Budget, type Command, type Hello, type Json } from "../protocol.js";
+import { startReleaseCheck } from "../releases.js";
 import { currentTab, initSessions, removed, removedGroup, sessionNames } from "../state.js";
 import { paintFirefox } from "./layer.js";
 import { refreshSiteAccess } from "./access.js";
@@ -96,6 +97,7 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") void chrome.tabs.create({ url: chrome.runtime.getURL("app.html") });
 });
 startIndicator();
+startReleaseCheck();
 startActivity(paintFirefox);
 startBridge({
   hello,

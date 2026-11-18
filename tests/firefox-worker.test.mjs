@@ -15,7 +15,12 @@ const token = "c".repeat(64);
 async function start(
   t,
   options = {},
-  { prepare = () => {}, wait = true, source = 'import "./extension/src/firefox/worker.ts";' } = {},
+  {
+    prepare = () => {},
+    wait = true,
+    source = 'import "./extension/src/firefox/worker.ts";',
+    daemonVersion = manifest.version,
+  } = {},
 ) {
   const original = {
     chrome: globalThis.chrome,
@@ -26,7 +31,7 @@ async function start(
   globalThis.setTimeout = (...args) => original.setTimeout(...args).unref();
   const api = firefoxApi(options);
   let paused = false;
-  api.chrome.storage.local.get = async () => ({ token, paused });
+  api.chrome.storage.local.get = async () => ({ token, paused, checkForReleases: false });
   const queries = [];
   api.chrome.tabs.query = async (filter) => {
     queries.push(filter);
@@ -54,7 +59,7 @@ async function start(
       this.bufferedAmount += Buffer.byteLength(wire);
       if (packet.type === "hello") {
         queueMicrotask(() => {
-          this.onmessage?.({ data: JSON.stringify({ type: "hello", protocol: 1 }) });
+          this.onmessage?.({ data: JSON.stringify({ type: "hello", protocol: 1, daemonVersion }) });
           hello.resolve(packet);
         });
       }
@@ -139,11 +144,13 @@ test("Firefox hello reports the browser, its version and the persisted sessions"
 });
 
 test("connection settings distinguish release skew, legacy and incompatible daemons", async (t) => {
+  const ping = t.mock.method(globalThis, "fetch", async () => new Response(null, { status: 404 }));
   const states = [];
   const f = await start(
     t,
     {},
     {
+      daemonVersion: null,
       prepare(api) {
         const save = api.chrome.storage.session.set;
         api.chrome.storage.session.set = async (value) => {
@@ -154,6 +161,7 @@ test("connection settings distinguish release skew, legacy and incompatible daem
     },
   );
   assert.equal(states.at(-1).versions.compatibility, "unknown-release");
+  assert.equal(ping.mock.callCount(), 1);
   const { socket } = f.sockets[0];
   for (const [release, compatibility] of [
     [manifest.version, "same-release"],
@@ -172,6 +180,49 @@ test("connection settings distinguish release skew, legacy and incompatible daem
   assert.equal(states.at(-1).versions.compatibility, "incompatible-protocol");
   assert.equal(states.at(-1).versions.protocol, 2);
 });
+
+for (const disconnected of [false, true]) {
+  test(`legacy release lookup ${disconnected ? "ignores the old socket" : "updates the live socket"}`, async (t) => {
+    const ping = Promise.withResolvers();
+    const fetch = t.mock.method(globalThis, "fetch", async (_url, options) =>
+      options.credentials === "omit" ? ping.promise : new Response(),
+    );
+    const states = [];
+    const f = await start(
+      t,
+      {},
+      {
+        daemonVersion: null,
+        prepare(api) {
+          const save = api.chrome.storage.session.set;
+          api.chrome.storage.session.set = async (value) => {
+            if (value.connection) states.push(value.connection);
+            return save(value);
+          };
+        },
+      },
+    );
+    const initial = states.at(-1);
+    assert.equal(initial.state, "connected");
+    assert.equal(initial.versions.compatibility, "unknown-release");
+    assert.equal(fetch.mock.calls[0].arguments[0], "http://127.0.0.1:17373/ping");
+    assert.equal(fetch.mock.calls[0].arguments[1].headers, undefined);
+    if (disconnected) await f.sockets[0].socket.close();
+    ping.resolve(Response.json({ name: "oh-my-webbridge", version: "0.1.0", protocol: 1 }));
+    await setImmediate();
+    const current = states.at(-1);
+    if (disconnected) {
+      assert.equal(fetch.mock.calls[0].arguments[1].signal.aborted, true);
+      assert.notEqual(current.state, "connected");
+      assert.equal(current.versions, undefined);
+    } else {
+      assert.equal(current.state, "connected");
+      assert.equal(current.since, initial.since);
+      assert.equal(current.versions.daemon, "0.1.0");
+      assert.equal(current.versions.compatibility, "compatible-skew");
+    }
+  });
+}
 
 for (const [reason, daemon, protocol] of [
   ["protocol mismatch: daemon 1.2.0+build protocol 2", "1.2.0+build", 2],

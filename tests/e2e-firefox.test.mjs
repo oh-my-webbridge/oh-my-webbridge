@@ -135,6 +135,52 @@ test(
       );
     });
 
+    await step(
+      "popup shows compatible version differences and the cached GitHub release",
+      async () => {
+        const settings = await firefox.openExtensionPage("app.html#settings");
+        const updateSwitch = '[role="switch"][aria-labelledby="release-check-label"]';
+        const checked = `document.querySelector(${JSON.stringify(updateSwitch)})?.getAttribute("aria-checked")`;
+        await until(
+          async () => (await firefox.evaluate(settings, checked)) === "true",
+          "automatic release checks are enabled",
+        );
+        await firefox.click(settings, updateSwitch);
+        await until(
+          async () => (await firefox.evaluate(settings, checked)) === "false",
+          "automatic release checks disabled",
+        );
+        const connected = await firefox.evaluate(
+          settings,
+          `(async () => {
+          const { connection } = await chrome.storage.session.get("connection");
+          await chrome.storage.local.set({ releaseCache: { latest: "999.0.0", attemptedAt: Date.now() } });
+          await chrome.storage.session.set({ connection: {
+            ...connection,
+            versions: { ...connection.versions, daemon: "0.1.0", compatibility: "compatible-skew" }
+          } });
+          return connection;
+        })()`,
+        );
+        await firefox.click(settings, updateSwitch);
+        await until(async () => {
+          const popupText = await firefox.evaluate(popup, "document.body.innerText");
+          return (
+            popupText.includes(
+              `Extension ${connected.versions.extension} and daemon 0.1.0 differ`,
+            ) &&
+            popupText.includes("The connection remains active") &&
+            popupText.includes("GitHub release 999.0.0")
+          );
+        }, "popup shows compatible skew and update information");
+        await firefox.evaluate(
+          settings,
+          `chrome.storage.session.set({ connection: ${JSON.stringify(connected)} })`,
+        );
+        await firefox.evaluate(settings, "chrome.storage.local.set({ checkForReleases: false })");
+      },
+    );
+
     await step("evaluate needs the userScripts grant from the settings page", async () => {
       const nav = await call("navigate", { url: site.url, group_title: "Fixture" });
       tabId = nav.tabId;

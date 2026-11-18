@@ -12,6 +12,7 @@ import { pageClient } from "./state.js";
 import manifest from "../../package.json" with { type: "json" };
 import {
   daemonRunning,
+  readDaemonRelease,
   validToken,
   type Connection,
   type ConnectionState,
@@ -161,8 +162,8 @@ function respond(
   }
   transmit(connection, wire, size);
 }
-function publish(state: ConnectionState, versions?: PeerVersions): void {
-  const connection: Connection = { state, since: Date.now(), ...(versions ? { versions } : {}) };
+function publish(state: ConnectionState, versions?: PeerVersions, since = Date.now()): void {
+  const connection: Connection = { state, since, ...(versions ? { versions } : {}) };
   void chrome.storage.session
     .set({ connection })
     .catch((cause: Error) => console.error("save connection state", cause.message));
@@ -272,6 +273,7 @@ async function connect(): Promise<void> {
     }
     let opened = false;
     let mismatch: PeerVersions | undefined;
+    let releaseLookup: AbortController | undefined;
     const connection = new WebSocket("ws://127.0.0.1:17373/extension", [
       "omw.v1",
       `omw-token.${settings.token}`,
@@ -308,17 +310,35 @@ async function connect(): Promise<void> {
             return;
           }
           attempt = 0;
+          const firstHello = !opened;
           opened = true;
-          publish("connected", {
+          const since = Date.now();
+          const peerVersions = (daemon?: string): PeerVersions => ({
             extension: extensionVersion,
-            daemon: message.daemonVersion,
+            daemon,
             protocol: message.protocol,
-            compatibility: !message.daemonVersion
+            compatibility: !daemon
               ? "unknown-release"
-              : message.daemonVersion === extensionVersion
+              : daemon === extensionVersion
                 ? "same-release"
                 : "compatible-skew",
           });
+          publish("connected", peerVersions(message.daemonVersion), since);
+          if (message.daemonVersion) releaseLookup?.abort();
+          else if (firstHello) {
+            releaseLookup = new AbortController();
+            const { signal } = releaseLookup;
+            void readDaemonRelease(signal, message.protocol).then((daemon) => {
+              if (
+                daemon &&
+                !signal.aborted &&
+                socket === connection &&
+                connection.readyState === WebSocket.OPEN &&
+                revision === settingsRevision
+              )
+                publish("connected", peerVersions(daemon), since);
+            });
+          }
           clearInterval(heartbeat);
           heartbeat = setInterval(() => {
             if (Date.now() - lastTraffic > 45000) {
@@ -351,6 +371,7 @@ async function connect(): Promise<void> {
     connection.onclose = (event): void => {
       clearTimeout(opening);
       clearInterval(heartbeat);
+      releaseLookup?.abort();
       backlogs.delete(connection);
       for (const job of jobs.values()) job.abort.abort("the daemon connection closed");
       void disconnected?.().catch((error: Error) =>

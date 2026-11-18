@@ -81,6 +81,37 @@ export async function daemonRunning(signal?: AbortSignal): Promise<boolean> {
   }
 }
 
+// Older daemons report their version on /ping but omit it from the socket hello.
+export async function readDaemonRelease(
+  signal: AbortSignal,
+  protocol: number,
+): Promise<string | undefined> {
+  try {
+    const response = await fetch(`${daemonOrigin}/ping`, {
+      cache: "no-store",
+      credentials: "omit",
+      redirect: "error",
+      signal: AbortSignal.any([signal, AbortSignal.timeout(2000)]),
+    });
+    if (!response.ok) return undefined;
+    const status = (await response.json()) as {
+      name?: string;
+      version?: string;
+      protocol?: number;
+    } | null;
+    if (
+      status?.name === "oh-my-webbridge" &&
+      status.protocol === protocol &&
+      typeof status.version === "string" &&
+      /^[\w.+-]+$/u.test(status.version)
+    )
+      return status.version;
+  } catch {
+    // A failed lookup leaves the already-connected daemon's release unknown.
+  }
+  return undefined;
+}
+
 export type PairResult = { ok: true } | { ok: false; reason: "invalid" | "offline" };
 
 // Redeems a code from `omw pair` and saves the token it returns.

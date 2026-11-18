@@ -18,7 +18,7 @@ async function transport(t, name) {
   const originalSocket = globalThis.WebSocket;
   globalThis.chrome = {
     storage: {
-      local: { get: async () => ({ token, paused }) },
+      local: { get: async () => ({ token, paused, checkForReleases: false }) },
       session: { get: async () => ({}), set: async () => {} },
       onChanged: {
         addListener(listener) {
@@ -70,7 +70,9 @@ async function transport(t, name) {
       this.bufferedAmount += Buffer.byteLength(wire);
       if (message.type === "hello")
         queueMicrotask(() =>
-          this.onmessage?.({ data: JSON.stringify({ type: "hello", protocol: 1 }) }),
+          this.onmessage?.({
+            data: JSON.stringify({ type: "hello", protocol: 1, daemonVersion: manifest.version }),
+          }),
         );
     }
     close(code, reason) {
@@ -261,7 +263,7 @@ test("token changes during an in-flight settings read reconnect immediately", as
       local: {
         get: async (keys) => {
           // Only the bridge's settings read stalls; other reads answer at once.
-          if (!keys.includes("token")) return {};
+          if (!keys.includes("token")) return { checkForReleases: false };
           if (first) {
             first = false;
             started();
@@ -302,7 +304,9 @@ test("token changes during an in-flight settings read reconnect immediately", as
     send(wire) {
       if (JSON.parse(wire).type === "hello")
         queueMicrotask(() =>
-          this.onmessage?.({ data: JSON.stringify({ type: "hello", protocol: 1 }) }),
+          this.onmessage?.({
+            data: JSON.stringify({ type: "hello", protocol: 1, daemonVersion: manifest.version }),
+          }),
         );
     }
     close() {
@@ -352,7 +356,7 @@ test("Chrome hello reports the browser, its version and the persisted sessions",
   let paused = false;
   globalThis.chrome = {
     storage: {
-      local: { get: async () => ({ token, paused }) },
+      local: { get: async () => ({ token, paused, checkForReleases: false }) },
       session: {
         get: async () => ({
           sessions: {
@@ -460,7 +464,7 @@ test("worker startup releases debugger sessions inherited by persisted tabs", as
   const detached = [];
   globalThis.chrome = {
     storage: {
-      local: { get: async () => ({ paused: true }) },
+      local: { get: async () => ({ paused: true, checkForReleases: false }) },
       session: {
         get: async () => ({
           sessions: { task: { tabs: [5], borrowed: [6], title: "task" } },
@@ -514,7 +518,7 @@ test("cleanup commands use the recovery reserve while 128 jobs wait", async (t) 
   const originalSocket = globalThis.WebSocket;
   globalThis.chrome = {
     storage: {
-      local: { get: async () => ({ token, paused }) },
+      local: { get: async () => ({ token, paused, checkForReleases: false }) },
       session: {
         get: async () => ({
           sessions: Object.fromEntries(
@@ -558,7 +562,9 @@ test("cleanup commands use the recovery reserve while 128 jobs wait", async (t) 
       sent.push(message);
       if (message.type === "hello")
         queueMicrotask(() =>
-          this.onmessage?.({ data: JSON.stringify({ type: "hello", protocol: 1 }) }),
+          this.onmessage?.({
+            data: JSON.stringify({ type: "hello", protocol: 1, daemonVersion: manifest.version }),
+          }),
         );
     }
     close() {
@@ -626,7 +632,7 @@ test("a closed daemon connection releases its page CDP clients' tabs", async (t)
   const originalSocket = globalThis.WebSocket;
   globalThis.chrome = {
     storage: {
-      local: { get: async () => ({ token, paused }) },
+      local: { get: async () => ({ token, paused, checkForReleases: false }) },
       session: {
         get: async () => structuredClone(stored),
         set: async (value) => {
@@ -673,7 +679,9 @@ test("a closed daemon connection releases its page CDP clients' tabs", async (t)
       const message = JSON.parse(wire);
       if (message.type === "hello")
         queueMicrotask(() =>
-          this.onmessage?.({ data: JSON.stringify({ type: "hello", protocol: 1 }) }),
+          this.onmessage?.({
+            data: JSON.stringify({ type: "hello", protocol: 1, daemonVersion: manifest.version }),
+          }),
         );
       if (message.type === "response") this.responses.set(message.id, message);
     }
