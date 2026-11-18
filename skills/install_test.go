@@ -2,6 +2,7 @@ package skills
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -50,6 +51,39 @@ func TestInstallAndRefresh(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRefreshRestoresFilesOnWriteFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write to read-only directories")
+	}
+	parent := t.TempDir()
+	if err := Install(parent, false); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(parent, "oh-my-webbridge")
+	guide := filepath.Join(target, "SKILL.md")
+	if err := os.WriteFile(guide, []byte("old guide"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	addition := filepath.Join(target, "references", "firefox.mdx")
+	if err := os.Remove(addition); err != nil {
+		t.Fatal(err)
+	}
+	readonly := filepath.Join(target, "references", "reference")
+	if err := os.Chmod(readonly, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(readonly, 0700) })
+	if err := Install(parent, true); !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("expected a permission error, got %v", err)
+	}
+	if data, err := os.ReadFile(guide); err != nil || string(data) != "old guide" {
+		t.Fatalf("original guide: %q, %v", data, err)
+	}
+	if _, err := os.Lstat(addition); !os.IsNotExist(err) {
+		t.Fatalf("new reference after rollback: %v", err)
 	}
 }
 

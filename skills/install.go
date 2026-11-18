@@ -1,10 +1,12 @@
 package skills
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	docs "github.com/oh-my-webbridge/oh-my-webbridge/docs/content/docs"
 )
@@ -29,6 +31,19 @@ func Install(parent string, refresh bool) error {
 	target := filepath.Join(parent, "oh-my-webbridge")
 	if !refresh {
 		return os.Rename(stage, target)
+	}
+	// Serialize refreshes across CLI processes without adding a file to the
+	// installed Skill. Closing the directory also releases its advisory lock.
+	lock, err := os.Open(parent)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	if err := os.Rename(stage, target); err == nil {
+		return nil
 	}
 	var dirs, files []string
 	if err := filepath.WalkDir(stage, func(path string, entry fs.DirEntry, err error) error {
@@ -73,10 +88,55 @@ func Install(parent string, refresh bool) error {
 			}
 		}
 	}
-	for _, rel := range files {
-		if err := os.Rename(filepath.Join(stage, rel), filepath.Join(target, rel)); err != nil {
-			return err
+	return replaceFiles(stage, target, files)
+}
+
+func replaceFiles(stage, target string, files []string) error {
+	backup, err := os.MkdirTemp(filepath.Dir(stage), ".omw-previous-")
+	if err != nil {
+		return err
+	}
+	type change struct{ dst, saved string }
+	var changes []change
+	for i, rel := range files {
+		dst := filepath.Join(target, rel)
+		saved := filepath.Join(backup, fmt.Sprint(i))
+		// Keep the live path readable until replacement where hard links
+		// are supported. Otherwise move the original aside for rollback.
+		err = os.Link(dst, saved)
+		moved := false
+		if err != nil && !os.IsNotExist(err) {
+			err = os.Rename(dst, saved)
+			moved = err == nil
+		}
+		if os.IsNotExist(err) {
+			saved = ""
+		} else if err != nil {
+			break
+		}
+		if moved {
+			changes = append(changes, change{dst, saved})
+		}
+		if err = os.Rename(filepath.Join(stage, rel), dst); err != nil {
+			break
+		}
+		if !moved {
+			changes = append(changes, change{dst, saved})
 		}
 	}
-	return nil
+	var recovery error
+	if err != nil {
+		for i := len(changes) - 1; i >= 0; i-- {
+			c := changes[i]
+			if c.saved == "" {
+				recovery = errors.Join(recovery, os.Remove(c.dst))
+			} else {
+				recovery = errors.Join(recovery, os.Rename(c.saved, c.dst))
+			}
+		}
+	}
+	if recovery != nil {
+		return errors.Join(err, fmt.Errorf("restore from %s: %w", backup, recovery))
+	}
+	return errors.Join(err, os.RemoveAll(backup))
 }
