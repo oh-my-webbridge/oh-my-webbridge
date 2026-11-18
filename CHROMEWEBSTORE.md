@@ -33,7 +33,7 @@ HOW TO USE
 3. Install the agent skill with omw install-skill ~/.agents/skills, then give your agent a browser task.
 
 PRIVACY
-The extension connects to one address: the omw daemon at 127.0.0.1 on this computer. It reads a page to carry out a command from the daemon and sends the result only to the daemon. When you open the popup, it reads the active tab to suggest prompts; that data stays in the popup. The project runs no server, and the extension contains no analytics. The program that sent the command decides what happens to the result; an agent can pass page content to its model provider.
+The extension reads a page to carry out a command from the omw daemon at 127.0.0.1 on this computer and sends the result only to the daemon. When you open the popup, it reads the active tab to suggest prompts; that data stays in the popup. Automatic release checks request public release metadata from GitHub without credentials or browser activity. You can turn them off in settings. The project runs no server, and the extension contains no analytics. The program that sent the command decides what happens to the result; an agent can pass page content to its model provider.
 
 SUPPORT
 Documentation: https://oh-my-webbridge.github.io/en/
@@ -72,10 +72,10 @@ The `assets` branch images are 1600×1160; the store needs them exported at 1280
 | `tabGroups`          | permissions      | Puts the tabs of each agent session in one collapsed tab group named after the session.                                                                                                                                                                                            |
 | `downloads`          | permissions      | The `download` command saves a file from the page to the browser's download folder and reports where it was saved.                                                                                                                                                                 |
 | `storage`            | permissions      | Keeps the daemon token and the settings on this computer, and keeps session state in session storage, which the browser clears when it restarts.                                                                                                                                   |
-| `alarms`             | permissions      | Reconnects to the daemon every 30 seconds while it is offline, and renews the activity overlay on controlled tabs, which removes itself when it is not renewed.                                                                                                                    |
+| `alarms`             | permissions      | Reconnects to the daemon while it is offline, renews the activity overlay on controlled tabs and schedules release checks if enabled.                                                                                                                                              |
 | `activeTab`          | permissions      | When you open the popup, reads the active tab to pick prompt suggestions for it.                                                                                                                                                                                                   |
 | `scripting`          | permissions      | When you open the popup, counts the tables, form fields, code blocks, videos, images and articles of the active tab to pick prompt suggestions. The counts stay in the popup.                                                                                                      |
-| `http://127.0.0.1/*` | host_permissions | Connects to the omw daemon on this computer at `127.0.0.1:17373` for pairing and status checks. The extension connects to no other address.                                                                                                                                        |
+| `http://127.0.0.1/*` | host_permissions | Connects to the omw daemon on this computer at `127.0.0.1:17373` for pairing and status checks.                                                                                                                                                                                    |
 
 ## Privacy and data use
 

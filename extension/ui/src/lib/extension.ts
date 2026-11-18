@@ -7,6 +7,7 @@ import {
   type Controls,
   type Preferences,
 } from "@ext/status.ts";
+import { readReleaseCheck, type ReleaseCheck } from "@ext/releases.ts";
 import { useEffect, useState } from "react";
 
 // Re-reads a value whenever one of the storage keys it depends on changes.
@@ -43,6 +44,8 @@ export const useControls = (): Controls | undefined =>
   useStored(readControls, ["controls"], "session");
 export const usePreferences = (): Preferences | undefined =>
   useStored(readPreferences, ["preferences"], "local");
+export const useReleaseCheck = (): ReleaseCheck | undefined =>
+  useStored(readReleaseCheck, ["checkForReleases", "releaseCache"], "local");
 export const useToken = (): string | undefined =>
   useStored(
     async () => ((await chrome.storage.local.get("token")) as { token?: string }).token ?? "",

@@ -18,6 +18,7 @@ import { currentTab, initSessions, removed, removedGroup, sessionNames } from ".
 import { topDocument } from "./frames.js";
 import { frameEvent, resetScope } from "./frames.js";
 import { observe } from "./features.js";
+import { startReleaseCheck } from "./releases.js";
 import type { Rect } from "./overlay.js";
 
 // User-Agent Client Hints are not part of TypeScript's DOM library.
@@ -147,6 +148,7 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") void chrome.tabs.create({ url: chrome.runtime.getURL("app.html") });
 });
 startIndicator();
+startReleaseCheck();
 startActivity(paintChrome);
 void initSessions(releaseInherited).catch((error: Error) =>
   console.error("restore sessions", fault(error).message),

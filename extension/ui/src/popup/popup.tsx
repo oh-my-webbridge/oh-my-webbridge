@@ -1,11 +1,18 @@
-import type { ConnectionState } from "@ext/status.ts";
-import { BookOpenIcon, PauseIcon, PlayIcon, Settings2Icon } from "lucide-react";
+import { peerMessage, type ConnectionState } from "@ext/status.ts";
+import { BookOpenIcon, PauseIcon, PlayIcon, Settings2Icon, TriangleAlertIcon } from "lucide-react";
 import type * as React from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { PromptComposer } from "@/components/prompt-composer";
+import { ReleaseNotice } from "@/components/release-notice";
 import { ConnectionLabel, StatusLabel } from "@/components/status-label";
 import { Button } from "@/components/ui/button";
-import { openPage, useActiveTab, useConnection, useControls } from "@/lib/extension";
+import {
+  openPage,
+  useActiveTab,
+  useConnection,
+  useControls,
+  useReleaseCheck,
+} from "@/lib/extension";
 import { useI18n } from "@/lib/i18n";
 
 const docs = "https://oh-my-webbridge.github.io";
@@ -42,8 +49,10 @@ export function Popup(): React.ReactElement {
   const { t } = useI18n();
   const connection = useConnection();
   const tab = useActiveTab();
+  const releaseCheck = useReleaseCheck();
   if (!connection) return <div className="h-24 w-[360px]" />;
-  const { state } = connection;
+  const { state, versions } = connection;
+  const incompatible = versions?.compatibility === "incompatible-protocol";
   return (
     <main className="flex max-h-[560px] w-[360px] flex-col">
       <header className="flex items-center gap-2.5 border-b px-4 py-3">
@@ -51,9 +60,21 @@ export function Popup(): React.ReactElement {
         <h1 className="font-semibold text-[15px] leading-5">{t("extensionName")}</h1>
         <ConnectionLabel className="ms-auto" state={state} />
       </header>
+      {versions?.compatibility === "compatible-skew" && (
+        <div className="flex gap-2 border-b px-4 py-3 text-sm" role="status">
+          <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <p>
+            {t("peerSkewPopup", {
+              extension: versions.extension,
+              daemon: versions.daemon ?? "?",
+            })}
+          </p>
+        </div>
+      )}
       {needsSetup(state) ? (
         <div className="flex flex-col gap-3 p-4">
-          <p className="text-sm">{t(setupHints[state])}</p>
+          <p className="text-sm">{t(incompatible ? peerMessage(versions) : setupHints[state])}</p>
+          <ReleaseNotice check={releaseCheck} daemon={versions?.daemon} />
           <Button className="w-full" onClick={() => openPage("app.html")}>
             {t("openSetup")}
           </Button>
@@ -61,6 +82,7 @@ export function Popup(): React.ReactElement {
       ) : (
         <>
           <div className="flex flex-col gap-3 overflow-y-auto p-4">
+            <ReleaseNotice check={releaseCheck} daemon={versions?.daemon} />
             {tab && (
               <>
                 <CurrentTab tab={tab} />

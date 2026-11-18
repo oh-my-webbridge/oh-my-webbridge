@@ -3,6 +3,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import type * as React from "react";
 import { PageTitle } from "@/components/rail-page";
+import { ReleaseNotice } from "@/components/release-notice";
 import { ConnectionLabel } from "@/components/status-label";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -14,6 +15,7 @@ import {
   setPreference,
   useConnection,
   usePreferences,
+  useReleaseCheck,
   useToken,
   useUserScripts,
 } from "@/lib/extension";
@@ -116,6 +118,9 @@ export function Settings(): React.ReactElement {
   const connection = useConnection();
   const versions = connection?.versions;
   const preferences = usePreferences();
+  const releaseCheck = useReleaseCheck();
+  const cache = releaseCheck?.releaseCache;
+  const checksEnabled = releaseCheck !== undefined && releaseCheck.checkForReleases !== false;
   const token = useToken();
   const [scripts, requestScripts] = useUserScripts();
   const [advanced, setAdvanced] = useState(false);
@@ -142,6 +147,42 @@ export function Settings(): React.ReactElement {
               onCheckedChange={(paused) => void chrome.storage.local.set({ paused })}
             />
           </Row>
+        </Group>
+        <Group title={t("releaseGroup")}>
+          <Row
+            description={t("releaseCheckDescription")}
+            htmlFor="release-check"
+            label={t("releaseCheckLabel")}
+          >
+            <Switch
+              checked={checksEnabled}
+              disabled={!releaseCheck}
+              id="release-check"
+              onCheckedChange={(enabled) =>
+                void chrome.storage.local.set({ checkForReleases: enabled })
+              }
+            />
+          </Row>
+          {checksEnabled && (
+            <div className="flex flex-col gap-2 py-3 pe-4">
+              {cache?.unavailable ? (
+                <p className="text-muted-foreground text-xs" role="status">
+                  {cache.latest
+                    ? t("releaseUnavailableCached", { version: cache.latest })
+                    : t("releaseUnavailable")}
+                </p>
+              ) : cache?.latest ? (
+                <p className="text-muted-foreground text-xs" role="status">
+                  {t("releaseLatest", { version: cache.latest })}
+                </p>
+              ) : (
+                <p className="text-muted-foreground text-xs" role="status">
+                  {t("releaseWaiting")}
+                </p>
+              )}
+              <ReleaseNotice check={releaseCheck} daemon={versions?.daemon} />
+            </div>
+          )}
         </Group>
         <Group title={t("groupPages")}>
           <Row description={t("activityDescription")} htmlFor="activity" label={t("activityLabel")}>

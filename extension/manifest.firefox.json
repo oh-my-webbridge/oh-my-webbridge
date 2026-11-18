@@ -48,6 +48,6 @@
     }
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' ws://127.0.0.1:17373 http://127.0.0.1:17373"
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' ws://127.0.0.1:17373 http://127.0.0.1:17373 https://api.github.com/repos/oh-my-webbridge/oh-my-webbridge/releases/latest"
   }
 }
