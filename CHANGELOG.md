@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.3.0](https://github.com/oh-my-webbridge/oh-my-webbridge/compare/v0.2.2...v0.3.0)
+
+### New capabilities
+
+#### Borrow a designated background tab
+
+Use `borrow_tab` with a full URL or tab ID to work in an existing page while keeping the user's focus. A borrowed page stays open when its session closes. ([#54](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/54))
+
+#### Continue long page reads and inspect one accessibility subtree
+
+Chrome and Firefox return completion and continuation fields with each page read. A snapshot can start at a selected element and issue references for just that subtree. ([#56](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/56))
+
+#### Check for stable releases from the extension
+
+Chrome and Firefox check the latest stable GitHub release and show when it is newer than the extension or daemon. You can turn off release checks in Settings. The popup also shows when the installed versions differ and can still connect. ([#57](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/57))
+
+#### Read the installed action reference offline
+
+The agent kit and `omw install-skill` include the matching CLI, SDK, browser, and error references. Run `omw install-skill --refresh DIRECTORY` after upgrading to refresh the bundled pages and keep your other files. Refresh checks for path conflicts before replacing files and restores the previous files if a replacement fails. ([#50](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/50))
+
+#### Diagnose daemon and extension compatibility offline
+
+Each browser reports its extension release separately from its engine version. Connection settings and CLI diagnostics identify compatible release differences, legacy peers, and incompatible wire protocols. ([#57](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/57))
+
+#### Hand selected tabs back to the user
+
+Choose which task pages to keep open or close with `release_tabs`. Kept task pages leave the session's tab group and can be claimed by another session. Commands continue in a remaining tab when the current tab is released. Partial cleanup reports individual failures for retry. ([#55](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/55))
+
+### Improvements and fixes
+
+#### Run benchmarks with updated browser comparators
+
+The benchmark uses Playwright MCP 0.0.85, Chrome DevTools MCP 1.13.0, and Puppeteer 25.17.0. It starts the MCP servers through their npm executables and reports comparator versions from the dependency pins. ([#58](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/58))
+
+#### Make browser action errors actionable
+
+Batch validation names malformed steps, tab lookup errors identify the search scope, and explicit Chrome protected-page refusals return `restricted_tab`. ([#52](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/52))
+
+#### Install the extension from either browser store
+
+The installation guide links to the Chrome Web Store and Firefox Add-ons. The manual loading and self-distribution steps remain available under expandable sections.
+
+#### Open Chrome task tabs in normal windows
+
+New task tabs open in their group’s window or a normal Chrome window. New task windows explicitly use the normal window type, and Chrome creation and grouping failures name the failed operation. ([#53](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/53))
+
+#### Report how far failed commands got
+
+The daemon distinguishes commands cancelled before sending from commands that ended while waiting for a browser reply. The CLI includes the fault code in stderr and preserves the structured reply on stdout. ([#51](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/51))
+
+#### Update dependencies for the extension build and browser tests
+
+Refresh the packaged extension's build dependencies and run browser tests and benchmarks with Playwright Core 1.65.1. ([#59](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/59))
+
+#### Update Fumadocs translations
+
+The Simplified and Traditional Chinese documentation layouts use `@fumadocs/language` 0.2.19. ([#25](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/25))
+
+#### Update the documentation MDX compiler
+
+The documentation site compiles its pages with `fumadocs-mdx` 15.5.0. ([#26](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/26))
+
+#### Update Next.js for the documentation site
+
+The documentation site builds with Next.js 16.4.5, which includes upstream security fixes. ([#27](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/27))
+
+#### Update extension animations
+
+The extension uses Motion 14.10.1 for status and setup animations. This release includes fixes for exit animations. ([#28](https://github.com/oh-my-webbridge/oh-my-webbridge/pull/28))
+
+#### Refresh bundled protection rules (2026-11-10 snapshot)
+
+Update pinned official filter sources and their include closure. Existing installations change only after installing the reviewed release; runtime rule downloads remain disabled. Inspect the source hashes and browser smoke results before merging.
+
+### Downloads
+
+Choose the native archive for macOS or Linux and your CPU. All release archives use `.tar.zst` with zstd level 3. Install zstd and verify `SHA256SUMS`, then extract with `zstd -dc archive.tar.zst | tar -xf - -C destination`. Load the extracted Chrome MV3 directory in Chrome. The agent kit includes the SDK and guide.
+
+The release workflow submits `omw-0.3.0-chrome-mv3.zip` to the Chrome Web Store and the unsigned add-on to addons.mozilla.org; each store publishes the version after its review.
+
+Firefox release builds install `omw-0.3.0-firefox-mv3-unsigned.xpi` permanently only after it is signed. For development, load the extracted Firefox MV3 directory as a temporary add-on in `about:debugging`. See [Firefox installation](https://oh-my-webbridge.github.io/en/firefox/#install).
+
+Browser benchmarks report interface costs on a deterministic fixture; they do not establish real-site reliability. Platform acceptance and remaining differences are recorded in the repository.
+
 ## [0.2.2](https://github.com/oh-my-webbridge/oh-my-webbridge/compare/v0.2.1...v0.2.2)
 
 ### Improvements and fixes
