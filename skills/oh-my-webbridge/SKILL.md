@@ -24,6 +24,8 @@ omw call research snapshot
 
 Use snapshot `@e...` references for click/fill, CSS selectors, or semantic selectors such as `role=button[name="Submit"]`, `label=Email`, and `testid=search`. CSS, text and attribute locators (`label=`, `placeholder=`, `alt=`, `title=`, `testid=`) traverse open shadow roots. Snapshot again after navigation or `stale_ref`. Read compact content with `read_page`. Use `evaluate` for specific structured extraction. Verify the page state after changes.
 
+For a long page, continue `read_page` with the returned `nextOffset` as `offset` until `complete` is true. Restart after navigation or a frame change. To inspect one region, pass its selector or current reference to `snapshot`; subsequent actions use the new references.
+
 ```sh
 omw call research fill '{"selector":"#search","value":"query"}'
 omw call research click '{"selector":"button[type=submit]"}'

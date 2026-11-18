@@ -6,6 +6,7 @@
 // replaced document takes them along, and a page restored from the
 // back-forward cache drops them.
 import { snowflake } from "../id.js";
+import { readChunk, readRange } from "../page-read.js";
 import { resolveElements } from "../locators.js";
 import { fail, fault, stringArg, type Json } from "../protocol.js";
 import {
@@ -494,7 +495,20 @@ function roleOf(element: Element): string | undefined {
 // Visits the accessible nodes of this document in tree order, starting with
 // the RootWebArea at depth 0. Hidden subtrees are skipped; elements without a
 // role pass their depth on to their children. visit returns false to stop.
-function walkTree(maxDepth: number, visit: (entry: Entry, depth: number) => boolean): void {
+function walkTree(
+  maxDepth: number,
+  visit: (entry: Entry, depth: number) => boolean,
+  root?: Node,
+): void {
+  // Follow the selected node's composed ancestors through the same visibility
+  // and child filters as a full snapshot. Siblings need no traversal.
+  const path = new Set<Node>();
+  for (let node = root; node;) {
+    const slot: HTMLSlotElement | null =
+      node instanceof Element || node instanceof Text ? node.assignedSlot : null;
+    node = slot ?? composedParent(node) ?? undefined;
+    if (node) path.add(node);
+  }
   let stopped = false;
   const step = (node: Node, depth: number, shown: boolean): void => {
     if (stopped || depth > maxDepth) return;
@@ -509,7 +523,8 @@ function walkTree(maxDepth: number, visit: (entry: Entry, depth: number) => bool
     const style = getComputedStyle(node);
     if (style.display === "none") return;
     const nodeShown = style.visibility !== "hidden" && style.visibility !== "collapse";
-    const role = roleOf(node);
+    const ancestor = path.has(node);
+    const role = ancestor ? undefined : roleOf(node);
     let next = depth;
     if (nodeShown && role && !(style.display === "contents" && role === "generic")) {
       stopped = !visit({ node, role }, depth);
@@ -523,8 +538,14 @@ function walkTree(maxDepth: number, visit: (entry: Entry, depth: number) => bool
             .filter((child) => child.localName === "summary")
             .slice(0, 1)
         : flatChildren(node);
-    for (const child of children) step(child, next, nodeShown);
+    for (const child of children)
+      if (!ancestor || child === root || path.has(child)) step(child, next, nodeShown);
   };
+  if (root) {
+    if (root === document.documentElement || path.has(document.documentElement))
+      step(document.documentElement, 0, true);
+    return;
+  }
   if (maxDepth < 0 || !visit({ node: document.documentElement, role: "RootWebArea" }, 0)) return;
   for (const child of flatChildren(document.documentElement)) step(child, 1, true);
 }
@@ -731,36 +752,42 @@ function propsOf(element: Element, role: string): string {
 
 // Same line format, reference numbering and limits as extension/src/snapshot.ts.
 function snapshot(args: PageArgs): { tree: string; truncated: boolean } {
+  const root = args.selector ? located(args.selector)[0] : undefined;
+  if (args.selector && !root) fail("element_missing", "snapshot root not found");
   clearRefs();
   generation = snowflake();
   const lines: string[] = [];
   let size = 0;
   let truncated = false;
-  walkTree(Math.min(64, args.maxDepth ?? 64), (entry, depth) => {
-    if (args.interactive && !interactiveRoles.has(entry.role)) return true;
-    if (lines.length >= maxLines || size >= maxBytes) {
-      truncated = true;
-      return false;
-    }
-    const ref = "@e" + generation + "." + String(lines.length);
-    refs.set(ref, entry.node);
-    const element =
-      entry.node instanceof Element && entry.role !== "RootWebArea" ? entry.node : undefined;
-    const name = nameOf(entry);
-    const value = element ? valueOf(element, entry.role) : undefined;
-    const props = element ? propsOf(element, entry.role) : "";
-    const line =
-      "  ".repeat(Math.min(depth, 20)) +
-      ref +
-      " " +
-      entry.role +
-      (name ? " " + JSON.stringify(name) : "") +
-      (value === undefined ? "" : " value=" + JSON.stringify(value).slice(0, maxText)) +
-      (props ? " [" + props + "]" : "");
-    lines.push(line);
-    size += line.length;
-    return true;
-  });
+  walkTree(
+    Math.min(64, args.maxDepth ?? 64),
+    (entry, depth) => {
+      if (args.interactive && !interactiveRoles.has(entry.role)) return true;
+      if (lines.length >= maxLines || size >= maxBytes) {
+        truncated = true;
+        return false;
+      }
+      const ref = "@e" + generation + "." + String(lines.length);
+      refs.set(ref, entry.node);
+      const element =
+        entry.node instanceof Element && entry.role !== "RootWebArea" ? entry.node : undefined;
+      const name = nameOf(entry);
+      const value = element ? valueOf(element, entry.role) : undefined;
+      const props = element ? propsOf(element, entry.role) : "";
+      const line =
+        "  ".repeat(Math.min(depth, 20)) +
+        ref +
+        " " +
+        entry.role +
+        (name ? " " + JSON.stringify(name) : "") +
+        (value === undefined ? "" : " value=" + JSON.stringify(value).slice(0, maxText)) +
+        (props ? " [" + props + "]" : "");
+      lines.push(line);
+      size += line.length;
+      return true;
+    },
+    root,
+  );
   return { tree: lines.join("\n"), truncated };
 }
 function find(args: PageArgs): Json {
@@ -1399,7 +1426,11 @@ function run(op: string, args: PageArgs): Json {
     case "find":
       return find(args);
     case "read_page":
-      return { url: location.href, title: document.title, text: bodyText().slice(0, maxBytes) };
+      return {
+        url: location.href,
+        title: document.title,
+        ...readChunk(bodyText(), ...readRange(args)),
+      };
     case "locate":
       return locate(args);
     case "get":
