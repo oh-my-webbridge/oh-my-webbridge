@@ -49,6 +49,26 @@ async function fixture(t, options = owned) {
   return { ...api, run };
 }
 
+test("Firefox borrows only the designated public tab and leaves it open", async (t) => {
+  const url = "https://example.test/form";
+  const f = await fixture(t, {
+    tabs: [
+      { id: 5, url },
+      { id: 6, url, incognito: true },
+      { id: 7, url: "https://addons.mozilla.org/" },
+    ],
+  });
+  await assert.rejects(f.run("borrow_tab", { tabId: 6 }), { code: "restricted_tab" });
+  await assert.rejects(f.run("borrow_tab", { tabId: 7 }), { code: "restricted_tab" });
+  f.state.permissions.delete("<all_urls>");
+  await assert.rejects(f.run("borrow_tab", { tabId: 5 }), { code: "restricted_tab" });
+  assert.deepEqual((await f.run("list_tabs", {})).tabs, []);
+  f.state.permissions.add("<all_urls>");
+  assert.equal((await f.run("borrow_tab", { url })).tabId, 5);
+  await f.run("close_session", {});
+  assert.ok(f.state.tabs.has(5));
+});
+
 test("actions Firefox cannot perform fail as unsupported without opening a session", async (t) => {
   const f = await fixture(t, {});
   for (const action of [

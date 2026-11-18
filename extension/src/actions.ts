@@ -44,6 +44,7 @@ import { quadRect } from "./layer.js";
 import { snapshot } from "./snapshot.js";
 import {
   assertOwner,
+  borrowTab,
   claim,
   closedTab,
   getSession,
@@ -601,6 +602,7 @@ async function run(command: Command, budget: Budget): Promise<object> {
     }
     return { success: true, tabId, url: (await chrome.tabs.get(tabId)).url };
   }
+  if (action === "borrow_tab") return await borrowTab(name, s, args, "chrome", budget);
   if (action === "find_tab") {
     const query = stringArg(args.url, "url");
     const tabs = await chrome.tabs.query(

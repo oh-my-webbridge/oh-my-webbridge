@@ -1,5 +1,5 @@
 import type { Preset } from "./presets.js";
-import { fail, type Args } from "./protocol.js";
+import { expired, fail, type Args, type Budget } from "./protocol.js";
 
 export type Session = {
   tabs: number[];
@@ -168,4 +168,49 @@ export function tabURL(tab: chrome.tabs.Tab): string {
 export function webTab(tab: chrome.tabs.Tab): boolean {
   const url = tabURL(tab);
   return !tab.incognito && (/^https?:\/\//u.test(url) || url === "about:blank");
+}
+
+// Borrow exactly the page the user identified, without activating its window.
+export async function borrowTab(
+  name: string,
+  session: Session,
+  args: Args,
+  browser: "chrome" | "firefox",
+  budget: Budget,
+): Promise<object> {
+  if ((args.url === undefined) === (args.tabId === undefined))
+    fail("invalid_args", "borrow_tab requires either an exact URL or a tabId");
+  let tab: chrome.tabs.Tab;
+  if (args.tabId !== undefined) {
+    if (!Number.isSafeInteger(args.tabId) || args.tabId < 0)
+      fail("invalid_args", "tabId must be a non-negative integer");
+    tab = await chrome.tabs.get(args.tabId);
+  } else {
+    if (typeof args.url !== "string" || !URL.canParse(args.url) || !/^https?:\/\//u.test(args.url))
+      fail("invalid_args", "url must be a complete HTTP(S) URL");
+    const address = new URL(args.url);
+    const candidates = await chrome.tabs.query({
+      url: `${address.protocol}//${address.hostname}/*`,
+    });
+    const matches = candidates.filter((t) => !t.incognito && tabURL(t) === address.href);
+    if (!matches[0]) fail("tab_missing", "no tab matches the exact URL");
+    if (matches.length > 1) fail("ambiguous_tab", "multiple tabs match this URL; specify a tabId");
+    tab = matches[0];
+  }
+  const url = tabURL(tab);
+  if (!tab.id || tab.incognito || !/^https?:\/\//u.test(url))
+    fail("restricted_tab", "borrowing requires a non-private HTTP(S) page");
+  const address = new URL(url);
+  if (
+    (browser === "chrome" &&
+      (address.hostname === "chromewebstore.google.com" ||
+        (address.hostname === "chrome.google.com" && address.pathname.startsWith("/webstore")))) ||
+    (browser === "firefox" && address.hostname === "addons.mozilla.org")
+  )
+    fail("restricted_tab", "this browser store page cannot be borrowed");
+  budget.check();
+  if (sessions.get(name) !== session) expired("the session was closed");
+  claim(name, session, tab.id, !session.tabs.includes(tab.id));
+  await persist();
+  return { success: true, tabId: tab.id, url, borrowed: session.borrowed.includes(tab.id) };
 }

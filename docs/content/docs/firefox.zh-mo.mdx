@@ -63,6 +63,8 @@ Firefox ESR、Developer Edition、Nightly 與未加品牌的建置版本，在 `
 - **存取所有網站**是 `<all_urls>` 主機權限，在安裝時請求。你可以在 `about:addons` 的「權限」中關閉它。關閉後，頁面動作、`screenshot`、`cookies`、帶有 `cmd: "start"` 的 `network` 與帶有 `data` 的 `emulate` 會回傳 `restricted_tab`，預設集也會停止過濾請求。此時 `navigate` 到回應 204 No Content 或 205 Reset Content 的 URL，會一直等到指令的期限。重新開啓這項權限即可恢復過濾。Firefox 不讓擴充功能存取的頁面（例如 `about:` 頁面與 addons.mozilla.org），即使開啓這項權限也會回傳 `restricted_tab`。頁面動作遇到分頁正在導覽時回傳 `outcome_unknown`，`wait` 則在新頁面上繼續檢查。
 - **使用者指令碼**是選用的 `userScripts` 權限。請在步驟 3 選擇**允許指令碼**，或到**設定**，再到**網頁**，並確認 Firefox 的提示。Firefox 只接受來自使用者操作的請求，所以這些按鈕是授予權限的唯一入口。在授予之前，`evaluate` 與帶有 `expression` 的 `wait` 會回傳 `unsupported`。
 
+`borrow_tab` 把分頁分配給工作階段。執行頁面動作時，Firefox 仍會檢查網站權限和瀏覽器政策。如果這些檢查阻止存取，借用分頁上的頁面動作也會回傳 `restricted_tab`。
+
 彈出式視窗中的**暫停**會讓擴充功能與 daemon 中斷連線，直到你選擇**繼續**。
 
 ## Chrome 與 Firefox 並用 [#chrome-and-firefox-together]
