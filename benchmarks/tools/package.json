@@ -4,10 +4,10 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@playwright/mcp": "0.0.85",
+    "@playwright/mcp": "0.0.86",
     "chrome-devtools-mcp": "1.13.0",
     "pi-chrome-use": "1.1.1",
-    "puppeteer-core": "25.17.0",
-    "selenium-webdriver": "4.52.0"
+    "puppeteer-core": "25.18.1",
+    "selenium-webdriver": "4.53.0"
   }
 }
