@@ -1,6 +1,6 @@
 {
   "name": "oh-my-webbridge",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "A local browser bridge for agents: Go daemon, Chrome and Firefox MV3 extensions, task sessions and CDP.",
   "homepage": "https://oh-my-webbridge.github.io",
