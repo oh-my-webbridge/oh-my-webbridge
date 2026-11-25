@@ -1,0 +1,504 @@
+[
+  {
+    "run": "repair_a",
+    "model": "gpt-6.2-sol",
+    "effort": "medium",
+    "duration_ms": 33891,
+    "input_tokens": 296207,
+    "cached_input_tokens": 265600,
+    "uncached_input_tokens": 30607,
+    "output_tokens": 510,
+    "reasoning_tokens": 62,
+    "total_tokens": 296717,
+    "model_responses": 7,
+    "tool_calls": 6,
+    "shell_executions": 7,
+    "session": "err-a",
+    "scenario": "archive",
+    "guide_sha256": "a161baf8830b9ce8dea8bc8378e101f3658e31fe1d8b07b76547c96129dfa99c",
+    "cli_calls": 5,
+    "cli_errors": 0,
+    "actions": [
+      ["navigate", "snapshot"],
+      ["click", "snapshot"],
+      "snapshot",
+      ["click", "snapshot"],
+      "snapshot"
+    ],
+    "server_events": ["fault", "register", "evidence"],
+    "writes": 0,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 17768,
+        "total_tokens": 79091,
+        "tool_calls": 2,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 30117,
+        "total_tokens": 252472,
+        "tool_calls": 6,
+        "cli_calls": 5
+      },
+      "answer": {
+        "at_ms": 33859,
+        "total_tokens": 296717,
+        "tool_calls": 6,
+        "cli_calls": 5
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_b",
+    "model": "gpt-6.1-terra",
+    "effort": "medium",
+    "duration_ms": 26321,
+    "input_tokens": 283381,
+    "cached_input_tokens": 253952,
+    "uncached_input_tokens": 29429,
+    "output_tokens": 588,
+    "reasoning_tokens": 31,
+    "total_tokens": 283969,
+    "model_responses": 7,
+    "tool_calls": 6,
+    "shell_executions": 6,
+    "session": "err-b",
+    "scenario": "receipt",
+    "guide_sha256": "a161baf8830b9ce8dea8bc8378e101f3658e31fe1d8b07b76547c96129dfa99c",
+    "cli_calls": 5,
+    "cli_errors": 0,
+    "actions": [["navigate", "snapshot"], "click", "snapshot", "click", "snapshot"],
+    "server_events": ["start", "write", "fault", "evidence"],
+    "writes": 1,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 17436,
+        "total_tokens": 158558,
+        "tool_calls": 4,
+        "cli_calls": 3
+      },
+      "evidence_visible": {
+        "at_ms": 22936,
+        "total_tokens": 241973,
+        "tool_calls": 6,
+        "cli_calls": 5
+      },
+      "answer": {
+        "at_ms": 26286,
+        "total_tokens": 283969,
+        "tool_calls": 6,
+        "cli_calls": 5
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_f",
+    "model": "gpt-6-luna",
+    "effort": "medium",
+    "duration_ms": 66767,
+    "input_tokens": 333324,
+    "cached_input_tokens": 277888,
+    "uncached_input_tokens": 55436,
+    "output_tokens": 1386,
+    "reasoning_tokens": 584,
+    "total_tokens": 334710,
+    "model_responses": 9,
+    "tool_calls": 8,
+    "shell_executions": 8,
+    "session": "err-f",
+    "scenario": "loading",
+    "guide_sha256": "661a4cf75293d650e8271fea85132ff78bb33cb5f19f630dbc1334c94bc7f409",
+    "cli_calls": 3,
+    "cli_errors": 0,
+    "actions": [["navigate", "snapshot"], "wait", "snapshot"],
+    "server_events": ["fault", "evidence"],
+    "writes": 0,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 38152,
+        "total_tokens": 172280,
+        "tool_calls": 5,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 57822,
+        "total_tokens": 292413,
+        "tool_calls": 8,
+        "cli_calls": 3
+      },
+      "answer": {
+        "at_ms": 66726,
+        "total_tokens": 334710,
+        "tool_calls": 8,
+        "cli_calls": 3
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_e",
+    "model": "gpt-6.2-sol",
+    "effort": "medium",
+    "duration_ms": 30528,
+    "input_tokens": 342511,
+    "cached_input_tokens": 333568,
+    "uncached_input_tokens": 8943,
+    "output_tokens": 592,
+    "reasoning_tokens": 24,
+    "total_tokens": 343103,
+    "model_responses": 8,
+    "tool_calls": 7,
+    "shell_executions": 8,
+    "session": "err-e",
+    "scenario": "unknown",
+    "guide_sha256": "661a4cf75293d650e8271fea85132ff78bb33cb5f19f630dbc1334c94bc7f409",
+    "cli_calls": 5,
+    "cli_errors": 0,
+    "actions": [["navigate", "snapshot"], "click", "snapshot", "click", "snapshot"],
+    "server_events": ["start", "write", "fault", "unavailable"],
+    "writes": 1,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 17547,
+        "total_tokens": 166491,
+        "tool_calls": 4,
+        "cli_calls": 3
+      },
+      "evidence_visible": {
+        "at_ms": 24527,
+        "total_tokens": 254359,
+        "tool_calls": 6,
+        "cli_calls": 5
+      },
+      "answer": {
+        "at_ms": 30509,
+        "total_tokens": 343103,
+        "tool_calls": 7,
+        "cli_calls": 5
+      }
+    },
+    "answer_contains_evidence": null
+  },
+  {
+    "run": "repair_d",
+    "model": "gpt-6.2-sol",
+    "effort": "medium",
+    "duration_ms": 36752,
+    "input_tokens": 385719,
+    "cached_input_tokens": 376192,
+    "uncached_input_tokens": 9527,
+    "output_tokens": 766,
+    "reasoning_tokens": 50,
+    "total_tokens": 386485,
+    "model_responses": 9,
+    "tool_calls": 8,
+    "shell_executions": 9,
+    "session": "err-d",
+    "scenario": "unknown",
+    "guide_sha256": "a161baf8830b9ce8dea8bc8378e101f3658e31fe1d8b07b76547c96129dfa99c",
+    "cli_calls": 5,
+    "cli_errors": 0,
+    "actions": [["navigate", "snapshot"], "click", "snapshot", ["click", "snapshot"], "read_page"],
+    "server_events": ["start", "write", "fault", "unavailable"],
+    "writes": 1,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 27043,
+        "total_tokens": 252903,
+        "tool_calls": 6,
+        "cli_calls": 3
+      },
+      "evidence_visible": {
+        "at_ms": 33759,
+        "total_tokens": 341778,
+        "tool_calls": 8,
+        "cli_calls": 5
+      },
+      "answer": {
+        "at_ms": 36719,
+        "total_tokens": 386485,
+        "tool_calls": 8,
+        "cli_calls": 5
+      }
+    },
+    "answer_contains_evidence": null
+  },
+  {
+    "run": "repair_c",
+    "model": "gpt-6-luna",
+    "effort": "medium",
+    "duration_ms": 33511,
+    "input_tokens": 206262,
+    "cached_input_tokens": 193152,
+    "uncached_input_tokens": 13110,
+    "output_tokens": 688,
+    "reasoning_tokens": 258,
+    "total_tokens": 206950,
+    "model_responses": 6,
+    "tool_calls": 5,
+    "shell_executions": 4,
+    "session": "err-c",
+    "scenario": "loading",
+    "guide_sha256": "a161baf8830b9ce8dea8bc8378e101f3658e31fe1d8b07b76547c96129dfa99c",
+    "cli_calls": 2,
+    "cli_errors": 0,
+    "actions": [["navigate", "read_page"], "read_page"],
+    "server_events": ["fault", "evidence"],
+    "writes": 0,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 17978,
+        "total_tokens": 98295,
+        "tool_calls": 3,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 24921,
+        "total_tokens": 134361,
+        "tool_calls": 4,
+        "cli_calls": 2
+      },
+      "answer": {
+        "at_ms": 33447,
+        "total_tokens": 206950,
+        "tool_calls": 5,
+        "cli_calls": 2
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_g",
+    "model": "gpt-6.1-terra",
+    "effort": "medium",
+    "duration_ms": 28366,
+    "input_tokens": 313535,
+    "cached_input_tokens": 300928,
+    "uncached_input_tokens": 12607,
+    "output_tokens": 624,
+    "reasoning_tokens": 29,
+    "total_tokens": 314159,
+    "model_responses": 7,
+    "tool_calls": 6,
+    "shell_executions": 6,
+    "session": "err-g",
+    "scenario": "receipt",
+    "guide_sha256": "661a4cf75293d650e8271fea85132ff78bb33cb5f19f630dbc1334c94bc7f409",
+    "cli_calls": 5,
+    "cli_errors": 0,
+    "actions": [["navigate", "snapshot"], "click", "snapshot", ["click", "snapshot"], "snapshot"],
+    "server_events": ["start", "write", "fault", "evidence"],
+    "writes": 1,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 20187,
+        "total_tokens": 173556,
+        "tool_calls": 4,
+        "cli_calls": 3
+      },
+      "evidence_visible": {
+        "at_ms": 26473,
+        "total_tokens": 267069,
+        "tool_calls": 6,
+        "cli_calls": 5
+      },
+      "answer": {
+        "at_ms": 28315,
+        "total_tokens": 314159,
+        "tool_calls": 6,
+        "cli_calls": 5
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_h",
+    "model": "gpt-6.2-sol",
+    "effort": "medium",
+    "duration_ms": 41576,
+    "input_tokens": 297329,
+    "cached_input_tokens": 266880,
+    "uncached_input_tokens": 30449,
+    "output_tokens": 560,
+    "reasoning_tokens": 23,
+    "total_tokens": 297889,
+    "model_responses": 7,
+    "tool_calls": 6,
+    "shell_executions": 7,
+    "session": "err-h",
+    "scenario": "archive",
+    "guide_sha256": "661a4cf75293d650e8271fea85132ff78bb33cb5f19f630dbc1334c94bc7f409",
+    "cli_calls": 5,
+    "cli_errors": 0,
+    "actions": [
+      ["navigate", "snapshot"],
+      ["click", "snapshot"],
+      "snapshot",
+      ["click", "read_page"],
+      "snapshot"
+    ],
+    "server_events": ["fault", "register", "evidence"],
+    "writes": 0,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 14221,
+        "total_tokens": 79231,
+        "tool_calls": 2,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 36058,
+        "total_tokens": 253448,
+        "tool_calls": 6,
+        "cli_calls": 5
+      },
+      "answer": {
+        "at_ms": 41545,
+        "total_tokens": 297889,
+        "tool_calls": 6,
+        "cli_calls": 5
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_i",
+    "model": "gpt-6-luna",
+    "effort": "medium",
+    "duration_ms": 45838,
+    "input_tokens": 216481,
+    "cached_input_tokens": 206592,
+    "uncached_input_tokens": 9889,
+    "output_tokens": 751,
+    "reasoning_tokens": 236,
+    "total_tokens": 217232,
+    "model_responses": 6,
+    "tool_calls": 5,
+    "shell_executions": 5,
+    "session": "err-i",
+    "scenario": "loading",
+    "guide_sha256": "ffd25b869f363ff24e27a45b14d7ce0b2cd8187f88f7091c92230d61068dd3a0",
+    "cli_calls": 2,
+    "cli_errors": 0,
+    "actions": [
+      ["navigate", "read_page"],
+      ["wait", "read_page"]
+    ],
+    "server_events": ["fault", "evidence"],
+    "writes": 0,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 31552,
+        "total_tokens": 139537,
+        "tool_calls": 4,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 38781,
+        "total_tokens": 178299,
+        "tool_calls": 5,
+        "cli_calls": 2
+      },
+      "answer": {
+        "at_ms": 45777,
+        "total_tokens": 217232,
+        "tool_calls": 5,
+        "cli_calls": 2
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_j",
+    "model": "gpt-6-luna",
+    "effort": "medium",
+    "duration_ms": 52256,
+    "input_tokens": 271538,
+    "cached_input_tokens": 264192,
+    "uncached_input_tokens": 7346,
+    "output_tokens": 1233,
+    "reasoning_tokens": 572,
+    "total_tokens": 272771,
+    "model_responses": 8,
+    "tool_calls": 7,
+    "shell_executions": 7,
+    "session": "err-j",
+    "scenario": "loading",
+    "guide_sha256": "661a4cf75293d650e8271fea85132ff78bb33cb5f19f630dbc1334c94bc7f409",
+    "cli_calls": 2,
+    "cli_errors": 0,
+    "actions": [
+      ["navigate", "read_page"],
+      ["wait", "read_page"]
+    ],
+    "server_events": ["fault", "evidence"],
+    "writes": 0,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 24533,
+        "total_tokens": 63148,
+        "tool_calls": 2,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 48517,
+        "total_tokens": 236578,
+        "tool_calls": 7,
+        "cli_calls": 2
+      },
+      "answer": {
+        "at_ms": 52224,
+        "total_tokens": 272771,
+        "tool_calls": 7,
+        "cli_calls": 2
+      }
+    },
+    "answer_contains_evidence": true
+  },
+  {
+    "run": "repair_transfer",
+    "model": "gpt-6.1-terra",
+    "effort": "medium",
+    "duration_ms": 24438,
+    "input_tokens": 200878,
+    "cached_input_tokens": 171776,
+    "uncached_input_tokens": 29102,
+    "output_tokens": 446,
+    "reasoning_tokens": 54,
+    "total_tokens": 201324,
+    "model_responses": 5,
+    "tool_calls": 4,
+    "shell_executions": 4,
+    "session": "err-replay",
+    "scenario": "receipt",
+    "guide_sha256": "14305a8df402d27a7da2f3aaaecd272e7141268acabd6418e7abaa48d2ec7c1d",
+    "cli_calls": 3,
+    "cli_errors": 0,
+    "actions": ["snapshot", ["click", "snapshot"], "snapshot"],
+    "server_events": ["start", "write", "fault", "evidence"],
+    "writes": 1,
+    "checkpoints": {
+      "fault_visible": {
+        "at_ms": 12868,
+        "total_tokens": 76384,
+        "tool_calls": 2,
+        "cli_calls": 1
+      },
+      "evidence_visible": {
+        "at_ms": 21546,
+        "total_tokens": 159442,
+        "tool_calls": 4,
+        "cli_calls": 3
+      },
+      "answer": {
+        "at_ms": 24401,
+        "total_tokens": 201324,
+        "tool_calls": 4,
+        "cli_calls": 3
+      }
+    },
+    "answer_contains_evidence": true
+  }
+]

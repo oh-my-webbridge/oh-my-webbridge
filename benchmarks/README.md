@@ -1,5 +1,7 @@
 # Browser interface and preset benchmarks
 
+For end-to-end task time, token usage and tool calls with the installed agent skill, see the [skill evaluation](skills/results.md).
+
 Run from the repository root on an otherwise idle Linux host:
 
 ```sh
