@@ -80,7 +80,7 @@ const result = await task.call(
 | `timeoutMs` | `number`      | `30000` | 命令的期限，包括它在队列中的时间，范围 1 到 120000。其他值会在发送请求之前以 `invalid_request` 拒绝。 |
 | `signal`    | `AbortSignal` | 无      | 取消请求。它会与 `timeoutMs + 5000` 的内部超时合并。                                                  |
 
-请求在 daemon 期限之后 5 秒于本机中止。这让 daemon 有时间响应：若在写入前就已停止，返回 `command_not_sent`（HTTP 408）；若命令可能已运行，返回 `outcome_unknown`（HTTP 504）。经由 `signal` 中止的请求以 `AbortError` 拒绝；由内部超时中止的请求以 `TimeoutError` 拒绝。
+请求在 daemon 期限之后 5 秒于本机中止。这让 daemon 有时间响应：若在写入前就已停止，返回 `command_not_sent`（HTTP 408）；若命令可能已运行，返回 `outcome_unknown`（HTTP 504）。经由 `signal` 中止时，以该 signal 的原因拒绝，通常是 `AbortError`；内部超时则以 `TimeoutError` 拒绝。本机中止无法确认命令是否已发送或生效。重试可能变更页面的动作之前，请先观察页面。
 
 ```js
 const controller = new AbortController();
@@ -94,15 +94,17 @@ try {
 
 ## 错误 [#errors]
 
-被拒绝的调用是带有 `code` 属性的 `Error`。当 daemon 以命令错误响应时，`code` 与 `message` 就是 daemon 的 `error.code` 与 `error.message`。
+当 daemon 以命令错误响应时，被拒绝的 `Error` 的 `code` 与 `message` 分别是 daemon 的 `error.code` 与 `error.message`。
 
 ```js
-try {
-  await task.click("@e12");
-} catch (error) {
-  if (error.code === "stale_ref") {
-    await task.snapshot();
-  } else {
+// 传入从目前页面快照取得的引用。
+async function clickRef(ref) {
+  try {
+    await task.click(ref);
+  } catch (error) {
+    if (error.code === "stale_ref") {
+      return await task.snapshot();
+    }
     throw error;
   }
 }
@@ -117,12 +119,12 @@ try {
 | `outcome_unknown`                          | 命令可能已经生效。重试之前，先读取页面。HTTP 504。                                         |
 | `wait_timeout`                             | `wait` 的条件在 `timeoutMs` 用完前没有成立，页面未变更。HTTP 408。                         |
 | `command_not_sent`                         | daemon 在开始向浏览器写入请求前就已停止处理。HTTP 408。                                    |
-| `invalid_args`、`invalid_request`          | 参数在分派之前就被拒绝。HTTP 400。                                                         |
+| `invalid_args`、`invalid_request`          | 动作参数或请求无效。HTTP 400。批量运行期间，若某个动作拒绝参数，先前步骤的效果仍会保留。   |
 | `http_error`                               | 回复不是 JSON，因此缺少 daemon 的错误对象。消息为 `HTTP <status>: <本文的前 200 个字符>`。 |
 
 回复没有 JSON 内容类型时，请求从未到达命令处理常式。可能的原因：token 被拒绝、`Host` 不是回环地址、网页 `Origin`，或连接端口 17373 上是其他服务。
 
-被中止的请求以 `AbortError` 拒绝，内部超时则以 `TimeoutError` 拒绝，两者都没有 daemon 的错误码。被拒绝的连接以 `fetch` 的 `TypeError` 拒绝。
+被中止的请求以 signal 的原因拒绝，内部超时则以 `TimeoutError` 拒绝，两者都没有 daemon 的错误码。被拒绝的连接以 `fetch` 的 `TypeError` 拒绝。
 
 完整的错误码清单与复原步骤位于[动作参考](./actions.mdx#errors)。
 

@@ -117,7 +117,7 @@ const { frameTree } = await task.cdp("Page.getFrameTree");
 有兩個方法會與橋接器的其他部分互動：
 
 - 根工作階段上的 `Page.disable` 會清除該分頁的 `@e` 參照。下一次 `snapshot` 或 `navigate` 會重新啓用 Page 事件。
-- `Runtime.disable` 結束該工作階段的框架選擇。之後的指令在主框架中執行，直到 `frame` 再次選取框架。
+- `Runtime.disable` 會結束屬於受影響 CDP 工作階段的框架選擇。下一個原本會在該框架執行的動作會以 `frame_unavailable` 失敗一次；之後的動作會使用主框架。若要繼續在該框架工作，請以 `frame` 重新選取。
 
 ## 原生模式 [#native-mode]
 

@@ -53,6 +53,12 @@ omw call billing navigate '{"url":"https://example.com/pricing","group_title":"B
 
 ## 借用你的标签页 [#borrowing-one-of-your-tabs]
 
+`borrow_tab` 接受用户指定标签页的完整 HTTP(S) URL 或标签页 ID，并保留目前窗口与标签页的焦点。若有多个标签页符合网址，命令会返回 `ambiguous_tab`，请改用用户指定的标签页 ID。
+
+```sh
+omw call research borrow_tab '{"url":"https://example.com/docs"}'
+```
+
 带有 `active: true` 的 `find_tab` 会认领最后取得焦点的窗口中的当前标签页。URL 必须完全相符，或主机名称相符：
 
 ```sh
@@ -62,6 +68,8 @@ omw call research find_tab '{"url":"example.com","active":true}'
 不带 `active: true` 时，`find_tab` 只在会话已持有的标签页中寻找。借用的标签页会保持打开，`close_tab` 会以 `borrowed_tab` 拒绝关闭它。会话使用该标签页，并在结束时释放它。一个标签页同一时间只属于一个会话，其他会话要求该标签页时会收到 `tab_busy`。预设只套用在会话自己打开的标签页。任务需要你已打开的页面时才借用标签页；否则请打开任务标签页。
 
 ## 结束会话 [#ending-a-session]
+
+若要移交部分标签页，请调用 `release_tabs`，将要保留打开的标签页 ID 放入 `keep`，要关闭的自有标签页 ID 放入 `close`。回报完成前先检查 `failed`。未列出的标签页仍属于该会话。
 
 `close_session` 会取消会话仍在运行或等待的命令，关闭会话打开的标签页，并释放借用的标签页，这些标签页会保持打开。它会移除会话的浏览器绑定，并清除会话在借用标签页上记录的内容：框架选择、网络项目、控制台输出与 `@e` 引用。你自己关闭标签页时，该标签页会从会话中移除；会话只会由 `close_session` 结束。会话的目前标签页以 `close_tab` 以外的方式关闭时，会话就没有目前标签页：没有 `tabId` 的页面动作会以 `no_tab` 失败，指定已关闭标签页的命令会以 `tab_missing` 失败。`close_tab` 之后，会话改在它最后打开的标签页继续，没有的话则是它最后借用的标签页。
 
@@ -80,7 +88,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 超时与结果不确定 [#timeouts-and-uncertain-results]
 
-`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。时间用完、`close_session` 取消了命令，或命令运行到一半时浏览器中断连接，调用会返回 `outcome_unknown`，消息会指出原因。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。条件未成立的 `wait` 则会在期限前稍早以 `wait_timeout` 失败，它不会变更页面。
+`timeoutMs` 涵盖整个请求，包括在会话队列中等待的时间。请求在传输写入开始之前超时或取消时，会返回 `command_not_sent`。写入之后超时、取消或浏览器中断连接时，可能返回 `outcome_unknown`，消息会指出原因。此时动作可能已经送达页面：点击可能已经发生，表单可能已经发送。条件未成立的 `wait` 则会在期限前稍早以 `wait_timeout` 失败，它不会变更页面。
 
 <Callout type="warn" title="收到 outcome_unknown 后重试">
   重新使用命令之前，请先观察页面。`snapshot`、`read_page`、标签页 URL、`get`
@@ -89,4 +97,4 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 登录状态来自你的个人资料 [#logins-come-from-your-profile]
 
-任务标签页与借用的标签页都在你的浏览器个人资料中运行，使用其中的 cookie、会话与登录状态。会话与标签页分组是用来整理标签页，不是用来区分账号：每个会话看到的登录状态都相同，为某项任务清除 cookie 或网站保存空间，等于为整个个人资料清除。下一项任务需要从未登录开始时，请先注销该网站。
+任务标签页与借用的标签页都使用其浏览器个人资料的网站数据。使用同一 cookie 保存区的两个会话会共用该网站的登录状态。清除网站 cookie 或注销时，两项任务都可能受到影响。在 Firefox 中，借用的标签页可能属于具有独立 cookie 保存区的容器。

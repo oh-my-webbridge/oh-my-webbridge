@@ -48,7 +48,7 @@ omw call archive preset '{"preset":"zen","zen":{"images":true,"fonts":true,"css"
 omw call archive preset '{"cmd":"status"}'
 ```
 
-A session that has not selected a preset uses `anti-ad`, the default for new task tabs.
+A session that has not selected a preset uses `anti-ad`, the default for new task tabs. Omitted switches retain their session values. Switching modes preserves those values, so pass `environment: false` or set individual `zen` switches explicitly to reset them.
 
 ## anti-ad
 
@@ -75,13 +75,13 @@ The engine implements request blocking and exceptions. Redirects, response body 
 | `css`        | Stylesheet requests          | `false` |
 | `javascript` | Script requests              | `false` |
 
-`javascript: true` also stops inline scripts and event handler attributes. In Chrome, script execution is disabled through CDP. In Firefox, the extension adds `Content-Security-Policy: script-src 'none'` to the document and iframe responses of the tab. `<noscript>` content then does not render, because the browser still reports scripting as enabled.
+`javascript: true` also stops inline scripts and event handler attributes. Chrome disables script execution through CDP. Firefox adds `Content-Security-Policy: script-src 'none'` to subsequent document and iframe responses. In Firefox, navigate or reload to apply the policy to an already loaded document. `<noscript>` content stays hidden because the browser still reports scripting as enabled.
 
 The restrictions cover network requests. Inline and data images, inline CSS and installed service worker caches are not affected. A site that needs stylesheets or scripts breaks under these switches. Select `none` or relax a switch and navigate again.
 
 ## environment
 
-`environment: true` adds cosmetics and scriptlets from the bundled lists, guarded by the document hostname. It is off by default, and skipped in `zen` while `javascript` is on.
+In Chrome, `environment: true` adds cosmetics and scriptlets from the bundled lists, guarded by the document hostname. It is off by default. Chrome skips it in `zen` while `javascript` is on.
 
 Registration happens before the target document loads, so the setting applies to the next document the tab shows. It does not alter a page that is already loaded. Navigate again. A cross-host redirect or an iframe from another host receives network filtering only, because the guard never injects a different host's rules.
 
@@ -97,7 +97,7 @@ Presets apply only to tabs the session owns. A borrowed tab is never filtered, a
 
 ## Status
 
-`preset {cmd:"status"}` reads the current tab and returns:
+`preset {cmd:"status"}` reads the current tab. Without a current tab it returns `{ config }` with the session configuration. A configured tab returns:
 
 - the configuration: `name`, `environment`, `images`, `fonts`, `css`, `javascript`
 - `blocked` and `allowed` request counts since the preset was installed
@@ -105,15 +105,15 @@ Presets apply only to tabs the session owns. A borrowed tab is never filtered, a
 - `environmentState`: `off`, `active` or `unavailable`
 - `fallback`, up to 8 reasons, each cut to 300 characters
 
-Any other `cmd` value returns `invalid_args`. A configuration call returns `config`, a status entry for each task tab, `appliesOn` and `borrowedTabsExcluded`. `appliesOn` is `immediate; environment on next navigation` in Chrome.
+A tab with no installed preset state reports `name: "none"`, `network: false`, `environmentState: "off"` and `fallback: []`. A configuration call returns `config`, `tabs`, `appliesOn` and `borrowedTabsExcluded`. `appliesOn` is `immediate; environment on next navigation` in Chrome and `immediate` in Firefox. For a configuration call, omit `cmd`. Other `cmd` values return `invalid_args`.
 
 ## Costs and limits
 
 - Matching runs in the extension background, in one filter engine shared by every tab. Requests are not sent to the daemon.
 - Engine data is released 30 seconds after the last filtered tab stops filtering. The next preset loads it again.
-- Network and script restrictions apply to existing task tabs and frames immediately. Environment registration applies to the next document.
-- Reconfiguring a tab disables interception on every target of the tab first, so page requests continue while a busy frame delays the rest. Installing the new preset needs the current document to answer. Use `close_session` to recover an unresponsive page.
-- Navigating a task tab whose preset did not change keeps the interception and sends no reconfiguration commands. With `environment` off, status counters continue across the navigation.
+- Network filtering changes apply to existing task tabs and frames. In Chrome, script execution settings apply to existing documents and environment registration applies to the next document. In Firefox, the script policy applies when the document or frame next receives a response.
+- In Chrome, reconfiguring a tab first disables interception on every target of the tab, so requests can continue while a busy frame delays the rest. The current document needs to answer before the new preset can be installed. Use `close_session` to recover an unresponsive page.
+- Navigating with the same installed preset and `environment` off can reuse interception and keep the status counters. Chrome requires the root target to be ready and no preset change to be in progress.
 - If the lists fail to load, requests pass unfiltered and status keeps the reason. `zen` type blocking still applies.
 - Chrome intercepts at most 128 targets per tab. Additional frames fail open and status records the reason. Firefox has no per-tab target limit.
 - When Chrome restarts the extension worker, status reports `none` for existing tabs until a controlled navigation reapplies the stored session configuration. No site action is retried.

@@ -64,9 +64,11 @@ omw doctor
 Both print the daemon's `/status` JSON to stdout and one line per browser to stderr:
 
 ```text
-chrome: connected (156.0.8078.80)
+chrome: connected (156.0.8078.80) extension 0.3.0, daemon 0.3.0 (same-release)
 firefox: not connected
 ```
+
+Connected browsers show the extension and daemon releases and their compatibility. An incompatible protocol is reported with both protocol versions and the component to update before reconnecting.
 
 `doctor` adds the path of `config.json` to stderr before those lines.
 

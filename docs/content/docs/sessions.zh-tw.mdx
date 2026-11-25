@@ -51,6 +51,12 @@ omw call billing navigate '{"url":"https://example.com/pricing","group_title":"B
 
 ## 借用你的分頁 [#borrowing-one-of-your-tabs]
 
+`borrow_tab` 接受使用者指定分頁的完整 HTTP(S) URL 或分頁 ID，並保留目前視窗與分頁的焦點。若有多個分頁符合網址，指令會回傳 `ambiguous_tab`，請改用使用者指定的分頁 ID。
+
+```sh
+omw call research borrow_tab '{"url":"https://example.com/docs"}'
+```
+
 帶有 `active: true` 的 `find_tab` 會認領最後取得焦點的視窗中的作用中分頁。URL 必須完全相符，或主機名稱相符：
 
 ```sh
@@ -60,6 +66,8 @@ omw call research find_tab '{"url":"example.com","active":true}'
 不帶 `active: true` 時，`find_tab` 只在工作階段已持有的分頁中尋找。借用的分頁會保持開啟，`close_tab` 會以 `borrowed_tab` 拒絕關閉它。工作階段使用該分頁，並在結束時釋放它。一個分頁同一時間只屬於一個工作階段，其他工作階段要求該分頁時會收到 `tab_busy`。預設集只套用在工作階段自己開啟的分頁。任務需要你已開啟的頁面時才借用分頁；否則請開啟任務分頁。
 
 ## 結束工作階段 [#ending-a-session]
+
+若要移交部分分頁，請呼叫 `release_tabs`，將要保留開啟的分頁 ID 放入 `keep`，要關閉的自有分頁 ID 放入 `close`。回報完成前先檢查 `failed`。未列出的分頁仍屬於該工作階段。
 
 `close_session` 會取消工作階段仍在執行或等待的指令，關閉工作階段開啟的分頁，並釋放借用的分頁，這些分頁會保持開啟。它會移除工作階段的瀏覽器綁定，並清除工作階段在借用分頁上記錄的內容：框架選擇、網路項目、主控台輸出與 `@e` 參照。你自己關閉分頁時，該分頁會從工作階段中移除；工作階段只會由 `close_session` 結束。工作階段的目前分頁以 `close_tab` 以外的方式關閉時，工作階段就沒有目前分頁：沒有 `tabId` 的頁面動作會以 `no_tab` 失敗，指定已關閉分頁的指令會以 `tab_missing` 失敗。`close_tab` 之後，工作階段改在它最後開啟的分頁繼續，沒有的話則是它最後借用的分頁。
 
@@ -78,7 +86,7 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 逾時與結果不確定 [#timeouts-and-uncertain-results]
 
-`timeoutMs` 涵蓋整個請求，包括在工作階段佇列中等待的時間。時間用完、`close_session` 取消了指令，或指令執行到一半時瀏覽器中斷連線，呼叫會回傳 `outcome_unknown`，訊息會指出原因。此時動作可能已經送達頁面：點擊可能已經發生，表單可能已經送出。條件未成立的 `wait` 則會在期限前稍早以 `wait_timeout` 失敗，它不會變更頁面。
+`timeoutMs` 涵蓋整個請求，包括在工作階段佇列中等待的時間。請求在傳輸寫入開始之前逾時或取消時，會回傳 `command_not_sent`。寫入之後逾時、取消或瀏覽器中斷連線時，可能回傳 `outcome_unknown`，訊息會指出原因。此時動作可能已經送達頁面：點擊可能已經發生，表單可能已經送出。條件未成立的 `wait` 則會在期限前稍早以 `wait_timeout` 失敗，它不會變更頁面。
 
 <Callout type="warn" title="收到 outcome_unknown 後重試">
   重新使用指令之前，請先觀察頁面。`snapshot`、`read_page`、分頁 URL、`get`
@@ -87,4 +95,4 @@ omw call research find_tab '{"url":"example.com","active":true}'
 
 ## 登入狀態來自你的設定檔 [#logins-come-from-your-profile]
 
-任務分頁與借用的分頁都在你的瀏覽器設定檔中執行，使用其中的 cookie、工作階段與登入狀態。工作階段與分頁群組是用來整理分頁，不是用來區分帳號：每個工作階段看到的登入狀態都相同，為某項任務清除 cookie 或網站儲存空間，等於為整個設定檔清除。下一項任務需要從未登入開始時，請先登出該網站。
+任務分頁與借用的分頁都使用其瀏覽器設定檔的網站資料。使用同一 cookie 儲存區的兩個工作階段會共用該網站的登入狀態。清除網站 cookie 或登出時，兩項任務都可能受到影響。在 Firefox 中，借用的分頁可能屬於具有獨立 cookie 儲存區的容器。

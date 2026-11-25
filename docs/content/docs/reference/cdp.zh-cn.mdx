@@ -117,7 +117,7 @@ const { frameTree } = await task.cdp("Page.getFrameTree");
 有两个方法会与桥接器的其他部分交互：
 
 - 根会话上的 `Page.disable` 会清除该标签页的 `@e` 引用。下一次 `snapshot` 或 `navigate` 会重新激活 Page 事件。
-- `Runtime.disable` 结束该会话的框架选择。之后的命令在主框架中运行，直到 `frame` 再次选取框架。
+- `Runtime.disable` 会结束属于受影响 CDP 会话的框架选择。下一个原本会在该框架运行的动作会以 `frame_unavailable` 失败一次；之后的动作会使用主框架。若要继续在该框架工作，请以 `frame` 重新选取。
 
 ## 原生模式 [#native-mode]
 

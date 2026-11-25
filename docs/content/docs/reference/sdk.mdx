@@ -78,7 +78,7 @@ const result = await task.call(
 | `timeoutMs` | `number`      | `30000` | Deadline for the command, including its time in the queue, 1 to 120000. Another value rejects with `invalid_request` before the request is sent. |
 | `signal`    | `AbortSignal` | none    | Cancels the request. It is combined with an internal timeout of `timeoutMs + 5000`.                                                              |
 
-The request is aborted locally 5 seconds after the daemon deadline. This gives the daemon time to report `command_not_sent` (HTTP 408) if it stopped before writing, or `outcome_unknown` (HTTP 504) if the command may have run. A request aborted through `signal` rejects with an `AbortError`; a request aborted by the internal timeout rejects with a `TimeoutError`.
+The request is aborted locally 5 seconds after the daemon deadline. This gives the daemon time to report `command_not_sent` (HTTP 408) if it stopped before writing, or `outcome_unknown` (HTTP 504) if the command may have run. An abort through `signal` rejects with the signal's reason, normally an `AbortError`; the internal timeout rejects with a `TimeoutError`. A local abort does not establish whether the command was sent or took effect. Observe the page before retrying an action that may change it.
 
 ```js
 const controller = new AbortController();
@@ -92,35 +92,37 @@ try {
 
 ## Errors
 
-A rejected call is an `Error` with a `code` property. When the daemon answers with a command error, `code` and `message` are the daemon's `error.code` and `error.message`.
+When the daemon answers with a command error, the rejected `Error` has the daemon's `error.code` and `error.message` as its `code` and `message`.
 
 ```js
-try {
-  await task.click("@e12");
-} catch (error) {
-  if (error.code === "stale_ref") {
-    await task.snapshot();
-  } else {
+// Pass a reference obtained from a snapshot of the current page.
+async function clickRef(ref) {
+  try {
+    await task.click(ref);
+  } catch (error) {
+    if (error.code === "stale_ref") {
+      return await task.snapshot();
+    }
     throw error;
   }
 }
 ```
 
-| `code`                                     | Cause                                                                                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `stale_ref`, `tab_busy`, `session_browser` | The reference expired, another session holds the tab, or the session is bound to another browser. HTTP 409.                          |
-| `browser_offline`                          | The target browser has no connected extension. HTTP 503.                                                                             |
-| `unsupported`                              | The action or argument is not available in that browser. HTTP 501.                                                                   |
-| `busy`                                     | Command capacity is full. HTTP 429. Retry after a running command finishes.                                                          |
-| `outcome_unknown`                          | The command may have taken effect. Read the page before retrying. HTTP 504.                                                          |
-| `wait_timeout`                             | The `wait` condition did not hold before `timeoutMs` ran out. The page is unchanged. HTTP 408.                                       |
-| `command_not_sent`                         | The daemon stopped before writing the request to the browser. HTTP 408.                                                              |
-| `invalid_args`, `invalid_request`          | The arguments were rejected before dispatch. HTTP 400.                                                                               |
-| `http_error`                               | The reply was not JSON, so the daemon's error object is missing. The message is `HTTP <status>: <first 200 characters of the body>`. |
+| `code`                                     | Cause                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stale_ref`, `tab_busy`, `session_browser` | The reference expired, another session holds the tab, or the session is bound to another browser. HTTP 409.                                      |
+| `browser_offline`                          | The target browser has no connected extension. HTTP 503.                                                                                         |
+| `unsupported`                              | The action or argument is not available in that browser. HTTP 501.                                                                               |
+| `busy`                                     | Command capacity is full. HTTP 429. Retry after a running command finishes.                                                                      |
+| `outcome_unknown`                          | The command may have taken effect. Read the page before retrying. HTTP 504.                                                                      |
+| `wait_timeout`                             | The `wait` condition did not hold before `timeoutMs` ran out. The page is unchanged. HTTP 408.                                                   |
+| `command_not_sent`                         | The daemon stopped before writing the request to the browser. HTTP 408.                                                                          |
+| `invalid_args`, `invalid_request`          | Invalid action arguments or request. HTTP 400. In a running batch, earlier steps retain their effects when a later action rejects its arguments. |
+| `http_error`                               | The reply was not JSON, so the daemon's error object is missing. The message is `HTTP <status>: <first 200 characters of the body>`.             |
 
 The request never reached the command handler when the reply has no JSON content type. Causes: a rejected token, a non-loopback `Host`, a web `Origin`, or another service on port 17373.
 
-An aborted request rejects with an `AbortError`, or a `TimeoutError` after the internal timeout, and no daemon fault code. A refused connection rejects with the `fetch` `TypeError`.
+An aborted request rejects with the signal's reason, or a `TimeoutError` after the internal timeout, without a daemon fault code. A refused connection rejects with the `fetch` `TypeError`.
 
 The full list of codes and recovery steps is in the [action reference](./actions.mdx#errors).
 

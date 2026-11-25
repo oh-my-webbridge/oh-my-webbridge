@@ -51,6 +51,12 @@ Each session has one queue. Commands for a session run one at a time, in the ord
 
 ## Borrowing one of your tabs
 
+`borrow_tab` takes the exact HTTP(S) URL or the ID of the tab the user designated. It keeps the current window and tab focused. If several pages match the URL, use the designated tab ID after `ambiguous_tab`.
+
+```sh
+omw call research borrow_tab '{"url":"https://example.com/docs"}'
+```
+
 `find_tab` with `active: true` claims the tab that is active in the last focused window. The URL must match exactly or by hostname:
 
 ```sh
@@ -60,6 +66,8 @@ omw call research find_tab '{"url":"example.com","active":true}'
 Without `active: true`, `find_tab` only looks at tabs the session already holds. A borrowed tab stays open, and `close_tab` refuses it with `borrowed_tab`. The session uses it and releases it when it ends. One tab belongs to one session at a time, and another session that asks for it gets `tab_busy`. Presets apply only to tabs the session opened. Borrow a tab when the task needs the page you have open; otherwise open a task tab.
 
 ## Ending a session
+
+For a partial handoff, call `release_tabs` with the IDs to keep open in `keep` and the owned IDs to close in `close`. Inspect `failed` before reporting completion. Unlisted tabs remain in the session.
 
 `close_session` cancels the commands still running or waiting for the session, closes the tabs the session opened, and releases the ones it borrowed, which stay open. It removes the session's browser binding and drops what the session recorded on borrowed tabs: frame selection, network entries, console output and `@e` references. Closing a tab yourself removes it from the session; the session ends only with `close_session`. When the session's current tab closes other than by `close_tab`, the session has no current tab: a page action without `tabId` fails with `no_tab`, and a command for the closed tab fails with `tab_missing`. After `close_tab`, the session continues in the tab it opened last, or else the tab it borrowed last.
 
@@ -78,7 +86,7 @@ When a limit is reached the command fails with `busy` and HTTP 429 instead of wa
 
 ## Timeouts and uncertain results
 
-`timeoutMs` covers the whole request, including time spent waiting in the session queue. When it runs out, when `close_session` cancels the command, or when the browser disconnects in the middle of a command, the call returns `outcome_unknown`, and the message names the cause. The action may already have reached the page: a click may have happened, a form may be submitted. A `wait` whose condition does not hold fails with `wait_timeout` just before the deadline instead; it does not change the page.
+`timeoutMs` covers the whole request, including time spent waiting in the session queue. A request that expires or is cancelled before the transport write starts returns `command_not_sent`. After the write, a timeout, cancellation, or browser disconnect can return `outcome_unknown`; the message names the cause. The action may already have reached the page: a click may have happened, a form may be submitted. A `wait` whose condition does not hold fails with `wait_timeout` just before the deadline instead; it does not change the page.
 
 <Callout type="warn" title="Retrying after outcome_unknown">
   Observe the page before reusing a command. `snapshot`, `read_page`, the tab URL, `get` and the
@@ -88,4 +96,4 @@ When a limit is reached the command fails with `busy` and HTTP 429 instead of wa
 
 ## Logins come from your profile
 
-Task tabs and borrowed tabs run in your browser profile, with its cookies, sessions and logins. Sessions and tab groups organize tabs, not accounts: every session sees the same logins, and clearing cookies or site storage for one task clears them for the profile. Sign out of a site when the next task should start signed out.
+Task tabs and borrowed tabs use their browser profile's site data. Two sessions using the same cookie store share that site's login. Clearing its cookies or signing out can affect both tasks. In Firefox, a borrowed tab can belong to a container with its own cookie store.

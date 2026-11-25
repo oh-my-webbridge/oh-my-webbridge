@@ -49,17 +49,17 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 導覽與分頁 [#navigation-and-tabs]
 
-| 動作            | 引數                                       | 備註                                                                                                              |
-| --------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `navigate`      | `url`、`newTab`、`group_title`、預設集欄位 | 除非工作階段已有目前分頁，或設定了 `newTab`，否則開啟一個背景任務分頁。URL 必須是 HTTP(S) 或 `about:blank`。      |
-| `find_tab`      | `url`（完整 URL 或主機名稱）、`active`     | 為工作階段認領既有分頁。`active: true` 借用瀏覽器的使用中分頁。回傳 `tabId`、`url`、`borrowed`。                  |
-| `borrow_tab`    | 指定完整的 `url` 或 `tabId`，兩者擇一      | 借用指定分頁並保留視窗焦點。網址符合多個分頁時回傳 `ambiguous_tab`。執行 `close_session` 後，借用的分頁仍會開啟。 |
-| `list_tabs`     | 無                                         | 列出這個工作階段擁有或借用的分頁，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。                |
-| `switch_tab`    | `tabId`                                    | 讓該分頁成為目前分頁。已被丟棄的分頁會先重新載入；結果會回報 `revived`。                                          |
-| `window_new`    | `url`、預設集欄位                          | 開啟獨立的視窗，認領其分頁，並回傳 `tabId` 與 `windowId`。                                                        |
-| `close_tab`     | `tabId`                                    | 關閉工作階段建立的分頁。借用的分頁不會被關閉。                                                                    |
-| `close_session` | 無                                         | 關閉任務分頁、釋放借用的分頁，並移除瀏覽器綁定。回傳已關閉的分頁數量。                                            |
-| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 回傳導覽項目。每次 `history` 呼叫都會丟棄該分頁的參照與框架選擇。                                          |
+| 動作            | 引數                                                            | 備註                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `navigate`      | `url`、`newTab`、`tabId`（或 `tab`）、`group_title`、預設集欄位 | 工作階段沒有目前分頁，或設定 `newTab: true` 時，會開啟背景任務分頁。其餘情況會導覽指定的分頁，未指定則導覽目前分頁。URL 必須是 HTTP(S) 或 `about:blank`。                                                 |
+| `find_tab`      | `url`（完整 URL 或主機名稱）、`active`                          | 搜尋這個工作階段持有的分頁。設為 `active: true` 時，只搜尋最後取得焦點的視窗中使用中的分頁。URL 相符且工作階段尚未持有該分頁時，就會借用它。符合的分頁會成為目前分頁，並回傳 `tabId`、`url`、`borrowed`。 |
+| `borrow_tab`    | 指定完整的 `url` 或 `tabId`，兩者擇一                           | 借用指定分頁並保留視窗焦點。網址符合多個分頁時回傳 `ambiguous_tab`。執行 `close_session` 後，借用的分頁仍會開啟。                                                                                         |
+| `list_tabs`     | 無                                                              | 列出這個工作階段擁有或借用的分頁，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。                                                                                                        |
+| `switch_tab`    | `tabId`                                                         | 讓該分頁成為目前分頁。已被丟棄的分頁會先重新載入；結果會回報 `revived`。                                                                                                                                  |
+| `window_new`    | `url`、預設集欄位                                               | 開啟獨立的視窗，認領其分頁，並回傳 `tabId` 與 `windowId`。                                                                                                                                                |
+| `close_tab`     | `tabId`                                                         | 關閉工作階段建立的分頁。借用的分頁不會被關閉。                                                                                                                                                            |
+| `close_session` | 無                                                              | 關閉任務分頁、釋放借用的分頁，並移除瀏覽器綁定。回傳已關閉的分頁數量。                                                                                                                                    |
+| `history`       | `cmd`：`list`、`back`、`forward`、`reload`                      | Chrome 的 `list` 會回傳導覽項目。Firefox 支援 `back`、`forward` 與 `reload`。受支援的指令會清除該分頁的參照與框架選擇。                                                                                   |
 
 一個工作階段最多持有 32 個分頁，任務分頁與借用的分頁合計。
 
@@ -73,9 +73,9 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 | 動作            | 引數                                                    | 備註                                                                                                                                                  |
 | --------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `snapshot`      | `interactive`、`maxDepth`                               | 帶有 `@e` 參照的無障礙樹，另含 `url`、`title`、`truncated`。深度上限為 64。輸出在 4000 個節點或 192000 個字元時停止。                                 |
+| `snapshot`      | `interactive`、`maxDepth`、`selector`                   | 帶有 `@e` 參照的無障礙樹，另含 `url`、`title`、`truncated`。深度上限為 64。輸出在 4000 個節點或 192000 個字元時停止。                                 |
 | `find`          | `query`、快照欄位                                       | 對快照各行做不分大小寫的搜尋。最多 100 筆符合。                                                                                                       |
-| `read_page`     | 無                                                      | `url`、`title`，以及 `document.body.innerText` 的前 192000 個字元。                                                                                   |
+| `read_page`     | `offset`、`pageSize`                                    | 回傳 `url`、`title`、從 `document.body.innerText` 讀出的 `text` 片段、`complete` 與 `nextOffset`。                                                    |
 | `evaluate`      | `code`、`contextId`                                     | 執行一個運算式，並回傳 `{ type: "value", value }`。需要 `await` 時，使用非同步 IIFE。                                                                 |
 | `get`           | `selector`、`property`、`attribute`                     | `text`、`html`、`value`、`attr`、`count`、`box`、`styles`、`title`、`url`。                                                                           |
 | `is`            | `selector`、`property`                                  | `visible`、`enabled`、`checked`、`editable`。回傳布林值 `value`。                                                                                     |
@@ -114,12 +114,12 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 框架 [#frames]
 
-| 動作或引數                                                                  | 意義                                                     |
-| --------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `frame {"cmd": "list"}`                                                     | 列出框架，含 `id`、`name` 與 `url`，包括跨行程的子框架。 |
-| `frame {"selector": "iframe#panel"}`                                        | 選取包含符合之 iframe 元素的框架。                       |
-| `frame {"frameId": "..."}`、`frame {"name": "..."}`、`frame {"url": "..."}` | 依 id、名稱或完整 URL 選取。                             |
-| `frame {"cmd": "main"}`                                                     | 回到主框架，並丟棄該框架的參照。                         |
+| 動作或引數                                                                  | 意義                                                                                                                |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `frame {"cmd": "list"}`                                                     | 列出框架，包括跨行程的子框架。每筆包含 `id` 與 `url`。Chrome 可能另回傳 `name`，Firefox 會為子框架回傳 `parentId`。 |
+| `frame {"selector": "iframe#panel"}`                                        | 選取符合的 iframe 元素所載入的文件。                                                                                |
+| `frame {"frameId": "..."}`、`frame {"name": "..."}`、`frame {"url": "..."}` | 依 id、名稱或完整 URL 選取。                                                                                        |
+| `frame {"cmd": "main"}`                                                     | 回到主框架，並丟棄該框架的參照。                                                                                    |
 
 選取框架後，頁面動作在該框架中執行。選取框架會丟棄先前的參照，並需要重新取得快照。
 
@@ -160,9 +160,11 @@ description: 指令端點、每個瀏覽器動作、選擇器語法與錯誤碼�
 
 ## 批次 [#batch]
 
-`batch` 接受含 1 到 64 個物件的 `steps` 陣列。每個步驟都要有 `action` 字串，可選擇提供 `args` 物件。步驟的欄位有誤時，會在任何瀏覽器動作開始前回傳 `invalid_args` 並指出步驟編號。使用 Firefox 時，daemon 也會在瀏覽器開始執行批次前準備上傳檔案。
+`batch` 接受含 1 到 64 個物件的 `steps` 陣列。每個步驟需要非空的 `action` 字串，可以提供 `args` 物件。執行前，瀏覽器會檢查每個步驟的格式，遇到格式不符或必須分開呼叫的動作，就會回傳 `invalid_args` 並指出步驟編號。個別動作的引數在執行該步驟時才會驗證。在 Firefox，daemon 會在瀏覽器開始執行批次前準備上傳檔案。
 
 開始執行後，步驟會依序進行，遇到第一個錯誤便停止。回覆保留失敗動作的錯誤碼，訊息以 `batch step N of M (action):` 開頭。前面已執行的動作仍會生效。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 與 `artifact_close` 要分開呼叫。
+
+0.2.2 版擴充功能可能在執行到後面的步驟時才發現格式錯誤。如果 `invalid_args` 回覆帶有上述執行階段的前綴，前面的步驟已經完成。繼續寫入前，先確認頁面結果或收據。
 
 ## 預設集 [#presets]
 
@@ -226,7 +228,7 @@ daemon 在內部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 | `stale_ref`             | 409  | `@e` 參照比它所屬的文件存活得更久。                                                                                                                                          | 重新取得 `snapshot`。                                                                                          |
 | `no_tab`                | 502  | 頁面動作在工作階段還沒有分頁時執行，或在目前分頁以 `close_tab` 以外的方式關閉之後執行。                                                                                      | 執行 `navigate` 或 `find_tab`，或傳入工作階段另一個分頁的 `tabId`。                                            |
 | `tab_missing`           | 502  | `find_tab` 沒有符合的分頁，或指令指定的分頁已經關閉。                                                                                                                        | 先在這個工作階段中開啟該頁面，或傳入 `active: true` 借用瀏覽器的使用中分頁。分頁已關閉時，改在另一個分頁繼續。 |
-| `restricted_tab`        | 502  | 該分頁不是一般的、非無痕的 HTTP(S) 頁面。                                                                                                                                    | 導覽到 HTTP(S) 頁面。瀏覽器內部頁面無法用指令碼操作。                                                          |
+| `restricted_tab`        | 502  | 分頁不符合使用條件，或 Firefox 的主機權限或瀏覽器政策阻止存取。                                                                                                              | 使用允許擴充功能存取的非隱私瀏覽 HTTP(S) 頁面。在 Firefox 的 `about:addons` 中檢查**存取所有網站**權限。       |
 | `borrowed_tab`          | 502  | 動作需要工作階段建立的分頁：關閉它，或對借用的分頁套用預設集。                                                                                                               | 用 `navigate` 開啟任務分頁。                                                                                   |
 | `element_missing`       | 502  | 選擇器沒有符合任何元素。                                                                                                                                                     | 檢查選擇器，或重新取得快照。                                                                                   |
 | `element_hidden`        | 502  | 元素沒有邊界框，因此沒有可點擊的中心。                                                                                                                                       | 把它捲動到可見範圍，或等待它轉譯完成。                                                                         |
@@ -235,7 +237,7 @@ daemon 在內部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 | `evaluation_failed`     | 502  | `evaluate` 擲出例外，或內部頁面指令碼擲出例外。在 Firefox 中，也包括結果無法傳回的 `evaluate`，例如 DOM 節點、`Window` 或 `BigInt`；程式碼已經執行。                         | 修正運算式，或傳回一般資料。訊息帶有頁面例外。                                                                 |
 | `frame_missing`         | 502  | `frame` 找不到符合所給選擇器、id、名稱或 URL 的框架。                                                                                                                        | 用 `frame {"cmd":"list"}` 列出框架，並選取其中一個。                                                           |
 | `frame_unavailable`     | 502  | 所選的框架已被取代、移除或失去其執行環境，或分頁的偵錯工作階段已結束。                                                                                                       | 之後的指令使用主框架；如果工作要在該框架繼續，請重新選取它。                                                   |
-| `history_missing`       | 502  | `history back` 或 `forward` 在該方向上沒有項目。                                                                                                                             | 先讀取 `history {"cmd":"list"}`。                                                                              |
+| `history_missing`       | 502  | `history back` 或 `forward` 在該方向上沒有項目。                                                                                                                             | 在 Chrome 可用 `history {"cmd":"list"}` 查看記錄。在 Firefox，知道目的地 URL 時可以用 `navigate`。             |
 | `request_missing`       | 502  | 該請求沒有網路紀錄，或紀錄已被逐出。                                                                                                                                         | 開始記錄，重現問題，然後讀取 `list`。                                                                          |
 | `request_pending`       | 502  | 回應本文尚未完整。                                                                                                                                                           | 等 `list` 中出現 `complete: true`，再重試 `detail`。                                                           |
 | `request_failed`        | 502  | 請求本身失敗。                                                                                                                                                               | 讀取該項目上的錯誤文字。                                                                                       |

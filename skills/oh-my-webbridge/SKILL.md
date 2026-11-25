@@ -1,77 +1,62 @@
 ---
 name: oh-my-webbridge
-description: Operate the user's real Chrome or Firefox through the local oh-my-webbridge daemon. Use for browser tasks that need existing logins, reading pages, forms, screenshots, downloads, or independent parallel task sessions when this bridge is installed.
+description: Use the local omw bridge to operate the user's Chrome or Firefox profile. Use it for signed-in pages, a designated open tab, forms, captures, downloads or parallel browser tasks that need that profile.
 ---
 
 # oh-my-webbridge
 
-omw is in developer preview and iterating rapidly. THERE WILL BE COMPATIBILITY-BREAKING CHANGES.
+Use `omw` from PATH or `dist/omw` in a checkout. Use the bundled references or `omw help` when you need syntax beyond the examples below.
 
-Use `omw` from `PATH`, or `dist/omw` in the project checkout. Read `omw help` when the installed command differs from these examples.
+## Choose the browser and tab
 
-## Start and observe
+Start with the task's first browser call. If the bridge is unavailable, run `omw status`. For an absent daemon, run `omw start` once and recheck. For an unpaired extension, run `omw pair` and have the user enter the six-digit code in extension setup. Keep the token from `omw connection` private. Use `omw doctor` for compatibility errors. Matching wire protocols allow different releases to connect. On a mismatch, update the indicated component, restart the daemon if its binary changed, and use the matching skill. See the [CLI reference](references/reference/cli.mdx).
 
-Use `omw doctor` to check each browser's extension release and wire protocol. Compatible release skew permits a connection. For a protocol mismatch, update the indicated component, restart the daemon if its binary changed, and refresh this Skill from the matching agent kit.
+Give each independent task a session. Reuse it across sites. To use a named browser, place `--browser firefox` or `--browser chrome` before the session name. The first dispatched command binds the session until `close_session`. Without a binding or explicit choice, omw uses the only connected browser, or Chrome when both are connected. A separate session isolates tab ownership and command ordering. Cookies and site storage still belong to the browser profile and its cookie store.
 
-Run `omw status`. If the daemon is absent, run `omw start` once and retry. If a browser is not connected, ask the user to open the extension's setup page and pair it. `omw pair` prints a six-digit pairing code, and the user types it there. Never print the daemon token from `omw connection` or include it in output or on a website.
+- For a new task page, `navigate {"url":"https://example.com"}` opens a background tab. Later navigations reuse the current tab. Add `"newTab":true` to open another.
+- For a designated existing page, `borrow_tab {"url":"https://example.com/orders"}` with the user's exact URL preserves focus. On `ambiguous_tab`, repeat `borrow_tab` with only the user's designated `tabId`.
+- For the active page in the last focused window, use `find_tab {"url":"example.com","active":true}` with a matching hostname or exact URL.
 
-`omw status` reports Chrome and Firefox separately. Commands go to the browser bound to the session. Otherwise they go to the only connected browser, or to Chrome when both are connected. When the user names a browser, put `--browser chrome` or `--browser firefox` right after `omw call` (SDK: `connect(session, {browser})`). A session stays in the browser that first ran it until `close_session`. On `session_browser`, keep that browser or use another session name.
+`list_tabs` and ordinary `find_tab` only see tabs the session already holds. `tab_busy` means another session holds the tab. On `session_browser`, use a fresh session for the requested browser. See [sessions and tab lifecycle](references/sessions.mdx).
 
-Choose one task session, e.g. `research`, and keep it across sites. Open pages in background task tabs:
+## Read and interact
 
-```sh
-omw call research navigate '{"url":"https://example.com","group_title":"Research"}'
-omw call research snapshot
-```
-
-Use snapshot `@e...` references for click/fill, CSS selectors, or semantic selectors such as `role=button[name="Submit"]`, `label=Email`, and `testid=search`. CSS, text and attribute locators (`label=`, `placeholder=`, `alt=`, `title=`, `testid=`) traverse open shadow roots. Snapshot again after navigation or `stale_ref`. Read compact content with `read_page`. Use `evaluate` for specific structured extraction. Verify the page state after changes.
-
-For a long page, continue `read_page` with the returned `nextOffset` as `offset` until `complete` is true. Restart after navigation or a frame change. To inspect one region, pass its selector or current reference to `snapshot`; subsequent actions use the new references.
+Choose the first observation by what you need next. Use `snapshot` to choose a link or control, or `read_page` to extract text. When opening a known URL, send the navigation and that observation in one call:
 
 ```sh
-omw call research fill '{"selector":"#search","value":"query"}'
-omw call research click '{"selector":"button[type=submit]"}'
-omw call research evaluate '{"code":"({title:document.title,url:location.href})"}'
+omw call --browser firefox research batch '{"steps":[{"action":"navigate","args":{"url":"https://example.com"}},{"action":"snapshot"}]}'
 ```
 
-For shell-sensitive or multiline data, write valid JSON with a file tool and send it through stdin: `omw call research evaluate - < request.json`. Do not interpolate page text or secrets into shell source.
+Use the returned text or handles directly. For paginated text, follow `nextOffset` as `offset` until `complete`. For a control, use a current `@e` reference or semantic selector such as `label=Email`. A click can return while the old document is still visible. When the destination URL or a marker unique to the new state is known, batch the click, a `wait` for that URL, text or selector, and the observation you need. Otherwise inspect the resulting page before choosing the next action. Pass multiline or shell-sensitive input as a JSON object via stdin, e.g. `omw call research fill - < request.json`.
 
-## Tasks and ownership
+For an iframe, select it with `frame` and take a new snapshot. If the selected document changes, reselect the intended frame, discard old references and restart reading at offset zero. Use `frame {"cmd":"main"}` to return. The [action reference](references/reference/actions.mdx) covers frame selection, selector syntax, waiting, input, uploads, network recording and error codes.
 
-When the user designates an existing background page, use `borrow_tab` with its exact URL or tab ID. It keeps the current window and tab focused. On `ambiguous_tab`, ask which tab to borrow.
+## Recover from a failed action
 
-Use distinct sessions for independent parallel tasks. Same-session commands execute in order. `list_tabs` lists only the session's tabs. When the user asks to use the active tab, borrow it explicitly with `find_tab {"url":"exact URL or hostname","active":true}`. Do not borrow unrelated tabs or fight another session's ownership.
+Match the visible record, period and revision to the request. Follow the current-record link for a superseded version. If a loading view shows preliminary values, wait for its visible loading marker to disappear and read the final record in one call:
 
-Keep task tabs for review. Call `close_session` only when the user asks to close the task tabs. It closes only owned tabs and releases borrowed ones. Do not stop or restart the shared daemon to clean up a task.
+```sh
+omw call research batch '{"steps":[{"action":"wait","args":{"text":"Loading","state":"hidden"}},{"action":"read_page"}]}'
+```
 
-When asked to hand off selected results and clean up, use `release_tabs {"keep":[7],"close":[8]}` with the task's actual tab IDs. Kept pages remain open and are released from ownership. Inspect `failed` before finishing. Unlisted tabs remain in the session.
+Use the marker text observed on that page and confirm the returned record is final.
 
-## Other operations
+After a submission, a missing acknowledgement or a site's retry button leaves the write uncertain. Consult a read-only receipt or activity history for that specific request. If that evidence is unavailable, report what you submitted and what you could verify, then stop.
 
-For a read-only batch, pass `{"steps":[{"action":"read_page"},{"action":"list_tabs","args":{}}]}`. The daemon reports the step number and field when an entry is malformed.
+- `command_not_sent`: the transport write never started. Issue a fresh call if the action is still needed.
+- `outcome_unknown`: the action may have reached the page. Check the URL, receipt, field value or other read-only evidence. If still uncertain, report the result as unconfirmed and stop before repeating the change.
+- Failed `batch`: read the message as well as the code. A runtime message starting `batch step N of M (action):` means steps 1 through N−1 completed, even for `invalid_args`. Current extensions reject a malformed step during preflight, while older ones can reach it after earlier actions. If the failure stage is unclear, inspect the page or receipt before resuming only the outstanding work.
+- `wait_timeout`: check the condition or repeat the read-only wait with `--timeout-ms` before the session name.
+- `stale_ref` or `frame_unavailable`: take a new snapshot. For a command meant for a lost frame, reselect it first.
+- `no_tab` or `tab_missing`: for a closed task page, use another held tab or open a new page. For a failed lookup, confirm the intended tab. On `busy`, reduce concurrency.
 
-Use `screenshot` and `save_as_pdf`, then open the returned path to inspect the artifact. Use unique absolute output paths; existing files are never overwritten. Upload paths are absolute on the machine running the daemon and browser; Firefox uploads total at most 16 MiB per command. Use user-provided or clearly task-authorized files.
+## Browser-specific work
 
-Use `wait` with selector/text/url/expression/load (`omw call --timeout-ms N` sets its deadline, default 30000), `scroll`, `hover`, `select_option`, `dialog`, `send_keys`, and `drag` for ordinary interactions. `cdp` accepts `{method,params,sessionId}` for advanced cases in Chrome. Use `frame` with selector/name/frameId/url to select a same-origin or cross-origin iframe, and `frame {"cmd":"main"}` to return. Take a new snapshot after changing frame. Commands then run in the selected frame. Other iframes that load or navigate do not change the selection or the references from its snapshot. When the selected frame navigates, reloads or is removed, the next command for it returns `frame_unavailable`, and later commands use the main frame. Select the frame again if the task continues there. In Chrome, a command with a reference from that frame's snapshot returns `stale_ref` instead. In Chrome, `dialog` answers dialogs from the page or any iframe, whichever frame is selected.
+- **Firefox.** Use [Firefox permissions and action support](references/firefox.mdx) for `unsupported` or `restricted_tab`. Page reading, `get` and `is` work without enabling user scripts. Verify clicks on the page. Keep the user's chosen browser and login. Report an unavailable operation when it requires a different profile.
+- **Files.** Use task-authorized absolute upload paths on the host. For a screenshot in either browser or a PDF in Chrome, run the capture as a separate call. Omit `path` or supply a new absolute path. Open the returned file and verify the page before handing it over. Downloads return a path on the browser host.
+- **Missing page content.** On an owned tab, inspect `preset {"cmd":"status"}` for counts and fallback reasons. To test the filter, set `preset {"preset":"none"}`, navigate again and check the same content. Presets apply across the session's owned tabs. Borrowed tabs are excluded. See [presets](references/presets.mdx) for archive settings and resource switches.
+- **Scripted workflows.** Use `connect(session, { browser })` from the kit's `sdk.mjs` (checkout: `dist/sdk.mjs`). See the [SDK](references/reference/sdk.mdx) for calls, deadlines and cancellation. For Playwright's browser-level connection, use the explicitly configured [native CDP proxy](references/reference/cdp.mdx#native-mode). The extension's CDP interface addresses Chrome page targets.
 
-Use `get` / `is` to verify element values and states, `check` / `uncheck` for idempotent controls, and `storage`, `cookies`, `console`, `emulate` or `download` for page tasks. Cookies and storage share the current profile, so clear only task-authorized data. Downloads return paths on the browser's host. `batch {"steps":[...]}` runs up to 64 actions in order and stops at the first error without rollback. Run `screenshot`, `save_as_pdf` and `close_session` as separate calls.
+## Hand back the pages
 
-For complex work, compose calls with the SDK (`sdk.mjs` at the root of the agent kit, or `dist/sdk.mjs` in a project checkout) and `connect(session)` in one Node script. Do not create a second daemon or browser. Use the explicit native CDP endpoint for Playwright's browser-level connection. Do not assume `chrome.debugger` has every browser domain.
-
-## Failure handling
-
-`command_not_sent` means the request ended before its transport write started. Use a new call if the action is still needed. `outcome_unknown` after a completed write means the browser did not reply in time; check the page before repeating the action.
-
-On `outcome_unknown`, observe the current page before deciding whether to retry: a click or submission may already have happened. Never replay a modifying command automatically after timeout, cancellation or disconnect. On `busy`, reduce concurrency. On `tab_busy`, use the task's own tab. On `tab_missing` for a tab the task used, or `no_tab` after its current tab closed, the tab is gone; continue in another task tab or `navigate` again. On `stale_ref`, take a new snapshot. In a failed `batch`, the message names the failed step; the steps before it completed. On `frame_unavailable`, select the frame again before repeating a command meant for it. On `wait_timeout`, the condition did not hold and the page is unchanged; wait again with a longer deadline or check the page.
-
-`unsupported` means the action or parameter does not exist in that browser, and the message names it and the reason. Do not retry it. Use another action for the same goal (for example `read_page` or `get` instead of `evaluate`), or run the step in a Chrome session (`--browser chrome` with a new session name) when it needs Chrome. In Firefox, these are unsupported: `save_as_pdf`, `dialog`, `drag`, `mouse`, `keyboard` down/up, `console`, `cdp`, `history list`, and `emulate` fields other than `data`. `send_keys` supports only Backspace, Delete, Enter, Tab, Shift+Tab and Control/Meta+A. `evaluate` works only after the user chooses Allow scripts in the extension's setup or settings page. Firefox clicks and key events are untrusted, so a page can ignore them; verify the result. Report remaining failures with their error code and operation.
-
-## Page presets
-
-Owned task tabs default to `anti-ad` with offline-pinned filter lists. Read `preset {cmd:"status"}` when a page appears broken; it reports the configuration, blocked and allowed request counts and fallback reasons. Select `preset {preset:"none"}` and navigate again for compatibility. Never blindly repeat an uncertain click or submission. Borrowed tabs are excluded from presets.
-
-Zen is optional and meant for static or old Web 2 archives: `preset {preset:"zen",zen:{images:true,fonts:true,css:false,javascript:false}}`. A `true` resource switch blocks it. Blocking CSS or JS can break modern sites, so keep those switches off unless the task warrants them. `environment:true` optionally installs supported bundled cosmetics/scriptlets before navigation. It is not fingerprint spoofing.
-
-## Reference
-
-Use the installed [actions and error recovery](references/reference/actions.mdx), [CLI](references/reference/cli.mdx), [SDK](references/reference/sdk.mdx), and [Firefox differences](references/firefox.mdx) for this release. The [documentation site](https://oh-my-webbridge.github.io/en/reference/actions/) tracks the current release.
+Keep task tabs open for review unless cleanup was requested. To hand off selected pages, use `release_tabs` with actual IDs in `keep` and `close`. Borrowed pages can be kept and released. Only owned pages can be closed. Check `failed` and reconcile those IDs. Unlisted pages stay in the session. Use `close_session` when the remaining owned tabs may all close. It releases borrowed tabs and leaves the shared daemon running.

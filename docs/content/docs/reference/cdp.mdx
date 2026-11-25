@@ -115,7 +115,7 @@ The action is available in Chrome only. Firefox answers `unsupported` with HTTP 
 Two methods interact with the rest of the bridge:
 
 - `Page.disable` on the root session clears the `@e` references of that tab. The next `snapshot` or `navigate` enables Page events again.
-- `Runtime.disable` ends the frame selection of that session. Later commands run in the main frame until `frame` selects one again.
+- `Runtime.disable` ends a frame selection belonging to the affected CDP session. The next action that would run in that frame fails once with `frame_unavailable`; later actions use the main frame. Select the frame again with `frame` to continue there.
 
 ## Native mode
 

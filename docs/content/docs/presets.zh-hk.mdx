@@ -50,7 +50,7 @@ omw call archive preset '{"preset":"zen","zen":{"images":true,"fonts":true,"css"
 omw call archive preset '{"cmd":"status"}'
 ```
 
-尚未選擇預設集的工作階段使用 `anti-ad`，這是新任務分頁的預設。
+尚未選擇預設集的工作階段使用 `anti-ad`，這是新任務分頁的預設。省略的開關會沿用工作階段中的值，切換模式也會保留這些值。要重設開關，請明確傳入 `environment: false` 或個別設定 `zen` 的開關。
 
 ## anti-ad [#anti-ad]
 
@@ -77,13 +77,13 @@ omw call archive preset '{"cmd":"status"}'
 | `css`        | 樣式表請求       | `false` |
 | `javascript` | 指令碼請求       | `false` |
 
-`javascript: true` 也會停止行內指令碼與事件處理常式屬性。在 Chrome 中，指令碼執行透過 CDP 停用。在 Firefox 中，擴充功能會在該分頁的文件與框架回應中加上 `Content-Security-Policy: script-src 'none'`。此時 `<noscript>` 的內容不會呈現，因為瀏覽器仍回報指令碼功能為啓用。
+`javascript: true` 也會停止行內指令碼與事件處理常式屬性。Chrome 透過 CDP 停用指令碼執行。Firefox 會在之後的文件與框架回應中加入 `Content-Security-Policy: script-src 'none'`。要在 Firefox 將政策套用到已載入的文件，請重新導覽或重新載入。瀏覽器仍回報指令碼功能為啓用，因此 `<noscript>` 內容維持隱藏。
 
 這些限制涵蓋網路請求。行內圖片與 data 圖片、行內 CSS，以及已安裝的 service worker 快取不受影響。需要樣式表或指令碼的網站會因這些開關而損壞。請選擇 `none`，或放寬某個開關，然後重新導覽。
 
 ## environment [#environment]
 
-`environment: true` 會加入內建清單中的外觀過濾（cosmetics）與 scriptlet，並以文件主機名稱作為防護。它預設關閉，而在 `zen` 的 `javascript` 開啓時會略過。
+在 Chrome，`environment: true` 會加入內建清單中的外觀過濾（cosmetics）與 scriptlet，並依文件主機名稱限制套用範圍。這項設定預設關閉。`zen` 的 `javascript` 開啓時，Chrome 會略過這項設定。
 
 註冊發生在目標文件載入之前，所以這項設定套用於分頁接下來顯示的文件，不會改變已載入的頁面。請重新導覽。跨主機的重新導向，或來自其他主機的框架，只會得到網路過濾，因為防護機制絕不會注入其他主機的規則。
 
@@ -99,7 +99,7 @@ omw call archive preset '{"cmd":"status"}'
 
 ## 狀態 [#status]
 
-`preset {cmd:"status"}` 會讀取目前的分頁，並回傳：
+`preset {cmd:"status"}` 會讀取目前分頁。沒有目前分頁時，會以 `{ config }` 回傳工作階段組態。已套用組態的分頁會回傳：
 
 - 組態：`name`、`environment`、`images`、`fonts`、`css`、`javascript`
 - `blocked` 與 `allowed`：自預設集安裝以來的請求數
@@ -107,15 +107,15 @@ omw call archive preset '{"cmd":"status"}'
 - `environmentState`：`off`、`active` 或 `unavailable`
 - `fallback`：最多 8 個原因，每個截斷為 300 個字元
 
-任何其他的 `cmd` 值都會回傳 `invalid_args`。組態呼叫會回傳 `config`、每個任務分頁的狀態項目、`appliesOn` 與 `borrowedTabsExcluded`。在 Chrome 中，`appliesOn` 為 `immediate; environment on next navigation`。
+分頁沒有已套用的預設集狀態時，會回傳 `name: "none"`、`network: false`、`environmentState: "off"` 與 `fallback: []`。設定預設集時會回傳 `config`、`tabs`、`appliesOn` 與 `borrowedTabsExcluded`。`appliesOn` 在 Chrome 是 `immediate; environment on next navigation`，在 Firefox 是 `immediate`。要設定預設集，請省略 `cmd`。其他 `cmd` 值會回傳 `invalid_args`。
 
 ## 成本與限制 [#costs-and-limits]
 
 - 比對在擴充功能背景中執行，所有分頁共用同一個過濾引擎。請求不會送到 daemon。
 - 最後一個過濾中的分頁停止過濾 30 秒後，引擎資料即被釋放。下一次套用預設集時會重新載入。
-- 網路與指令碼限制會立即套用到既有的任務分頁與框架。環境註冊則套用到下一個文件。
-- 重新設定分頁時，會先停用該分頁每個目標上的攔截，所以頁面請求會繼續進行，而忙碌的框架只會延後其餘的處理。安裝新的預設集需要目前的文件有回應。頁面沒有回應時，請用 `close_session` 復原。
-- 導覽預設集未變更的任務分頁時，會保留攔截，也不會送出重新設定的指令。`environment` 關閉時，狀態計數器會在導覽前後持續累計。
+- 網路過濾的變更會套用到既有的任務分頁與框架。在 Chrome，指令碼執行設定會套用到既有文件，環境註冊則套用到下一個文件。在 Firefox，指令碼政策會在文件或框架下次收到回應時套用。
+- Chrome 在重新設定分頁時，會先停用該分頁每個目標上的攔截。忙碌的框架延後其餘操作時，頁面請求仍可繼續。安裝新的預設集需要目前的文件有回應。頁面沒有回應時，請用 `close_session` 復原。
+- 導覽時，已套用的預設集設定相同且 `environment` 關閉，就可以沿用攔截及狀態計數器。Chrome 還要求根目標已就緒，而且沒有其他預設集變更正在進行。
 - 清單載入失敗時，請求會不經過濾而通過，狀態會保留原因。`zen` 的類型封鎖仍然有效。
 - Chrome 每個分頁最多攔截 128 個目標。超出的框架會放行（fail open），狀態會記錄原因。Firefox 沒有每個分頁的目標數上限。
 - Chrome 重新啓動擴充功能 worker 後，既有分頁的狀態會回報 `none`，直到受控制的導覽重新套用已儲存的工作階段組態。不會重試任何網站動作。

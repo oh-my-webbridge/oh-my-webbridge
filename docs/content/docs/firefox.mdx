@@ -61,7 +61,7 @@ Installing the extension opens the setup page (`app.html`), which lists the setu
 - **Access to all websites** is the `<all_urls>` host permission, requested at installation. You can turn it off under Permissions in `about:addons`. Without it, page actions, `screenshot`, `cookies`, `network` with `cmd: "start"` and `emulate` with `data` return `restricted_tab` and presets stop filtering requests. A `navigate` to a URL that answers 204 No Content or 205 Reset Content then waits until the command deadline. Turning the permission back on restores filtering. Pages that Firefox protects from extensions, such as `about:` pages and addons.mozilla.org, return `restricted_tab` with the permission on. A page action that meets a navigation of the tab returns `outcome_unknown`, and `wait` keeps checking on the new page.
 - **User scripts** is the optional `userScripts` permission. Choose **Allow scripts** in step 3, or under **Settings**, then **Pages**, and confirm the Firefox prompt. Firefox accepts the request only from a user action, so these buttons are the only place to grant it. Until it is granted, `evaluate` and `wait` with `expression` return `unsupported`.
 
-`borrow_tab` assigns a tab to the session. Firefox still checks site permissions and browser policy when you run a page action. If those checks block access, the page action returns `restricted_tab` even for a borrowed tab.
+`borrow_tab` requires **Access to all websites**. Firefox checks the target page again when a page action runs. Protected pages such as addons.mozilla.org return `restricted_tab`.
 
 **Pause** in the popup disconnects the extension from the daemon until you select **Resume**.
 
@@ -89,10 +89,10 @@ Actions behave as in Chrome unless the table lists a difference. An action or pa
 | `keyboard` (`down`, `up`), `mouse`, `drag`               | `unsupported`                                                                                                                       |
 | `key_type`, `keyboard` (`insertText`)                    | Returns `element_action_failed` when no editable element has focus                                                                  |
 | `scroll`                                                 | Fires no `wheel` event; an unknown `direction` returns `invalid_args`                                                               |
-| `snapshot`, `read_page`, `find`                          | Roles and names come from the DOM; the same page can give different text than in Chrome                                             |
+| `snapshot`, `find`                                       | Roles and names come from the DOM. Snapshot text and search matches can differ from Chrome.                                         |
 | `wait`                                                   | `expression` needs the user scripts permission                                                                                      |
 | `evaluate`                                               | Needs the user scripts permission; `contextId` returns `unsupported`                                                                |
-| `frame`                                                  | Returns a numeric `frameId` as a string and no `contextId`                                                                          |
+| `frame`                                                  | Selection returns a string `frameId` without a `contextId`. `list` returns `id`, `url`, and `parentId` for child frames.            |
 | `history`                                                | `back`, `forward` and `reload` work; `list` returns `unsupported`                                                                   |
 | `dialog`, `console`                                      | `unsupported`                                                                                                                       |
 | `dialog_status`                                          | Returns the URL only, without the dialog type or message                                                                            |
@@ -125,7 +125,7 @@ Firefox presets use the same modes, filter lists, engine and session settings as
 
 - Each task tab gets its own blocking `webRequest.onBeforeRequest` listener, filtered by `tabId`. It receives the requests of every frame, including cross-process iframes, and there is no per-tab target limit. Each request is matched synchronously once the lists have loaded.
 - A preset change applies to existing task tabs immediately and the response reports `appliesOn: "immediate"`. Reconfiguration replaces the listeners and sends nothing to the page, so a busy page does not delay it. A navigation with an unchanged preset keeps the listeners and the status counters; a preset with `environment` set reconfigures on each navigation.
-- `zen` blocks requests by type: `images` covers image and image set requests, `fonts` covers fonts, `css` covers stylesheets, and `javascript` covers scripts. With `javascript: true`, the extension also adds `Content-Security-Policy: script-src 'none'` to the document and iframe responses of the tab. Inline scripts and event handler attributes stop running, and `<noscript>` content does not render.
+- `zen` blocks requests by type: `images` covers image and image set requests, `fonts` covers fonts, `css` covers stylesheets, and `javascript` covers scripts. With `javascript: true`, the extension adds `Content-Security-Policy: script-src 'none'` to subsequent document and iframe responses. Navigate or reload to apply the policy to an already loaded document. The policy blocks inline scripts and event handler attributes, and `<noscript>` content stays hidden.
 - `environment` is accepted but reports `environmentState: "unavailable"` with a reason. Network filtering continues.
 - A blocked top-level page leaves the tab on its current page, with no error page.
 - Without **Access to all websites**, every request passes. Status reports `network: false` and records the reason. No request counts as blocked.

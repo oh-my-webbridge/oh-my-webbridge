@@ -64,9 +64,11 @@ omw doctor
 兩者都把 daemon 的 `/status` JSON 印到 stdout，並把每個瀏覽器一行的狀態印到 stderr：
 
 ```text
-chrome: connected (156.0.8078.80)
+chrome: connected (156.0.8078.80) extension 0.3.0, daemon 0.3.0 (same-release)
 firefox: not connected
 ```
+
+已連線的瀏覽器會顯示擴充功能與 daemon 的版本及其相容狀態。協定不相容時，輸出會列出雙方的協定版本，並指出重新連線前需要更新的元件。
 
 `doctor` 會在這些行之前，先把 `config.json` 的路徑印到 stderr。
 

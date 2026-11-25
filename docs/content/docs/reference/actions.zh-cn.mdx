@@ -51,17 +51,17 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 ## 导航与标签页 [#navigation-and-tabs]
 
-| 动作            | 参数                                       | 备注                                                                                                                    |
-| --------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `navigate`      | `url`、`newTab`、`group_title`、预设字段   | 除非会话已有目前标签页，或设置了 `newTab`，否则打开一个背景任务标签页。URL 必须是 HTTP(S) 或 `about:blank`。            |
-| `find_tab`      | `url`（完整 URL 或主机名称）、`active`     | 为会话认领既有标签页。`active: true` 借用浏览器的使用中标签页。返回 `tabId`、`url`、`borrowed`。                        |
-| `borrow_tab`    | 指定完整的 `url` 或 `tabId`，两者择一      | 借用指定标签页并保留窗口焦点。网址符合多个标签页时返回 `ambiguous_tab`。运行 `close_session` 后，借用的标签页仍会打开。 |
-| `list_tabs`     | 无                                         | 列出这个会话拥有或借用的标签页，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。                        |
-| `switch_tab`    | `tabId`                                    | 让该标签页成为目前标签页。已被丢弃的标签页会先重新加载；结果会回报 `revived`。                                          |
-| `window_new`    | `url`、预设字段                            | 打开独立的窗口，认领其标签页，并返回 `tabId` 与 `windowId`。                                                            |
-| `close_tab`     | `tabId`                                    | 关闭会话创建的标签页。借用的标签页不会被关闭。                                                                          |
-| `close_session` | 无                                         | 关闭任务标签页、释放借用的标签页，并移除浏览器绑定。返回已关闭的标签页数量。                                            |
-| `history`       | `cmd`：`list`、`back`、`forward`、`reload` | `list` 返回导航项目。每次 `history` 调用都会丢弃该标签页的引用与框架选择。                                              |
+| 动作            | 参数                                                          | 备注                                                                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `navigate`      | `url`、`newTab`、`tabId`（或 `tab`）、`group_title`、预设字段 | 会话没有目前标签页，或设置 `newTab: true` 时，会打开背景任务标签页。其余情况会导航指定的标签页，未指定则导航目前标签页。URL 必须是 HTTP(S) 或 `about:blank`。                                               |
+| `find_tab`      | `url`（完整 URL 或主机名称）、`active`                        | 搜索这个会话持有的标签页。设为 `active: true` 时，只搜索最后取得焦点的窗口中使用中的标签页。URL 相符且会话尚未持有该标签页时，就会借用它。符合的标签页会成为目前标签页，并返回 `tabId`、`url`、`borrowed`。 |
+| `borrow_tab`    | 指定完整的 `url` 或 `tabId`，两者择一                         | 借用指定标签页并保留窗口焦点。网址符合多个标签页时返回 `ambiguous_tab`。运行 `close_session` 后，借用的标签页仍会打开。                                                                                     |
+| `list_tabs`     | 无                                                            | 列出这个会话拥有或借用的标签页，含 `tabId`、`url`、`title`、`active`、`borrowed`、`groupTitle`。                                                                                                            |
+| `switch_tab`    | `tabId`                                                       | 让该标签页成为目前标签页。已被丢弃的标签页会先重新加载；结果会回报 `revived`。                                                                                                                              |
+| `window_new`    | `url`、预设字段                                               | 打开独立的窗口，认领其标签页，并返回 `tabId` 与 `windowId`。                                                                                                                                                |
+| `close_tab`     | `tabId`                                                       | 关闭会话创建的标签页。借用的标签页不会被关闭。                                                                                                                                                              |
+| `close_session` | 无                                                            | 关闭任务标签页、释放借用的标签页，并移除浏览器绑定。返回已关闭的标签页数量。                                                                                                                                |
+| `history`       | `cmd`：`list`、`back`、`forward`、`reload`                    | Chrome 的 `list` 会返回导航项目。Firefox 支持 `back`、`forward` 与 `reload`。受支持的命令会清除该标签页的引用与框架选择。                                                                                   |
 
 一个会话最多持有 32 个标签页，任务标签页与借用的标签页合计。
 
@@ -75,9 +75,9 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 | 动作            | 参数                                                    | 备注                                                                                                                                                  |
 | --------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `snapshot`      | `interactive`、`maxDepth`                               | 带有 `@e` 引用的无障碍树，另含 `url`、`title`、`truncated`。深度上限为 64。输出在 4000 个节点或 192000 个字符时停止。                                 |
+| `snapshot`      | `interactive`、`maxDepth`、`selector`                   | 带有 `@e` 引用的无障碍树，另含 `url`、`title`、`truncated`。深度上限为 64。输出在 4000 个节点或 192000 个字符时停止。                                 |
 | `find`          | `query`、快照字段                                       | 对快照各行做不分大小写的搜索。最多 100 笔符合。                                                                                                       |
-| `read_page`     | 无                                                      | `url`、`title`，以及 `document.body.innerText` 的前 192000 个字符。                                                                                   |
+| `read_page`     | `offset`、`pageSize`                                    | 返回 `url`、`title`、从 `document.body.innerText` 读出的 `text` 片段、`complete` 与 `nextOffset`。                                                    |
 | `evaluate`      | `code`、`contextId`                                     | 运行一个表达式，并返回 `{ type: "value", value }`。需要 `await` 时，使用异步 IIFE。                                                                   |
 | `get`           | `selector`、`property`、`attribute`                     | `text`、`html`、`value`、`attr`、`count`、`box`、`styles`、`title`、`url`。                                                                           |
 | `is`            | `selector`、`property`                                  | `visible`、`enabled`、`checked`、`editable`。返回布尔值 `value`。                                                                                     |
@@ -116,12 +116,12 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 ## 框架 [#frames]
 
-| 动作或参数                                                                  | 意义                                                     |
-| --------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `frame {"cmd": "list"}`                                                     | 列出框架，含 `id`、`name` 与 `url`，包括跨进程的子框架。 |
-| `frame {"selector": "iframe#panel"}`                                        | 选取包含符合之 iframe 元素的框架。                       |
-| `frame {"frameId": "..."}`、`frame {"name": "..."}`、`frame {"url": "..."}` | 依 id、名称或完整 URL 选取。                             |
-| `frame {"cmd": "main"}`                                                     | 回到主框架，并丢弃该框架的引用。                         |
+| 动作或参数                                                                  | 意义                                                                                                                |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `frame {"cmd": "list"}`                                                     | 列出框架，包括跨进程的子框架。每笔包含 `id` 与 `url`。Chrome 可能另返回 `name`，Firefox 会为子框架返回 `parentId`。 |
+| `frame {"selector": "iframe#panel"}`                                        | 选取符合的 iframe 元素所加载的文档。                                                                                |
+| `frame {"frameId": "..."}`、`frame {"name": "..."}`、`frame {"url": "..."}` | 依 id、名称或完整 URL 选取。                                                                                        |
+| `frame {"cmd": "main"}`                                                     | 回到主框架，并丢弃该框架的引用。                                                                                    |
 
 选取框架后，页面动作在该框架中运行。选取框架会丢弃先前的引用，并需要重新取得快照。
 
@@ -162,9 +162,11 @@ description: 命令端点、每个浏览器动作、选择器语法与错误码�
 
 ## 批量 [#batch]
 
-`batch` 接受含 1 到 64 个对象的 `steps` 数组。每个步骤都要有 `action` 字符串，可选择提供 `args` 对象。步骤的字段有误时，会在任何浏览器动作开始前返回 `invalid_args` 并指出步骤编号。使用 Firefox 时，daemon 也会在浏览器开始运行批量前准备上传文件。
+`batch` 接受含 1 到 64 个对象的 `steps` 数组。每个步骤需要非空的 `action` 字符串，可以提供 `args` 对象。运行前，浏览器会检查每个步骤的格式，遇到格式不符或必须分开调用的动作，就会返回 `invalid_args` 并指出步骤编号。个别动作的参数在运行该步骤时才会验证。在 Firefox，daemon 会在浏览器开始运行批量前准备上传文件。
 
 开始运行后，步骤会依序进行，遇到第一个错误便停止。回复保留失败动作的错误码，消息以 `batch step N of M (action):` 开头。前面已运行的动作仍会生效。`batch`、`close_session`、`screenshot`、`save_as_pdf`、`artifact_read` 与 `artifact_close` 要分开调用。
+
+0.2.2 版扩展程序可能在运行到后面的步骤时才发现格式错误。如果 `invalid_args` 回复带有上述运行阶段的前缀，前面的步骤已经完成。继续写入前，先确认页面结果或收据。
 
 ## 预设 [#presets]
 
@@ -228,7 +230,7 @@ daemon 在内部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 | `stale_ref`             | 409  | `@e` 引用比它所属的文档存活得更久。                                                                                                                                          | 重新取得 `snapshot`。                                                                                            |
 | `no_tab`                | 502  | 页面动作在会话还没有标签页时运行，或在目前标签页以 `close_tab` 以外的方式关闭之后运行。                                                                                      | 运行 `navigate` 或 `find_tab`，或传入会话另一个标签页的 `tabId`。                                                |
 | `tab_missing`           | 502  | `find_tab` 没有符合的标签页，或命令指定的标签页已经关闭。                                                                                                                    | 先在这个会话中打开该页面，或传入 `active: true` 借用浏览器的使用中标签页。标签页已关闭时，改在另一个标签页继续。 |
-| `restricted_tab`        | 502  | 该标签页不是一般的、非无痕的 HTTP(S) 页面。                                                                                                                                  | 导航到 HTTP(S) 页面。浏览器内部页面无法用脚本操作。                                                              |
+| `restricted_tab`        | 502  | 标签页不符合使用条件，或 Firefox 的主机权限或浏览器政策阻止访问。                                                                                                            | 使用允许扩展程序访问的非隐私浏览 HTTP(S) 页面。在 Firefox 的 `about:addons` 中检查**访问所有网站**权限。         |
 | `borrowed_tab`          | 502  | 动作需要会话创建的标签页：关闭它，或对借用的标签页套用预设。                                                                                                                 | 用 `navigate` 打开任务标签页。                                                                                   |
 | `element_missing`       | 502  | 选择器没有符合任何元素。                                                                                                                                                     | 检查选择器，或重新取得快照。                                                                                     |
 | `element_hidden`        | 502  | 元素没有边界框，因此没有可点击的中心。                                                                                                                                       | 把它滚动到可见范围，或等待它转译完成。                                                                           |
@@ -237,7 +239,7 @@ daemon 在内部使用 `cdp_attach`、`cdp_detach`、`artifact_read`、`artifact
 | `evaluation_failed`     | 502  | `evaluate` 掷出例外，或内部页面脚本掷出例外。在 Firefox 中，也包括结果无法传回的 `evaluate`，例如 DOM 节点、`Window` 或 `BigInt`；代码已经运行。                             | 修正表达式，或传回一般数据。消息带有页面例外。                                                                   |
 | `frame_missing`         | 502  | `frame` 找不到符合所给选择器、id、名称或 URL 的框架。                                                                                                                        | 用 `frame {"cmd":"list"}` 列出框架，并选取其中一个。                                                             |
 | `frame_unavailable`     | 502  | 所选的框架已被取代、移除或失去其运行环境，或标签页的调试会话已结束。                                                                                                         | 之后的命令使用主框架；如果工作要在该框架继续，请重新选取它。                                                     |
-| `history_missing`       | 502  | `history back` 或 `forward` 在该方向上没有项目。                                                                                                                             | 先读取 `history {"cmd":"list"}`。                                                                                |
+| `history_missing`       | 502  | `history back` 或 `forward` 在该方向上没有项目。                                                                                                                             | 在 Chrome 可用 `history {"cmd":"list"}` 查看记录。在 Firefox，知道目的地 URL 时可以用 `navigate`。               |
 | `request_missing`       | 502  | 该请求没有网络纪录，或纪录已被逐出。                                                                                                                                         | 开始记录，重现问题，然后读取 `list`。                                                                            |
 | `request_pending`       | 502  | 响应本文尚未完整。                                                                                                                                                           | 等 `list` 中出现 `complete: true`，再重试 `detail`。                                                             |
 | `request_failed`        | 502  | 请求本身失败。                                                                                                                                                               | 读取该项目上的错误文字。                                                                                         |

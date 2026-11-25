@@ -50,7 +50,7 @@ omw call archive preset '{"preset":"zen","zen":{"images":true,"fonts":true,"css"
 omw call archive preset '{"cmd":"status"}'
 ```
 
-尚未选择预设的会话使用 `anti-ad`，这是新任务标签页的默认。
+尚未选择预设的会话使用 `anti-ad`，这是新任务标签页的默认。省略的开关会沿用会话中的值，切换模式也会保留这些值。要重设开关，请明确传入 `environment: false` 或个别设置 `zen` 的开关。
 
 ## anti-ad [#anti-ad]
 
@@ -77,13 +77,13 @@ omw call archive preset '{"cmd":"status"}'
 | `css`        | 样式表请求       | `false` |
 | `javascript` | 脚本请求         | `false` |
 
-`javascript: true` 也会停止行内脚本与事件处理常式属性。在 Chrome 中，脚本运行通过 CDP 禁用。在 Firefox 中，扩展程序会在该标签页的文档与框架响应中加上 `Content-Security-Policy: script-src 'none'`。此时 `<noscript>` 的内容不会呈现，因为浏览器仍回报脚本功能为激活。
+`javascript: true` 也会停止行内脚本与事件处理常式属性。Chrome 通过 CDP 禁用脚本运行。Firefox 会在之后的文档与框架响应中加入 `Content-Security-Policy: script-src 'none'`。要在 Firefox 将政策套用到已加载的文档，请重新导航或重新加载。浏览器仍回报脚本功能为激活，因此 `<noscript>` 内容维持隐藏。
 
 这些限制涵盖网络请求。行内图片与 data 图片、行内 CSS，以及已安装的 service worker 缓存不受影响。需要样式表或脚本的网站会因这些开关而损坏。请选择 `none`，或放宽某个开关，然后重新导航。
 
 ## environment [#environment]
 
-`environment: true` 会加入内置清单中的外观过滤（cosmetics）与 scriptlet，并以文档主机名称作为防护。它默认关闭，而在 `zen` 的 `javascript` 打开时会略过。
+在 Chrome，`environment: true` 会加入内置清单中的外观过滤（cosmetics）与 scriptlet，并依文档主机名称限制套用范围。这项设置默认关闭。`zen` 的 `javascript` 打开时，Chrome 会略过这项设置。
 
 注册发生在目标文档加载之前，所以这项设置套用于标签页接下来显示的文档，不会改变已加载的页面。请重新导航。跨主机的重新导向，或来自其他主机的框架，只会得到网络过滤，因为防护机制绝不会注入其他主机的规则。
 
@@ -99,7 +99,7 @@ omw call archive preset '{"cmd":"status"}'
 
 ## 状态 [#status]
 
-`preset {cmd:"status"}` 会读取目前的标签页，并返回：
+`preset {cmd:"status"}` 会读取目前标签页。没有目前标签页时，会以 `{ config }` 返回会话配置。已套用配置的标签页会返回：
 
 - 配置：`name`、`environment`、`images`、`fonts`、`css`、`javascript`
 - `blocked` 与 `allowed`：自预设安装以来的请求数
@@ -107,15 +107,15 @@ omw call archive preset '{"cmd":"status"}'
 - `environmentState`：`off`、`active` 或 `unavailable`
 - `fallback`：最多 8 个原因，每个截断为 300 个字符
 
-任何其他的 `cmd` 值都会返回 `invalid_args`。配置调用会返回 `config`、每个任务标签页的状态项目、`appliesOn` 与 `borrowedTabsExcluded`。在 Chrome 中，`appliesOn` 为 `immediate; environment on next navigation`。
+标签页没有已套用的预设状态时，会返回 `name: "none"`、`network: false`、`environmentState: "off"` 与 `fallback: []`。设置预设时会返回 `config`、`tabs`、`appliesOn` 与 `borrowedTabsExcluded`。`appliesOn` 在 Chrome 是 `immediate; environment on next navigation`，在 Firefox 是 `immediate`。要设置预设，请省略 `cmd`。其他 `cmd` 值会返回 `invalid_args`。
 
 ## 成本与限制 [#costs-and-limits]
 
 - 比对在扩展程序背景中运行，所有标签页共用同一个过滤引擎。请求不会送到 daemon。
 - 最后一个过滤中的标签页停止过滤 30 秒后，引擎数据即被释放。下一次套用预设时会重新加载。
-- 网络与脚本限制会立即套用到既有的任务标签页与框架。环境注册则套用到下一个文档。
-- 重新设置标签页时，会先禁用该标签页每个目标上的拦截，所以页面请求会继续进行，而忙碌的框架只会延后其余的处理。安装新的预设需要目前的文档有响应。页面没有响应时，请用 `close_session` 复原。
-- 导航预设未变更的任务标签页时，会保留拦截，也不会发送重新设置的命令。`environment` 关闭时，状态计数器会在导航前后持续累计。
+- 网络过滤的变更会套用到既有的任务标签页与框架。在 Chrome，脚本运行设置会套用到既有文档，环境注册则套用到下一个文档。在 Firefox，脚本政策会在文档或框架下次收到响应时套用。
+- Chrome 在重新设置标签页时，会先禁用该标签页每个目标上的拦截。忙碌的框架延后其余操作时，页面请求仍可继续。安装新的预设需要目前的文档有响应。页面没有响应时，请用 `close_session` 复原。
+- 导航时，已套用的预设设置相同且 `environment` 关闭，就可以沿用拦截及状态计数器。Chrome 还要求根目标已就绪，而且没有其他预设变更正在进行。
 - 清单加载失败时，请求会不经过滤而通过，状态会保留原因。`zen` 的类型拦截仍然有效。
 - Chrome 每个标签页最多拦截 128 个目标。超出的框架会放行（fail open），状态会记录原因。Firefox 没有每个标签页的目标数上限。
 - Chrome 重新启动扩展程序 worker 后，既有标签页的状态会回报 `none`，直到受控制的导航重新套用已保存的会话配置。不会重试任何网站动作。
