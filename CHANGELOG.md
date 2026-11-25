@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.1](https://github.com/oh-my-webbridge/oh-my-webbridge/compare/v0.3.0...v0.3.1)
+
+### Improvements and fixes
+
+#### Compare browser tools in two tables
+
+The [comparison page](https://oh-my-webbridge.github.io/en/comparison/) starts with an overview of twelve tools and a capability table for the six closest ones.
+
+#### Navigate browser tasks with the bundled agent skill
+
+The skill shows how to open a page and get its text or interactive controls in one call. It covers browser and tab selection, checking the outcome of a failed action, and handing selected pages back to the user. It links directly to all seven release-matched offline references, including Firefox permissions, page presets and the native CDP connection for Playwright.
+
+It also guides agents through superseded and loading records, shows how to check for a missing receipt and distinguishes batch validation errors from runtime failures after an earlier write.
+
+### Downloads
+
+Choose the native archive for macOS or Linux and your CPU. All release archives use `.tar.zst` with zstd level 3. Install zstd and verify `SHA256SUMS`, then extract with `zstd -dc archive.tar.zst | tar -xf - -C destination`. Load the extracted Chrome MV3 directory in Chrome. The agent kit includes the SDK and guide.
+
+The release workflow submits `omw-0.3.1-chrome-mv3.zip` to the Chrome Web Store and the unsigned add-on to addons.mozilla.org; each store publishes the version after its review.
+
+Firefox release builds install `omw-0.3.1-firefox-mv3-unsigned.xpi` permanently only after it is signed. For development, load the extracted Firefox MV3 directory as a temporary add-on in `about:debugging`. See [Firefox installation](https://oh-my-webbridge.github.io/en/firefox/#install).
+
+Browser benchmarks report interface costs on a deterministic fixture; they do not establish real-site reliability. Platform acceptance and remaining differences are recorded in the repository.
+
 ## [0.3.0](https://github.com/oh-my-webbridge/oh-my-webbridge/compare/v0.2.2...v0.3.0)
 
 ### New capabilities
